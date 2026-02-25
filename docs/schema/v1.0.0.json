@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/locktivity/epack-collector-okta/docs/schema/v1.0.0.json",
+  "title": "Okta Organization Security Posture",
+  "description": "Security posture metrics collected from an Okta organization",
+  "type": "object",
+  "required": ["schema_version", "collected_at", "org_domain", "posture", "users", "apps", "policy"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Version of this schema"
+    },
+    "collected_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when data was collected"
+    },
+    "org_domain": {
+      "type": "string",
+      "description": "Okta organization domain"
+    },
+    "posture": {
+      "type": "object",
+      "description": "High-level security posture scores",
+      "required": ["mfa_coverage", "mfa_phishing_resistant", "sso_coverage"],
+      "properties": {
+        "mfa_coverage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of users with any MFA factor enrolled"
+        },
+        "mfa_phishing_resistant": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of users with phishing-resistant MFA (WebAuthn/FIDO2)"
+        },
+        "sso_coverage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of apps using SSO (SAML/OIDC/WS-Fed)"
+        }
+      }
+    },
+    "users": {
+      "type": "object",
+      "description": "User status metrics",
+      "required": ["password_expired", "locked_out", "inactive"],
+      "properties": {
+        "password_expired": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of users with expired passwords"
+        },
+        "locked_out": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of users currently locked out"
+        },
+        "inactive": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of users inactive for 90+ days"
+        }
+      }
+    },
+    "apps": {
+      "type": "object",
+      "description": "Application lifecycle metrics",
+      "required": ["provisioning_enabled", "deprovisioning_enabled"],
+      "properties": {
+        "provisioning_enabled": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of apps with automatic user provisioning"
+        },
+        "deprovisioning_enabled": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of apps with automatic user deprovisioning"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "description": "Aggregated security policy settings across all active policies",
+      "required": ["policy_count", "mfa_required_all", "mfa_required_any"],
+      "properties": {
+        "policy_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of active sign-on policies"
+        },
+        "mfa_required_all": {
+          "type": "boolean",
+          "description": "Whether all policies require MFA"
+        },
+        "mfa_required_any": {
+          "type": "boolean",
+          "description": "Whether at least one policy requires MFA"
+        },
+        "session_lifetime_min_minutes": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Shortest session lifetime across all policies (in minutes)"
+        },
+        "session_lifetime_max_minutes": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Longest session lifetime across all policies (in minutes)"
+        },
+        "idle_timeout_min_minutes": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Shortest idle timeout across all policies (in minutes)"
+        },
+        "idle_timeout_max_minutes": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Longest idle timeout across all policies (in minutes)"
+        }
+      }
+    }
+  }
+}
