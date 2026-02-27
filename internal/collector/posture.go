@@ -9,12 +9,22 @@ const SchemaVersion = "1.0.0"
 // InactiveDaysThreshold is the number of days after which a user is considered inactive.
 const InactiveDaysThreshold = 90
 
+// StatusFunc is called to report indeterminate status updates.
+type StatusFunc func(message string)
+
+// ProgressFunc is called to report determinate progress (current/total).
+type ProgressFunc func(current, total int64, message string)
+
 // Config holds the collector configuration passed via stdin.
 type Config struct {
 	OrgDomain  string `json:"org_domain"`  // e.g., "company.okta.com"
 	ClientID   string `json:"client_id"`   // OAuth 2.0 client ID
 	PrivateKey string `json:"private_key"` // Private key for JWT assertion (PEM)
 	APIToken   string `json:"api_token"`   // SSWS token (legacy, less secure)
+
+	// Progress callbacks (optional, set by main to report status)
+	OnStatus   StatusFunc   `json:"-"`
+	OnProgress ProgressFunc `json:"-"`
 }
 
 // OrgPosture represents the collected security posture of an Okta organization.

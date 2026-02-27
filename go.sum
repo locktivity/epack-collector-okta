@@ -1,4 +1,4 @@
 github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=
 github.com/golang-jwt/jwt/v5 v5.3.1/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
-github.com/locktivity/epack v0.1.11 h1:9cFmQLdxFEmV3wUmtcbc6LF0C/A/Sa+aApWCZRjB6po=
-github.com/locktivity/epack v0.1.11/go.mod h1:4dQCa+eaoT2fjwYkUuOCpSbcyl1RwIOOagaUNZoGOz4=
+github.com/locktivity/epack v0.1.17 h1:sUxtwQ/B/ZAG191F+shLLEuF+q+nDTqs/XgaVnZgKI0=
+github.com/locktivity/epack v0.1.17/go.mod h1:AbC3rPZ0IJJJ/pPQF1WUodxemM9SbK7jsZuXTPr3Pbc=

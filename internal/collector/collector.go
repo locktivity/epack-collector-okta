@@ -15,6 +15,20 @@ type Collector struct {
 	config Config
 }
 
+// status reports an indeterminate status update.
+func (c *Collector) status(message string) {
+	if c.config.OnStatus != nil {
+		c.config.OnStatus(message)
+	}
+}
+
+// progress reports a determinate progress update.
+func (c *Collector) progress(current, total int64, message string) {
+	if c.config.OnProgress != nil {
+		c.config.OnProgress(current, total, message)
+	}
+}
+
 // New creates a new Collector with the given configuration.
 // It supports two authentication methods:
 //   - OAuth 2.0 (recommended): Set ClientID and PrivateKey
@@ -60,18 +74,23 @@ func (c *Collector) Collect(ctx context.Context) (*OrgPosture, error) {
 		return nil, fmt.Errorf("org_domain is required")
 	}
 
+	c.status(fmt.Sprintf("Connecting to Okta org %s...", c.config.OrgDomain))
+
 	posture := NewOrgPosture(c.config.OrgDomain)
 
+	c.status("Collecting user metrics...")
 	userMetrics, err := c.collectUserMetrics(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect user metrics: %w", err)
 	}
 
+	c.status("Collecting application metrics...")
 	appMetrics, err := c.collectAppMetrics(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect app metrics: %w", err)
 	}
 
+	c.status("Collecting policy metrics...")
 	policyMetrics, err := c.collectPolicyMetrics(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect policy metrics: %w", err)
@@ -104,6 +123,8 @@ func (c *Collector) Collect(ctx context.Context) (*OrgPosture, error) {
 		IdleTimeoutMaxMinutes:     policyMetrics.idleTimeoutMax,
 	}
 
+	c.status("Collection complete")
+
 	return posture, nil
 }
 
@@ -116,21 +137,31 @@ type userMetricsCollector struct {
 	lockedOut            int
 	inactive             int
 	mfaEnrolled          int
+	users                []okta.User // Collected users for second pass
 }
 
 func (c *Collector) collectUserMetrics(ctx context.Context) (*userMetricsCollector, error) {
 	metrics := &userMetricsCollector{}
 	inactiveThreshold := time.Now().AddDate(0, 0, -InactiveDaysThreshold)
 
+	// First pass: fetch all users
+	userCount := 0
 	err := c.client.FetchUsers(ctx, func(users []okta.User) error {
-		for _, user := range users {
-			c.processUser(ctx, user, inactiveThreshold, metrics)
-		}
+		metrics.users = append(metrics.users, users...)
+		userCount += len(users)
+		c.status(fmt.Sprintf("Found %d users...", userCount))
 		return nil
 	})
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Second pass: check MFA factors for each user
+	total := int64(len(metrics.users))
+	for i, user := range metrics.users {
+		c.progress(int64(i+1), total, fmt.Sprintf("Checking MFA for user %d of %d", i+1, len(metrics.users)))
+		c.processUser(ctx, user, inactiveThreshold, metrics)
 	}
 
 	metrics.mfaEnrolled = percent(metrics.mfaEnrolledCount, metrics.totalUsers)
@@ -207,10 +238,13 @@ type appMetricsCollector struct {
 func (c *Collector) collectAppMetrics(ctx context.Context) (*appMetricsCollector, error) {
 	metrics := &appMetricsCollector{}
 
+	appCount := 0
 	err := c.client.FetchApplications(ctx, func(apps []okta.Application) error {
 		for _, app := range apps {
 			c.processApp(app, metrics)
 		}
+		appCount += len(apps)
+		c.status(fmt.Sprintf("Found %d applications...", appCount))
 		return nil
 	})
 
@@ -277,7 +311,10 @@ type policyMetricsCollector struct {
 func (c *Collector) collectPolicyMetrics(ctx context.Context) (*policyMetricsCollector, error) {
 	metrics := &policyMetricsCollector{}
 
+	c.status("Checking sign-on policies...")
 	c.collectSignOnPolicies(ctx, metrics)
+
+	c.status("Checking MFA enrollment policies...")
 	c.collectMFAEnrollPolicies(ctx, metrics)
 
 	return metrics, nil

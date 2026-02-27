@@ -28,6 +28,8 @@ func run(ctx componentsdk.CollectorContext) error {
 		ClientID:   getString(cfg, "client_id"),
 		PrivateKey: ctx.Secret("OKTA_PRIVATE_KEY"),
 		APIToken:   ctx.Secret("OKTA_API_TOKEN"),
+		OnStatus:   ctx.Status,
+		OnProgress: ctx.Progress,
 	}
 
 	if config.OrgDomain == "" {
