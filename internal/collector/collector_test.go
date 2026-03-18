@@ -448,3 +448,225 @@ func TestOutputJSONStructure(t *testing.T) {
 		}
 	}
 }
+
+func intPtr(i int) *int {
+	return &i
+}
+
+func TestToIDPPosture(t *testing.T) {
+	// Test transformation from OrgPosture to normalized IDPPosture
+	orgPosture := &OrgPosture{
+		SchemaVersion: "1.0.0",
+		CollectedAt:   "2024-01-15T10:00:00Z",
+		OrgDomain:     "acme.okta.com",
+		Posture: Posture{
+			MFACoverage:          95,
+			MFAPhishingResistant: 40,
+			SSOCoverage:          85,
+		},
+		Users: UserMetrics{
+			PasswordExpired: 5,
+			LockedOut:       2,
+			Inactive:        8,
+		},
+		Apps: AppMetrics{
+			ProvisioningEnabled:   60,
+			DeprovisioningEnabled: 45,
+		},
+		Policy: PolicyConfig{
+			PolicyCount:               3,
+			MFARequiredAll:            false,
+			MFARequiredAny:            true,
+			SessionLifetimeMinMinutes: intPtr(15),
+			SessionLifetimeMaxMinutes: intPtr(1440),
+			IdleTimeoutMinMinutes:     intPtr(5),
+			IdleTimeoutMaxMinutes:     intPtr(120),
+		},
+	}
+
+	idpPosture := orgPosture.ToIDPPosture()
+
+	// Verify basic fields
+	if idpPosture.SchemaVersion != "1.0.0" {
+		t.Errorf("SchemaVersion = %q, want %q", idpPosture.SchemaVersion, "1.0.0")
+	}
+	if idpPosture.Provider != "okta" {
+		t.Errorf("Provider = %q, want %q", idpPosture.Provider, "okta")
+	}
+	if idpPosture.OrgDomain != "acme.okta.com" {
+		t.Errorf("OrgDomain = %q, want %q", idpPosture.OrgDomain, "acme.okta.com")
+	}
+
+	// Verify user_security mappings
+	if idpPosture.UserSecurity.MFACoveragePct != 95 {
+		t.Errorf("UserSecurity.MFACoveragePct = %v, want 95", idpPosture.UserSecurity.MFACoveragePct)
+	}
+	if idpPosture.UserSecurity.MFAPhishingResistantPct != 40 {
+		t.Errorf("UserSecurity.MFAPhishingResistantPct = %v, want 40", idpPosture.UserSecurity.MFAPhishingResistantPct)
+	}
+	if idpPosture.UserSecurity.InactivePct != 8 {
+		t.Errorf("UserSecurity.InactivePct = %v, want 8", idpPosture.UserSecurity.InactivePct)
+	}
+	if idpPosture.UserSecurity.LockedOutPct != 2 {
+		t.Errorf("UserSecurity.LockedOutPct = %v, want 2", idpPosture.UserSecurity.LockedOutPct)
+	}
+
+	// Verify app_security mappings
+	if idpPosture.AppSecurity.SSOCoveragePct != 85 {
+		t.Errorf("AppSecurity.SSOCoveragePct = %v, want 85", idpPosture.AppSecurity.SSOCoveragePct)
+	}
+	if idpPosture.AppSecurity.ProvisioningEnabledPct != 60 {
+		t.Errorf("AppSecurity.ProvisioningEnabledPct = %v, want 60", idpPosture.AppSecurity.ProvisioningEnabledPct)
+	}
+
+	// Verify policy mappings
+	if !idpPosture.Policy.MFARequired {
+		t.Error("Policy.MFARequired = false, want true (MFARequiredAny is true)")
+	}
+	if idpPosture.Policy.SessionLifetimeMaxMin != 1440 {
+		t.Errorf("Policy.SessionLifetimeMaxMin = %d, want 1440", idpPosture.Policy.SessionLifetimeMaxMin)
+	}
+	if idpPosture.Policy.IdleTimeoutMaxMin != 120 {
+		t.Errorf("Policy.IdleTimeoutMaxMin = %d, want 120", idpPosture.Policy.IdleTimeoutMaxMin)
+	}
+}
+
+func TestToIDPPosture_MFARequiredAll(t *testing.T) {
+	// Test that MFARequired is true when MFARequiredAll is true
+	orgPosture := &OrgPosture{
+		OrgDomain: "test.okta.com",
+		Policy: PolicyConfig{
+			MFARequiredAll: true,
+			MFARequiredAny: true,
+		},
+	}
+
+	idpPosture := orgPosture.ToIDPPosture()
+
+	if !idpPosture.Policy.MFARequired {
+		t.Error("Policy.MFARequired = false, want true (MFARequiredAll is true)")
+	}
+}
+
+func TestToIDPPosture_NoMFARequired(t *testing.T) {
+	// Test that MFARequired is false when neither MFARequiredAll nor MFARequiredAny
+	orgPosture := &OrgPosture{
+		OrgDomain: "test.okta.com",
+		Policy: PolicyConfig{
+			MFARequiredAll: false,
+			MFARequiredAny: false,
+		},
+	}
+
+	idpPosture := orgPosture.ToIDPPosture()
+
+	if idpPosture.Policy.MFARequired {
+		t.Error("Policy.MFARequired = true, want false")
+	}
+}
+
+func TestToIDPPosture_NilPolicyValues(t *testing.T) {
+	// Test that nil policy values result in zero values
+	orgPosture := &OrgPosture{
+		OrgDomain: "test.okta.com",
+		Policy: PolicyConfig{
+			SessionLifetimeMaxMinutes: nil,
+			IdleTimeoutMaxMinutes:     nil,
+		},
+	}
+
+	idpPosture := orgPosture.ToIDPPosture()
+
+	if idpPosture.Policy.SessionLifetimeMaxMin != 0 {
+		t.Errorf("Policy.SessionLifetimeMaxMin = %d, want 0 (nil input)", idpPosture.Policy.SessionLifetimeMaxMin)
+	}
+	if idpPosture.Policy.IdleTimeoutMaxMin != 0 {
+		t.Errorf("Policy.IdleTimeoutMaxMin = %d, want 0 (nil input)", idpPosture.Policy.IdleTimeoutMaxMin)
+	}
+}
+
+func TestIDPPostureJSONStructure(t *testing.T) {
+	// Test that IDPPosture JSON output matches idp-posture@v1 schema
+	orgPosture := &OrgPosture{
+		OrgDomain: "test.okta.com",
+		Posture: Posture{
+			MFACoverage:          100,
+			MFAPhishingResistant: 50,
+			SSOCoverage:          90,
+		},
+		Users: UserMetrics{
+			LockedOut: 1,
+			Inactive:  5,
+		},
+		Apps: AppMetrics{
+			ProvisioningEnabled: 75,
+		},
+		Policy: PolicyConfig{
+			MFARequiredAny:            true,
+			SessionLifetimeMaxMinutes: intPtr(480),
+			IdleTimeoutMaxMinutes:     intPtr(30),
+		},
+	}
+
+	idpPosture := orgPosture.ToIDPPosture()
+
+	// Marshal to JSON and unmarshal to map to verify structure
+	jsonBytes, err := json.Marshal(idpPosture)
+	if err != nil {
+		t.Fatalf("failed to marshal IDPPosture: %v", err)
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &data); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+
+	// Check top-level required fields per idp-posture@v1 schema
+	topLevelRequired := []string{
+		"schema_version", "collected_at", "provider", "org_domain",
+		"user_security", "app_security", "policy",
+	}
+	for _, field := range topLevelRequired {
+		if _, ok := data[field]; !ok {
+			t.Errorf("missing required field: %s", field)
+		}
+	}
+
+	// Check user_security fields
+	userSecurity, ok := data["user_security"].(map[string]interface{})
+	if !ok {
+		t.Fatal("user_security is not an object")
+	}
+	userSecurityFields := []string{
+		"mfa_coverage_pct", "mfa_phishing_resistant_pct", "inactive_pct", "locked_out_pct",
+	}
+	for _, field := range userSecurityFields {
+		if _, ok := userSecurity[field]; !ok {
+			t.Errorf("user_security missing required field: %s", field)
+		}
+	}
+
+	// Check app_security fields
+	appSecurity, ok := data["app_security"].(map[string]interface{})
+	if !ok {
+		t.Fatal("app_security is not an object")
+	}
+	appSecurityFields := []string{"sso_coverage_pct", "provisioning_enabled_pct"}
+	for _, field := range appSecurityFields {
+		if _, ok := appSecurity[field]; !ok {
+			t.Errorf("app_security missing required field: %s", field)
+		}
+	}
+
+	// Check policy fields
+	policy, ok := data["policy"].(map[string]interface{})
+	if !ok {
+		t.Fatal("policy is not an object")
+	}
+	policyFields := []string{"mfa_required", "session_lifetime_max_min", "idle_timeout_max_min"}
+	for _, field := range policyFields {
+		if _, ok := policy[field]; !ok {
+			t.Errorf("policy missing required field: %s", field)
+		}
+	}
+}

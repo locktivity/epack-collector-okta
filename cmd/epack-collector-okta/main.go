@@ -57,8 +57,23 @@ func run(ctx componentsdk.CollectorContext) error {
 		return componentsdk.NewNetworkError("collecting posture: %v", err)
 	}
 
-	// Emit the collected data (SDK handles protocol envelope)
-	return ctx.Emit(posture)
+	// Transform to normalized idp-posture format
+	normalized := posture.ToIDPPosture()
+
+	// Emit both detailed and normalized artifacts
+	return ctx.Emit([]componentsdk.CollectedArtifact{
+		{
+			// Detailed Okta-specific output
+			Data: posture,
+			Path: "artifacts/okta.json",
+		},
+		{
+			// Normalized IDP posture for profile evaluation
+			Data:   normalized,
+			Schema: "evidencepack/idp-posture@v1",
+			Path:   "artifacts/okta.idp-posture.json",
+		},
+	})
 }
 
 // getString safely extracts a string from config map
