@@ -19,6 +19,7 @@ type ProgressFunc func(current, total int64, message string)
 type Config struct {
 	OrgDomain  string `json:"org_domain"`  // e.g., "company.okta.com"
 	ClientID   string `json:"client_id"`   // OAuth 2.0 client ID
+	KeyID      string `json:"key_id"`      // Key ID (kid) for JWT header - from Okta public key
 	PrivateKey string `json:"private_key"` // Private key for JWT assertion (PEM)
 	APIToken   string `json:"api_token"`   // SSWS token (legacy, less secure)
 

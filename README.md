@@ -34,6 +34,7 @@ collectors:
     config:
       org_domain: company.okta.com
       client_id: 0oa1234567890abcdef
+      key_id: abc123xyz                    # From Okta public key settings
     secrets:
       - OKTA_PRIVATE_KEY
 ```
@@ -44,10 +45,12 @@ collectors:
 
 1. Create an OAuth 2.0 service app in Okta Admin Console
 2. Configure public key authentication and generate a key pair
-3. Download the private key in **PEM format** (not JWK/JSON)
-4. Grant API scopes: `okta.users.read`, `okta.apps.read`, `okta.policies.read`
-5. Assign **Read Only Administrator** role to the service app (Security → Administrators)
-6. Set `OKTA_PRIVATE_KEY` environment variable:
+3. Uncheck **Require Demonstrating Proof of Possession (DPoP)**
+4. Download the private key in **PEM format** (not JWK/JSON)
+5. Copy the **Key ID** from the public key settings (General → Client Credentials → Public Keys)
+6. Grant API scopes: `okta.users.read`, `okta.apps.read`, `okta.policies.read`
+7. Assign **Read Only Administrator** role to the service app (Security → Administrators)
+8. Set `OKTA_PRIVATE_KEY` environment variable:
    ```bash
    export OKTA_PRIVATE_KEY="$(cat ~/.okta/epack-private-key.pem)"
    ```
@@ -124,6 +127,7 @@ export OKTA_ORG_DOMAIN=dev-12345.okta.com
 
 # OAuth 2.0 authentication (recommended)
 export OKTA_CLIENT_ID=0oa1234567890abcdef
+export OKTA_KEY_ID=abc123xyz
 export OKTA_PRIVATE_KEY="$(cat ~/.okta/epack-private-key.pem)"
 
 # Or API token authentication (legacy)

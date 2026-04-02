@@ -13,6 +13,7 @@ collectors:
     config:
       org_domain: company.okta.com
       client_id: 0oa1234567890abcdef
+      key_id: abc123xyz
     secrets:
       - OKTA_PRIVATE_KEY
 ```
@@ -136,6 +137,7 @@ collectors:
     config:
       org_domain: company.okta.com
       client_id: 0oa1234567890abcdef
+      key_id: prodkey123
     secrets:
       - OKTA_PROD_PRIVATE_KEY
 
@@ -144,6 +146,7 @@ collectors:
     config:
       org_domain: company.oktapreview.com
       client_id: 0oa0987654321fedcba
+      key_id: previewkey456
     secrets:
       - OKTA_PREVIEW_PRIVATE_KEY
 ```

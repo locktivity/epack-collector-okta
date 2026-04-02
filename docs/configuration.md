@@ -22,13 +22,14 @@ OAuth 2.0 with private key JWT is the recommended authentication method. It prov
 1. In the app settings, go to "Client Credentials"
 2. Edit the "Client authentication" section
 3. Select "Public key / Private key"
-4. In the "Public keys" section below, click "Edit"
-5. Keep "Save keys in Okta" selected
-6. Click "Generate new key"
-7. **Important**: When prompted, choose **PEM** format (not JWK/JSON)
-8. Download the private key immediately - Okta only shows it once
-9. Save the private key securely (e.g., `~/.okta/epack-private-key.pem`)
-10. **Disable DPoP**: In "General Settings", uncheck "Require Demonstrating Proof of Possession (DPoP) header in token requests" - this is redundant for server-side apps already using private key authentication
+4. **Disable DPoP**: Uncheck "Require Demonstrating Proof of Possession (DPoP) header in token requests"
+5. In the "Public keys" section below, click "Edit"
+6. Keep "Save keys in Okta" selected
+7. Click "Generate new key"
+8. **Important**: When prompted, choose **PEM** format (not JWK/JSON)
+9. Download the private key immediately - Okta only shows it once
+10. Save the private key securely (e.g., `~/.okta/epack-private-key.pem`)
+11. **Copy the Key ID**: After saving, expand the key details to find the Key ID (a string like `abc123xyz...`). You'll need this for your epack config.
 
 #### Step 3: Grant API Scopes
 
@@ -48,7 +49,7 @@ OAuth scopes alone aren't enough - the service app needs an admin role to access
 4. Under "Role", select **Read Only Administrator**
 5. Click **Save Changes**
 
-#### Step 4: Configure epack
+#### Step 5: Configure epack
 
 ```yaml
 collectors:
@@ -57,6 +58,7 @@ collectors:
     config:
       org_domain: your-org.okta.com
       client_id: 0oa1234567890abcdef   # From app settings
+      key_id: abc123xyz                # From public key settings
     secrets:
       - OKTA_PRIVATE_KEY               # PEM-encoded private key
 ```
@@ -105,6 +107,7 @@ export OKTA_API_TOKEN="00abcdef..."
 |--------|----------|-------------|
 | `org_domain` | Yes | Your Okta organization domain (e.g., `company.okta.com`) |
 | `client_id` | For OAuth | OAuth 2.0 client ID from your service app |
+| `key_id` | For OAuth | Key ID from the public key settings in your Okta app |
 
 ## Environment Variables
 
@@ -118,14 +121,16 @@ export OKTA_API_TOKEN="00abcdef..."
 ### "Authentication required" error
 
 Ensure either:
-- Both `client_id` config and `OKTA_PRIVATE_KEY` env var are set (for OAuth), OR
+- `client_id`, `key_id` config and `OKTA_PRIVATE_KEY` env var are all set (for OAuth), OR
 - `OKTA_API_TOKEN` env var is set (for API token auth)
 
-### "Token exchange failed" error
+### "Token exchange failed" or "invalid_client - JWT kid is invalid" error
 
 For OAuth 2.0:
-- Verify the client ID is correct
-- Ensure the private key matches the public key configured in Okta
+- Verify the `client_id` is correct
+- Verify the `key_id` matches the Key ID shown in Okta (General → Client Credentials → Public Keys)
+- Ensure the private key matches the public key configured in Okta (they're a matched pair)
+- Make sure DPoP is disabled
 - Check that all required scopes are granted
 
 ### "Rate limited" errors

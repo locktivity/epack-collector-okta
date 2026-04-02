@@ -57,7 +57,8 @@ func NewClient(orgDomain, apiToken string) *Client {
 
 // NewClientWithOAuth creates a client using OAuth 2.0 private key JWT.
 // This is the recommended authentication method.
-func NewClientWithOAuth(orgDomain, clientID string, privateKey []byte) (*Client, error) {
+// keyID is the key identifier from Okta (found in the public keys section of your app).
+func NewClientWithOAuth(orgDomain, clientID, keyID string, privateKey []byte) (*Client, error) {
 	baseURL := buildBaseURL(orgDomain)
 
 	// Parse the private key
@@ -67,7 +68,7 @@ func NewClientWithOAuth(orgDomain, clientID string, privateKey []byte) (*Client,
 	}
 
 	// Generate JWT for client credentials grant
-	token, err := generateClientAssertionJWT(clientID, baseURL, key)
+	token, err := generateClientAssertionJWT(clientID, baseURL, keyID, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate JWT: %w", err)
 	}
@@ -132,7 +133,8 @@ func parsePrivateKey(keyData []byte) (*rsa.PrivateKey, error) {
 }
 
 // generateClientAssertionJWT creates a JWT for OAuth 2.0 client credentials flow.
-func generateClientAssertionJWT(clientID, baseURL string, key *rsa.PrivateKey) (string, error) {
+// keyID is the key identifier from Okta that must match the public key registered in your app.
+func generateClientAssertionJWT(clientID, baseURL, keyID string, key *rsa.PrivateKey) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"aud": fmt.Sprintf("%s/oauth2/v1/token", baseURL),
@@ -143,6 +145,8 @@ func generateClientAssertionJWT(clientID, baseURL string, key *rsa.PrivateKey) (
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	// Set the key ID in the JWT header - required by Okta to identify which public key to use
+	token.Header["kid"] = keyID
 	return token.SignedString(key)
 }
 

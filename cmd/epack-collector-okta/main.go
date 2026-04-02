@@ -30,6 +30,7 @@ func run(ctx componentsdk.CollectorContext) error {
 	config := collector.Config{
 		OrgDomain:  getString(cfg, "org_domain"),
 		ClientID:   getString(cfg, "client_id"),
+		KeyID:      getString(cfg, "key_id"),
 		PrivateKey: ctx.Secret("OKTA_PRIVATE_KEY"),
 		APIToken:   ctx.Secret("OKTA_API_TOKEN"),
 		OnStatus:   ctx.Status,
@@ -41,10 +42,10 @@ func run(ctx componentsdk.CollectorContext) error {
 	}
 
 	// Check for valid auth configuration
-	hasOAuthAuth := config.ClientID != "" && config.PrivateKey != ""
+	hasOAuthAuth := config.ClientID != "" && config.KeyID != "" && config.PrivateKey != ""
 	hasTokenAuth := config.APIToken != ""
 	if !hasOAuthAuth && !hasTokenAuth {
-		return componentsdk.NewConfigError("authentication required: provide client_id + OKTA_PRIVATE_KEY or OKTA_API_TOKEN")
+		return componentsdk.NewConfigError("authentication required: provide client_id + key_id + OKTA_PRIVATE_KEY or OKTA_API_TOKEN")
 	}
 
 	// Create collector and collect posture

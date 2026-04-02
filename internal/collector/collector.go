@@ -39,9 +39,13 @@ func New(config Config) (*Collector, error) {
 
 	if config.ClientID != "" && config.PrivateKey != "" {
 		// OAuth 2.0 auth (recommended)
+		if config.KeyID == "" {
+			return nil, fmt.Errorf("key_id is required for OAuth 2.0 authentication")
+		}
 		client, err = okta.NewClientWithOAuth(
 			config.OrgDomain,
 			config.ClientID,
+			config.KeyID,
 			[]byte(config.PrivateKey),
 		)
 		if err != nil {
