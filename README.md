@@ -7,9 +7,10 @@ Okta organization security posture collector for [epack](https://github.com/lock
 This collector gathers security posture metrics from an Okta organization, including:
 
 - **Posture**: MFA coverage, phishing-resistant MFA, SSO coverage
-- **Users**: Account health (expired passwords, lockouts, inactive accounts)
+- **Users**: Account health (expired passwords, lockouts, inactive and suspended accounts)
 - **Apps**: Provisioning and deprovisioning automation
-- **Policy**: MFA requirements, session settings
+- **Privileged Access**: Admin role coverage, super admins, and privileged MFA strength
+- **Policy**: MFA coverage evaluation, session settings
 
 ## Installation
 
@@ -48,7 +49,7 @@ collectors:
 3. Uncheck **Require Demonstrating Proof of Possession (DPoP)**
 4. Download the private key in **PEM format** (not JWK/JSON)
 5. Copy the **Key ID** from the public key settings (General → Client Credentials → Public Keys)
-6. Grant API scopes: `okta.users.read`, `okta.apps.read`, `okta.policies.read`
+6. Grant API scopes: `okta.users.read`, `okta.groups.read`, `okta.apps.read`, `okta.policies.read`, `okta.roles.read`
 7. Assign **Read Only Administrator** role to the service app (Security → Administrators)
 8. Set `OKTA_PRIVATE_KEY` environment variable:
    ```bash
@@ -79,16 +80,25 @@ See [docs/schema/v1.0.0.json](docs/schema/v1.0.0.json) for the full JSON schema.
   "users": {
     "password_expired": 2,
     "locked_out": 0,
-    "inactive": 15
+    "inactive": 15,
+    "suspended": 3
   },
   "apps": {
     "provisioning_enabled": 40,
     "deprovisioning_enabled": 30
   },
+  "privileged_access": {
+    "privileged_users_count": 6,
+    "super_admin_count": 2,
+    "standing_privileged_users_count": 6,
+    "privileged_mfa_coverage_pct": 100,
+    "privileged_phishing_resistant_pct": 50
+  },
   "policy": {
     "policy_count": 2,
     "mfa_required_all": false,
     "mfa_required_any": true,
+    "mfa_required_coverage_pct": 33,
     "session_lifetime_min_minutes": 15,
     "session_lifetime_max_minutes": 1440,
     "idle_timeout_min_minutes": 5,

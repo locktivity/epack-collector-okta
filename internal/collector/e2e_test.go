@@ -123,8 +123,12 @@ func TestE2E_ValidatePostureMetrics(t *testing.T) {
 		{"users.password_expired", posture.Users.PasswordExpired},
 		{"users.locked_out", posture.Users.LockedOut},
 		{"users.inactive", posture.Users.Inactive},
+		{"users.suspended", posture.Users.Suspended},
 		{"apps.provisioning_enabled", posture.Apps.ProvisioningEnabled},
 		{"apps.deprovisioning_enabled", posture.Apps.DeprovisioningEnabled},
+		{"privileged_access.privileged_mfa_coverage_pct", posture.PrivilegedAccess.PrivilegedMFACoveragePct},
+		{"privileged_access.privileged_phishing_resistant_pct", posture.PrivilegedAccess.PrivilegedPhishingResistantPct},
+		{"policy.mfa_required_coverage_pct", posture.Policy.MFARequiredCoveragePct},
 	}
 
 	for _, pf := range percentFields {
@@ -154,8 +158,9 @@ func TestE2E_ValidatePolicySettings(t *testing.T) {
 
 	// Log policy settings
 	t.Logf("Policy Count: %d", posture.Policy.PolicyCount)
-	t.Logf("MFA Required (all policies): %v", posture.Policy.MFARequiredAll)
-	t.Logf("MFA Required (any policy): %v", posture.Policy.MFARequiredAny)
+	t.Logf("MFA Required (all users): %v", posture.Policy.MFARequiredAll)
+	t.Logf("MFA Required (any users): %v", posture.Policy.MFARequiredAny)
+	t.Logf("MFA Required Coverage: %d%%", posture.Policy.MFARequiredCoveragePct)
 
 	if posture.Policy.SessionLifetimeMinMinutes != nil {
 		t.Logf("Session Lifetime Min: %d minutes", *posture.Policy.SessionLifetimeMinMinutes)
@@ -217,6 +222,7 @@ func TestE2E_OutputValidJSON(t *testing.T) {
 		"posture",
 		"users",
 		"apps",
+		"privileged_access",
 		"policy",
 	}
 

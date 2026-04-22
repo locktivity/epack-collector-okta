@@ -65,16 +65,25 @@ epack collect
     "users": {
       "password_expired": 2,
       "locked_out": 0,
-      "inactive": 15
+      "inactive": 15,
+      "suspended": 3
     },
     "apps": {
       "provisioning_enabled": 40,
       "deprovisioning_enabled": 30
     },
+    "privileged_access": {
+      "privileged_users_count": 6,
+      "super_admin_count": 2,
+      "standing_privileged_users_count": 6,
+      "privileged_mfa_coverage_pct": 100,
+      "privileged_phishing_resistant_pct": 50
+    },
     "policy": {
       "policy_count": 2,
       "mfa_required_all": false,
       "mfa_required_any": true,
+      "mfa_required_coverage_pct": 33,
       "session_lifetime_min_minutes": 15,
       "session_lifetime_max_minutes": 1440,
       "idle_timeout_min_minutes": 5,

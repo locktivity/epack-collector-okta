@@ -22,6 +22,9 @@ type OktaClient interface {
 	// User operations
 	FetchUsers(ctx context.Context, callback func([]User) error) error
 	FetchUserFactors(ctx context.Context, userID string) ([]Factor, error)
+	FetchGroupUsers(ctx context.Context, groupID string, callback func([]User) error) error
+	FetchUsersWithRoleAssignments(ctx context.Context, callback func([]RoleAssignedUser) error) error
+	FetchUserRoleAssignments(ctx context.Context, userID string) ([]RoleAssignment, error)
 
 	// Application operations
 	FetchApplications(ctx context.Context, callback func([]Application) error) error
@@ -29,6 +32,9 @@ type OktaClient interface {
 	// Policy operations
 	FetchPolicies(ctx context.Context, policyType string) ([]Policy, error)
 	FetchPolicyRules(ctx context.Context, policyID string) ([]PolicyRule, error)
+
+	// Device assurance operations
+	FetchDeviceAssurancePolicies(ctx context.Context) ([]DeviceAssurancePolicy, error)
 
 	// Org settings
 	FetchOrgSettings(ctx context.Context) (*OrgSettings, error)
@@ -156,7 +162,7 @@ func exchangeJWTForToken(baseURL, clientID, assertion string) (string, error) {
 
 	data := url.Values{}
 	data.Set("grant_type", "client_credentials")
-	data.Set("scope", "okta.users.read okta.apps.read okta.policies.read")
+	data.Set("scope", "okta.users.read okta.groups.read okta.apps.read okta.policies.read okta.roles.read")
 	data.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
 	data.Set("client_assertion", assertion)
 
@@ -195,7 +201,6 @@ func exchangeJWTForToken(baseURL, clientID, assertion string) (string, error) {
 
 	return result.AccessToken, nil
 }
-
 
 // doRequest performs an HTTP request with authentication and rate limit handling.
 func (c *Client) doRequest(ctx context.Context, method, path string) (*http.Response, error) {
@@ -317,6 +322,95 @@ func (c *Client) FetchUserFactors(ctx context.Context, userID string) ([]Factor,
 	return factors, nil
 }
 
+// FetchGroupUsers fetches all users in a group with pagination.
+func (c *Client) FetchGroupUsers(ctx context.Context, groupID string, callback func([]User) error) error {
+	path := fmt.Sprintf("/api/v1/groups/%s/users?limit=%d", groupID, paginationLimit)
+
+	for path != "" {
+		resp, err := c.doRequest(ctx, "GET", path)
+		if err != nil {
+			return err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			_ = resp.Body.Close()
+			return fmt.Errorf("group users API returned status %d for group %s", resp.StatusCode, groupID)
+		}
+
+		var users []User
+		if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
+			_ = resp.Body.Close()
+			return err
+		}
+		_ = resp.Body.Close()
+
+		if err := callback(users); err != nil {
+			return err
+		}
+
+		path = getNextLink(resp.Header.Get("Link"))
+	}
+
+	return nil
+}
+
+// FetchUsersWithRoleAssignments fetches all users that have role assignments.
+func (c *Client) FetchUsersWithRoleAssignments(ctx context.Context, callback func([]RoleAssignedUser) error) error {
+	path := fmt.Sprintf("/api/v1/iam/assignees/users?limit=%d", paginationLimit)
+
+	for path != "" {
+		resp, err := c.doRequest(ctx, "GET", path)
+		if err != nil {
+			return err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			_ = resp.Body.Close()
+			return fmt.Errorf("role assignees API returned status %d", resp.StatusCode)
+		}
+
+		var page RoleAssignedUsersResponse
+		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+			_ = resp.Body.Close()
+			return err
+		}
+		_ = resp.Body.Close()
+
+		if err := callback(page.Value); err != nil {
+			return err
+		}
+
+		path = ""
+		if page.Links.Next != nil && page.Links.Next.Href != "" {
+			path = getPathAndQuery(page.Links.Next.Href)
+		}
+	}
+
+	return nil
+}
+
+// FetchUserRoleAssignments fetches all role assignments for a user.
+func (c *Client) FetchUserRoleAssignments(ctx context.Context, userID string) ([]RoleAssignment, error) {
+	path := fmt.Sprintf("/api/v1/users/%s/roles", userID)
+
+	resp, err := c.doRequest(ctx, "GET", path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("user roles API returned status %d for user %s", resp.StatusCode, userID)
+	}
+
+	var roles []RoleAssignment
+	if err := json.NewDecoder(resp.Body).Decode(&roles); err != nil {
+		return nil, err
+	}
+
+	return roles, nil
+}
+
 // FetchApplications fetches all applications with pagination.
 func (c *Client) FetchApplications(ctx context.Context, callback func([]Application) error) error {
 	path := fmt.Sprintf("/api/v1/apps?limit=%d", paginationLimit)
@@ -405,6 +499,28 @@ func (c *Client) FetchPolicyRules(ctx context.Context, policyID string) ([]Polic
 	return rules, nil
 }
 
+// FetchDeviceAssurancePolicies fetches all device assurance policies.
+func (c *Client) FetchDeviceAssurancePolicies(ctx context.Context) ([]DeviceAssurancePolicy, error) {
+	path := "/api/v1/device-assurances"
+
+	resp, err := c.doRequest(ctx, "GET", path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("device assurances API returned status %d", resp.StatusCode)
+	}
+
+	var policies []DeviceAssurancePolicy
+	if err := json.NewDecoder(resp.Body).Decode(&policies); err != nil {
+		return nil, err
+	}
+
+	return policies, nil
+}
+
 // FetchOrgSettings fetches organization settings.
 func (c *Client) FetchOrgSettings(ctx context.Context) (*OrgSettings, error) {
 	path := "/api/v1/org"
@@ -456,4 +572,20 @@ func getNextLink(linkHeader string) string {
 	}
 
 	return ""
+}
+
+// getPathAndQuery extracts the path and query string from an absolute URL.
+func getPathAndQuery(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	if u.RawQuery != "" {
+		return u.Path + "?" + u.RawQuery
+	}
+	return u.Path
 }

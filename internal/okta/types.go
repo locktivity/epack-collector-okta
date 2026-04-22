@@ -33,6 +33,31 @@ type Factor struct {
 	Status     string `json:"status"` // ACTIVE, PENDING_ACTIVATION, ENROLLED, INACTIVE, NOT_SETUP
 }
 
+// RoleAssignedUser represents a user that has at least one role assignment.
+type RoleAssignedUser struct {
+	ID  string `json:"id"`
+	ORN string `json:"orn"`
+}
+
+// RoleAssignment represents a role assigned to a user.
+type RoleAssignment struct {
+	ID             string `json:"id"`
+	Label          string `json:"label"`
+	Type           string `json:"type"`
+	Status         string `json:"status"`
+	AssignmentType string `json:"assignmentType"` // USER or GROUP
+}
+
+// RoleAssignedUsersResponse is the paginated response for users with roles.
+type RoleAssignedUsersResponse struct {
+	Value []RoleAssignedUser `json:"value"`
+	Links struct {
+		Next *struct {
+			Href string `json:"href"`
+		} `json:"next,omitempty"`
+	} `json:"_links,omitempty"`
+}
+
 // Application represents an Okta application.
 type Application struct {
 	ID          string        `json:"id"`
@@ -199,6 +224,19 @@ type PolicyRuleConditions struct {
 		Include    []string `json:"include,omitempty"`
 		Exclude    []string `json:"exclude,omitempty"`
 	} `json:"network,omitempty"`
+	Device *DeviceCondition `json:"device,omitempty"`
+}
+
+// DeviceCondition specifies device requirements for a policy rule.
+type DeviceCondition struct {
+	Managed    string              `json:"managed,omitempty"`    // "true", "false"
+	Registered string              `json:"registered,omitempty"` // "true", "false"
+	Assurance  *AssuranceCondition `json:"assurance,omitempty"`
+}
+
+// AssuranceCondition specifies which device assurance policies must be satisfied.
+type AssuranceCondition struct {
+	Include []string `json:"include,omitempty"` // Device assurance policy IDs
 }
 
 // PolicyRuleActions contains rule actions.
@@ -247,4 +285,13 @@ type OrgSettings struct {
 	CompanyName string    `json:"companyName"`
 	Status      string    `json:"status"`
 	Created     time.Time `json:"created"`
+}
+
+// DeviceAssurancePolicy represents an Okta device assurance policy.
+type DeviceAssurancePolicy struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Platform    string    `json:"platform"` // IOS, ANDROID, MACOS, WINDOWS, CHROMEOS
+	CreatedDate time.Time `json:"createdDate"`
+	LastUpdate  time.Time `json:"lastUpdate"`
 }

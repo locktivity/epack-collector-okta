@@ -30,13 +30,15 @@ type Config struct {
 
 // OrgPosture represents the collected security posture of an Okta organization.
 type OrgPosture struct {
-	SchemaVersion string       `json:"schema_version"`
-	CollectedAt   string       `json:"collected_at"`
-	OrgDomain     string       `json:"org_domain"`
-	Posture       Posture      `json:"posture"`
-	Users         UserMetrics  `json:"users"`
-	Apps          AppMetrics   `json:"apps"`
-	Policy        PolicyConfig `json:"policy"`
+	SchemaVersion    string                  `json:"schema_version"`
+	CollectedAt      string                  `json:"collected_at"`
+	OrgDomain        string                  `json:"org_domain"`
+	Posture          Posture                 `json:"posture"`
+	Users            UserMetrics             `json:"users"`
+	Apps             AppMetrics              `json:"apps"`
+	PrivilegedAccess PrivilegedAccessMetrics `json:"privileged_access"`
+	Policy           PolicyConfig            `json:"policy"`
+	DeviceAccess     DeviceAccessMetrics     `json:"device_access"`
 }
 
 // Posture contains high-level security posture scores (all percentages 0-100).
@@ -51,6 +53,7 @@ type UserMetrics struct {
 	PasswordExpired int `json:"password_expired"` // % users with expired passwords
 	LockedOut       int `json:"locked_out"`       // % users currently locked out
 	Inactive        int `json:"inactive"`         // % users inactive for 90+ days
+	Suspended       int `json:"suspended"`        // % users currently suspended
 }
 
 // AppMetrics contains application lifecycle percentages (all 0-100).
@@ -59,15 +62,33 @@ type AppMetrics struct {
 	DeprovisioningEnabled int `json:"deprovisioning_enabled"` // % apps with auto-deprovisioning
 }
 
+// PrivilegedAccessMetrics contains privileged account counts and MFA coverage.
+type PrivilegedAccessMetrics struct {
+	PrivilegedUsersCount           int `json:"privileged_users_count"`
+	SuperAdminCount                int `json:"super_admin_count"`
+	StandingPrivilegedUsersCount   int `json:"standing_privileged_users_count"`
+	PrivilegedMFACoveragePct       int `json:"privileged_mfa_coverage_pct"`
+	PrivilegedPhishingResistantPct int `json:"privileged_phishing_resistant_pct"`
+}
+
 // PolicyConfig contains aggregated policy settings across all active policies.
 type PolicyConfig struct {
 	PolicyCount               int  `json:"policy_count"`                 // Number of active sign-on policies
-	MFARequiredAll            bool `json:"mfa_required_all"`             // All policies require MFA
-	MFARequiredAny            bool `json:"mfa_required_any"`             // At least one policy requires MFA
-	SessionLifetimeMinMinutes *int `json:"session_lifetime_min_minutes"` // Shortest session lifetime across policies
-	SessionLifetimeMaxMinutes *int `json:"session_lifetime_max_minutes"` // Longest session lifetime across policies
-	IdleTimeoutMinMinutes     *int `json:"idle_timeout_min_minutes"`     // Shortest idle timeout across policies
-	IdleTimeoutMaxMinutes     *int `json:"idle_timeout_max_minutes"`     // Longest idle timeout across policies
+	MFARequiredAll            bool `json:"mfa_required_all"`             // MFA is required for all non-deprovisioned users
+	MFARequiredAny            bool `json:"mfa_required_any"`             // MFA is required for at least one non-deprovisioned user
+	MFARequiredCoveragePct    int  `json:"mfa_required_coverage_pct"`    // % of non-deprovisioned users covered by an MFA requirement
+	SessionLifetimeMinMinutes *int `json:"session_lifetime_min_minutes"` // Shortest session lifetime across active sign-on rules
+	SessionLifetimeMaxMinutes *int `json:"session_lifetime_max_minutes"` // Longest session lifetime across active sign-on rules
+	IdleTimeoutMinMinutes     *int `json:"idle_timeout_min_minutes"`     // Shortest idle timeout across active sign-on rules
+	IdleTimeoutMaxMinutes     *int `json:"idle_timeout_max_minutes"`     // Longest idle timeout across active sign-on rules
+}
+
+// DeviceAccessMetrics contains device access enforcement posture.
+type DeviceAccessMetrics struct {
+	ManagedDeviceRequired            bool `json:"managed_device_required"`              // Whether any sign-on policy rule requires managed devices
+	ManagedDeviceRequiredCoveragePct int  `json:"managed_device_required_coverage_pct"` // % of users covered by a managed device requirement
+	ManagedDeviceRequiredForAdmins   bool `json:"managed_device_required_for_admins"`   // Whether all privileged users are covered by a managed device requirement
+	DeviceAssurancePoliciesCount     int  `json:"device_assurance_policies_count"`      // Number of device assurance policies defined
 }
 
 // NewOrgPosture creates a new OrgPosture with the current timestamp.

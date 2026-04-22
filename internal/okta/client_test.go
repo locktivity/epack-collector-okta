@@ -167,6 +167,124 @@ func TestFetchUserFactors_Forbidden(t *testing.T) {
 	}
 }
 
+func TestFetchGroupUsers_Pagination(t *testing.T) {
+	page := 0
+	var serverURL string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/groups/group123/users" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+
+		if page == 0 {
+			w.Header().Set("Link", `<`+serverURL+`/api/v1/groups/group123/users?after=cursor123>; rel="next"`)
+			_ = json.NewEncoder(w).Encode([]User{{ID: "user1"}})
+			page++
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode([]User{{ID: "user2"}})
+	}))
+	defer server.Close()
+	serverURL = server.URL
+
+	client := NewClientWithHTTP(server.Client(), server.URL)
+	client.SetToken("test-token")
+
+	var fetched []User
+	err := client.FetchGroupUsers(context.Background(), "group123", func(users []User) error {
+		fetched = append(fetched, users...)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fetched) != 2 {
+		t.Fatalf("expected 2 group users, got %d", len(fetched))
+	}
+}
+
+func TestFetchUsersWithRoleAssignments(t *testing.T) {
+	page := 0
+	var serverURL string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/iam/assignees/users" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+
+		if page == 0 {
+			_ = json.NewEncoder(w).Encode(RoleAssignedUsersResponse{
+				Value: []RoleAssignedUser{{ID: "user1"}},
+				Links: struct {
+					Next *struct {
+						Href string `json:"href"`
+					} `json:"next,omitempty"`
+				}{
+					Next: &struct {
+						Href string `json:"href"`
+					}{Href: serverURL + "/api/v1/iam/assignees/users?after=abc123"},
+				},
+			})
+			page++
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(RoleAssignedUsersResponse{
+			Value: []RoleAssignedUser{{ID: "user2"}},
+		})
+	}))
+	defer server.Close()
+	serverURL = server.URL
+
+	client := NewClientWithHTTP(server.Client(), server.URL)
+	client.SetToken("test-token")
+
+	var fetched []RoleAssignedUser
+	err := client.FetchUsersWithRoleAssignments(context.Background(), func(users []RoleAssignedUser) error {
+		fetched = append(fetched, users...)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fetched) != 2 {
+		t.Fatalf("expected 2 role-assigned users, got %d", len(fetched))
+	}
+}
+
+func TestFetchUserRoleAssignments(t *testing.T) {
+	roles := []RoleAssignment{
+		{ID: "r1", Type: "USER_ADMIN", AssignmentType: "USER"},
+		{ID: "r2", Type: "SUPER_ADMIN", AssignmentType: "GROUP"},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/users/user123/roles" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(roles)
+	}))
+	defer server.Close()
+
+	client := NewClientWithHTTP(server.Client(), server.URL)
+	client.SetToken("test-token")
+
+	fetched, err := client.FetchUserRoleAssignments(context.Background(), "user123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fetched) != 2 {
+		t.Fatalf("expected 2 roles, got %d", len(fetched))
+	}
+	if fetched[1].Type != "SUPER_ADMIN" {
+		t.Fatalf("expected SUPER_ADMIN, got %s", fetched[1].Type)
+	}
+}
+
 func TestFetchApplications(t *testing.T) {
 	apps := []Application{
 		{ID: "app1", SignOnMode: "SAML_2_0", Status: "ACTIVE"},
@@ -320,6 +438,26 @@ func TestGetNextLink(t *testing.T) {
 			result := getNextLink(tt.header)
 			if result != tt.expected {
 				t.Errorf("getNextLink(%q) = %q, want %q", tt.header, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetPathAndQuery(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawURL   string
+		expected string
+	}{
+		{name: "empty", rawURL: "", expected: ""},
+		{name: "path only", rawURL: "https://example.okta.com/api/v1/users", expected: "/api/v1/users"},
+		{name: "path and query", rawURL: "https://example.okta.com/api/v1/iam/assignees/users?after=abc123&limit=100", expected: "/api/v1/iam/assignees/users?after=abc123&limit=100"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getPathAndQuery(tt.rawURL); got != tt.expected {
+				t.Fatalf("getPathAndQuery(%q) = %q, want %q", tt.rawURL, got, tt.expected)
 			}
 		})
 	}

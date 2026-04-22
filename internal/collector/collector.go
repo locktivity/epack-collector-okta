@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -94,10 +95,28 @@ func (c *Collector) Collect(ctx context.Context) (*OrgPosture, error) {
 		return nil, fmt.Errorf("failed to collect app metrics: %w", err)
 	}
 
+	c.status("Collecting privileged access metrics...")
+	privilegedMetrics, err := c.collectPrivilegedMetrics(ctx, userMetrics)
+	if err != nil {
+		return nil, fmt.Errorf("failed to collect privileged access metrics: %w", err)
+	}
+
 	c.status("Collecting policy metrics...")
-	policyMetrics, err := c.collectPolicyMetrics(ctx)
+	policyMetrics, err := c.collectPolicyMetrics(ctx, userMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect policy metrics: %w", err)
+	}
+
+	c.status("Collecting device access metrics...")
+	deviceAccessMetrics, err := c.collectDeviceAccessMetrics(
+		ctx,
+		userMetrics,
+		privilegedMetrics.privilegedUserIDs,
+		policyMetrics.signOnPolicies,
+		policyMetrics.groupMembers,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to collect device access metrics: %w", err)
 	}
 
 	posture.Posture = Posture{
@@ -110,6 +129,7 @@ func (c *Collector) Collect(ctx context.Context) (*OrgPosture, error) {
 		PasswordExpired: userMetrics.passwordExpired,
 		LockedOut:       userMetrics.lockedOut,
 		Inactive:        userMetrics.inactive,
+		Suspended:       userMetrics.suspended,
 	}
 
 	posture.Apps = AppMetrics{
@@ -117,14 +137,30 @@ func (c *Collector) Collect(ctx context.Context) (*OrgPosture, error) {
 		DeprovisioningEnabled: appMetrics.deprovisioningEnabled,
 	}
 
+	posture.PrivilegedAccess = PrivilegedAccessMetrics{
+		PrivilegedUsersCount:           privilegedMetrics.privilegedUsersCount,
+		SuperAdminCount:                privilegedMetrics.superAdminCount,
+		StandingPrivilegedUsersCount:   privilegedMetrics.standingPrivilegedUsersCount,
+		PrivilegedMFACoveragePct:       privilegedMetrics.privilegedMFACoveragePct,
+		PrivilegedPhishingResistantPct: privilegedMetrics.privilegedPhishingResistantPct,
+	}
+
 	posture.Policy = PolicyConfig{
 		PolicyCount:               policyMetrics.policyCount,
-		MFARequiredAll:            policyMetrics.policyCount > 0 && policyMetrics.mfaRequiredCount >= policyMetrics.policyCount,
-		MFARequiredAny:            policyMetrics.mfaRequiredCount > 0,
+		MFARequiredAll:            policyMetrics.mfaRequiredAll,
+		MFARequiredAny:            policyMetrics.mfaRequiredAny,
+		MFARequiredCoveragePct:    policyMetrics.mfaRequiredCoveragePct,
 		SessionLifetimeMinMinutes: policyMetrics.sessionLifetimeMin,
 		SessionLifetimeMaxMinutes: policyMetrics.sessionLifetimeMax,
 		IdleTimeoutMinMinutes:     policyMetrics.idleTimeoutMin,
 		IdleTimeoutMaxMinutes:     policyMetrics.idleTimeoutMax,
+	}
+
+	posture.DeviceAccess = DeviceAccessMetrics{
+		ManagedDeviceRequired:            deviceAccessMetrics.managedDeviceRequired,
+		ManagedDeviceRequiredCoveragePct: deviceAccessMetrics.managedDeviceRequiredCoveragePct,
+		ManagedDeviceRequiredForAdmins:   deviceAccessMetrics.managedDeviceRequiredForAdmins,
+		DeviceAssurancePoliciesCount:     deviceAccessMetrics.deviceAssurancePoliciesCount,
 	}
 
 	c.status("Collection complete")
@@ -140,18 +176,29 @@ type userMetricsCollector struct {
 	passwordExpired      int
 	lockedOut            int
 	inactive             int
+	suspended            int
 	mfaEnrolled          int
 	users                []okta.User // Collected users for second pass
+	userByID             map[string]okta.User
+	hasMFAByUser         map[string]bool
+	hasPhishingByUser    map[string]bool
 }
 
 func (c *Collector) collectUserMetrics(ctx context.Context) (*userMetricsCollector, error) {
-	metrics := &userMetricsCollector{}
+	metrics := &userMetricsCollector{
+		userByID:          make(map[string]okta.User),
+		hasMFAByUser:      make(map[string]bool),
+		hasPhishingByUser: make(map[string]bool),
+	}
 	inactiveThreshold := time.Now().AddDate(0, 0, -InactiveDaysThreshold)
 
 	// First pass: fetch all users
 	userCount := 0
 	err := c.client.FetchUsers(ctx, func(users []okta.User) error {
-		metrics.users = append(metrics.users, users...)
+		for _, user := range users {
+			metrics.users = append(metrics.users, user)
+			metrics.userByID[user.ID] = user
+		}
 		userCount += len(users)
 		c.status(fmt.Sprintf("Found %d users...", userCount))
 		return nil
@@ -173,6 +220,7 @@ func (c *Collector) collectUserMetrics(ctx context.Context) (*userMetricsCollect
 	metrics.passwordExpired = percent(metrics.passwordExpired, metrics.totalUsers)
 	metrics.lockedOut = percent(metrics.lockedOut, metrics.totalUsers)
 	metrics.inactive = percent(metrics.inactive, metrics.totalUsers)
+	metrics.suspended = percent(metrics.suspended, metrics.totalUsers)
 
 	return metrics, nil
 }
@@ -194,6 +242,8 @@ func (c *Collector) processUser(ctx context.Context, user okta.User, inactiveThr
 		metrics.passwordExpired++
 	case StatusLockedOut:
 		metrics.lockedOut++
+	case StatusSuspended:
+		metrics.suspended++
 	}
 
 	c.processUserFactors(ctx, user.ID, metrics)
@@ -228,6 +278,9 @@ func (c *Collector) processUserFactors(ctx context.Context, userID string, metri
 	if hasPhishingResistant {
 		metrics.mfaPhishingResistant++
 	}
+
+	metrics.hasMFAByUser[userID] = hasMFA
+	metrics.hasPhishingByUser[userID] = hasPhishingResistant
 }
 
 // appMetricsCollector holds intermediate app collection state.
@@ -237,6 +290,77 @@ type appMetricsCollector struct {
 	provisioningEnabled   int
 	deprovisioningEnabled int
 	ssoCoverage           int
+}
+
+// privilegedMetricsCollector holds privileged access counts and MFA coverage.
+type privilegedMetricsCollector struct {
+	privilegedUsersCount           int
+	superAdminCount                int
+	standingPrivilegedUsersCount   int
+	privilegedMFAEnrolledCount     int
+	privilegedPhishingFactorCount  int
+	privilegedMFACoveragePct       int
+	privilegedPhishingResistantPct int
+	privilegedUserIDs              map[string]struct{} // Set of privileged user IDs for reuse
+}
+
+func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *userMetricsCollector) (*privilegedMetricsCollector, error) {
+	metrics := &privilegedMetricsCollector{
+		privilegedUserIDs: make(map[string]struct{}),
+	}
+	roleAssignedUserIDs := make(map[string]struct{})
+
+	err := c.client.FetchUsersWithRoleAssignments(ctx, func(users []okta.RoleAssignedUser) error {
+		for _, user := range users {
+			roleAssignedUserIDs[user.ID] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	total := int64(len(roleAssignedUserIDs))
+	current := int64(0)
+	for userID := range roleAssignedUserIDs {
+		current++
+		c.progress(current, total, fmt.Sprintf("Checking privileged roles for user %d of %d", current, total))
+
+		user, ok := userMetrics.userByID[userID]
+		if !ok {
+			return nil, fmt.Errorf("role-assigned user %s missing from user inventory", userID)
+		}
+		if user.Status == StatusDeprovisioned || user.Status == StatusSuspended {
+			continue
+		}
+
+		roles, err := c.client.FetchUserRoleAssignments(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if len(roles) == 0 {
+			continue
+		}
+
+		metrics.privilegedUsersCount++
+		metrics.standingPrivilegedUsersCount++
+		metrics.privilegedUserIDs[userID] = struct{}{}
+
+		if userMetrics.hasMFAByUser[userID] {
+			metrics.privilegedMFAEnrolledCount++
+		}
+		if userMetrics.hasPhishingByUser[userID] {
+			metrics.privilegedPhishingFactorCount++
+		}
+		if hasRoleType(roles, RoleTypeSuperAdmin) {
+			metrics.superAdminCount++
+		}
+	}
+
+	metrics.privilegedMFACoveragePct = percent(metrics.privilegedMFAEnrolledCount, metrics.privilegedUsersCount)
+	metrics.privilegedPhishingResistantPct = percent(metrics.privilegedPhishingFactorCount, metrics.privilegedUsersCount)
+
+	return metrics, nil
 }
 
 func (c *Collector) collectAppMetrics(ctx context.Context) (*appMetricsCollector, error) {
@@ -302,106 +426,434 @@ func checkProvisioningFeatures(features []string) (provisioning, deprovisioning 
 	return
 }
 
-// policyMetricsCollector holds intermediate policy collection state.
-type policyMetricsCollector struct {
-	policyCount        int
-	mfaRequiredCount   int
-	sessionLifetimeMin *int
-	sessionLifetimeMax *int
-	idleTimeoutMin     *int
-	idleTimeoutMax     *int
-}
-
-func (c *Collector) collectPolicyMetrics(ctx context.Context) (*policyMetricsCollector, error) {
-	metrics := &policyMetricsCollector{}
-
-	c.status("Checking sign-on policies...")
-	c.collectSignOnPolicies(ctx, metrics)
-
-	c.status("Checking MFA enrollment policies...")
-	c.collectMFAEnrollPolicies(ctx, metrics)
-
-	return metrics, nil
-}
-
-// collectSignOnPolicies collects sign-on policy metrics.
-func (c *Collector) collectSignOnPolicies(ctx context.Context, metrics *policyMetricsCollector) {
-	policies, err := c.client.FetchPolicies(ctx, PolicyTypeSignOn)
-	if err != nil {
-		return
-	}
-
-	for _, policy := range policies {
-		if policy.Status != StatusActive {
-			continue
+func hasRoleType(roles []okta.RoleAssignment, roleType string) bool {
+	for _, role := range roles {
+		if strings.EqualFold(role.Type, roleType) {
+			return true
 		}
-
-		rules, err := c.client.FetchPolicyRules(ctx, policy.ID)
-		if err != nil {
-			continue
-		}
-
-		if c.processSignOnRules(rules, metrics) {
-			metrics.policyCount++
-		}
-	}
-}
-
-// processSignOnRules processes sign-on policy rules and returns true if policy has active rules.
-func (c *Collector) processSignOnRules(rules []okta.PolicyRule, metrics *policyMetricsCollector) bool {
-	for _, rule := range rules {
-		if rule.Status != StatusActive || rule.Actions.Signon == nil {
-			continue
-		}
-
-		signon := rule.Actions.Signon
-
-		updateMinMax(&metrics.sessionLifetimeMin, &metrics.sessionLifetimeMax, signon.Session.MaxSessionLifetimeMinutes)
-		updateMinMax(&metrics.idleTimeoutMin, &metrics.idleTimeoutMax, signon.Session.MaxSessionIdleMinutes)
-
-		if signon.RequireFactor {
-			metrics.mfaRequiredCount++
-		}
-
-		return true // Use first active rule per policy
 	}
 	return false
 }
 
-// collectMFAEnrollPolicies collects MFA enrollment policy metrics.
-func (c *Collector) collectMFAEnrollPolicies(ctx context.Context, metrics *policyMetricsCollector) {
-	policies, err := c.client.FetchPolicies(ctx, PolicyTypeMFAEnroll)
+// policyMetricsCollector holds intermediate policy collection state.
+type policyMetricsCollector struct {
+	policyCount            int
+	totalUsers             int
+	mfaRequiredUsers       int
+	mfaRequiredAll         bool
+	mfaRequiredAny         bool
+	mfaRequiredCoveragePct int
+	sessionLifetimeMin     *int
+	sessionLifetimeMax     *int
+	idleTimeoutMin         *int
+	idleTimeoutMax         *int
+	// Shared data for device access metrics
+	signOnPolicies []scopedPolicy
+	groupMembers   map[string]map[string]struct{}
+}
+
+type scopedPolicy struct {
+	policy okta.Policy
+	rules  []okta.PolicyRule
+}
+
+func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userMetricsCollector) (*policyMetricsCollector, error) {
+	metrics := &policyMetricsCollector{}
+
+	c.status("Checking sign-on policies...")
+	signOnPolicies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypeSignOn)
 	if err != nil {
-		return
+		return nil, err
+	}
+	metrics.policyCount = len(signOnPolicies)
+	metrics.signOnPolicies = signOnPolicies
+	metrics.updateSignOnTimeouts(signOnPolicies)
+
+	c.status("Checking MFA enrollment policies...")
+	mfaEnrollPolicies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypeMFAEnroll)
+	if err != nil {
+		return nil, err
 	}
 
+	allPolicies := make([]scopedPolicy, 0, len(signOnPolicies)+len(mfaEnrollPolicies))
+	allPolicies = append(allPolicies, signOnPolicies...)
+	allPolicies = append(allPolicies, mfaEnrollPolicies...)
+
+	c.status("Resolving policy group memberships...")
+	groupMembers, err := c.fetchGroupMembersForPolicies(ctx, allPolicies)
+	if err != nil {
+		return nil, err
+	}
+	metrics.groupMembers = groupMembers
+
+	metrics.totalUsers = userMetrics.totalUsers
+	total := int64(len(userMetrics.users))
+	for i, user := range userMetrics.users {
+		c.progress(int64(i+1), total, fmt.Sprintf("Evaluating MFA policy coverage for user %d of %d", i+1, len(userMetrics.users)))
+
+		if user.Status == StatusDeprovisioned {
+			continue
+		}
+
+		if userCoveredByMFARequirement(user.ID, signOnPolicies, mfaEnrollPolicies, groupMembers) {
+			metrics.mfaRequiredUsers++
+		}
+	}
+
+	metrics.mfaRequiredCoveragePct = percent(metrics.mfaRequiredUsers, metrics.totalUsers)
+	metrics.mfaRequiredAny = metrics.mfaRequiredUsers > 0
+	metrics.mfaRequiredAll = metrics.totalUsers > 0 && metrics.mfaRequiredUsers == metrics.totalUsers
+
+	return metrics, nil
+}
+
+func (m *policyMetricsCollector) updateSignOnTimeouts(policies []scopedPolicy) {
+	for _, scopedPolicy := range policies {
+		for _, rule := range scopedPolicy.rules {
+			if rule.Status != StatusActive || rule.Actions.Signon == nil {
+				continue
+			}
+
+			signon := rule.Actions.Signon
+			updateMinMax(&m.sessionLifetimeMin, &m.sessionLifetimeMax, signon.Session.MaxSessionLifetimeMinutes)
+			updateMinMax(&m.idleTimeoutMin, &m.idleTimeoutMax, signon.Session.MaxSessionIdleMinutes)
+		}
+	}
+}
+
+func (c *Collector) fetchActivePoliciesWithRules(ctx context.Context, policyType string) ([]scopedPolicy, error) {
+	policies, err := c.client.FetchPolicies(ctx, policyType)
+	if err != nil {
+		return nil, err
+	}
+
+	activePolicies := make([]okta.Policy, 0, len(policies))
 	for _, policy := range policies {
 		if policy.Status != StatusActive {
 			continue
 		}
+		activePolicies = append(activePolicies, policy)
+	}
 
+	sort.Slice(activePolicies, func(i, j int) bool {
+		return activePolicies[i].Priority < activePolicies[j].Priority
+	})
+
+	result := make([]scopedPolicy, 0, len(activePolicies))
+	for _, policy := range activePolicies {
 		rules, err := c.client.FetchPolicyRules(ctx, policy.ID)
 		if err != nil {
-			continue
+			return nil, err
 		}
 
-		c.processMFAEnrollRules(rules, metrics)
+		sort.Slice(rules, func(i, j int) bool {
+			return rules[i].Priority < rules[j].Priority
+		})
+
+		result = append(result, scopedPolicy{
+			policy: policy,
+			rules:  rules,
+		})
+	}
+
+	return result, nil
+}
+
+func (c *Collector) fetchGroupMembersForPolicies(ctx context.Context, policies []scopedPolicy) (map[string]map[string]struct{}, error) {
+	groupIDs := collectPolicyGroupIDs(policies)
+	groupMembers := make(map[string]map[string]struct{}, len(groupIDs))
+	if len(groupIDs) == 0 {
+		return groupMembers, nil
+	}
+
+	total := int64(len(groupIDs))
+	for i, groupID := range groupIDs {
+		c.progress(int64(i+1), total, fmt.Sprintf("Loading policy group %d of %d", i+1, len(groupIDs)))
+
+		members := make(map[string]struct{})
+		if err := c.client.FetchGroupUsers(ctx, groupID, func(users []okta.User) error {
+			for _, user := range users {
+				members[user.ID] = struct{}{}
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+
+		groupMembers[groupID] = members
+	}
+
+	return groupMembers, nil
+}
+
+func collectPolicyGroupIDs(policies []scopedPolicy) []string {
+	groupIDs := make(map[string]struct{})
+
+	for _, scopedPolicy := range policies {
+		collectGroupIDsFromPeopleCondition(scopedPolicy.policy.Conditions.People, groupIDs)
+		for _, rule := range scopedPolicy.rules {
+			collectGroupIDsFromPeopleCondition(rule.Conditions.People, groupIDs)
+		}
+	}
+
+	ids := make([]string, 0, len(groupIDs))
+	for groupID := range groupIDs {
+		ids = append(ids, groupID)
+	}
+	sort.Strings(ids)
+
+	return ids
+}
+
+func collectGroupIDsFromPeopleCondition(people *okta.PolicyPeopleCondition, groupIDs map[string]struct{}) {
+	if people == nil || people.Groups == nil {
+		return
+	}
+
+	for _, groupID := range people.Groups.Include {
+		groupIDs[groupID] = struct{}{}
+	}
+	for _, groupID := range people.Groups.Exclude {
+		groupIDs[groupID] = struct{}{}
 	}
 }
 
-// processMFAEnrollRules processes MFA enrollment policy rules.
-func (c *Collector) processMFAEnrollRules(rules []okta.PolicyRule, metrics *policyMetricsCollector) {
+func userCoveredByMFARequirement(
+	userID string,
+	signOnPolicies []scopedPolicy,
+	mfaEnrollPolicies []scopedPolicy,
+	groupMembers map[string]map[string]struct{},
+) bool {
+	return signOnPolicyRequiresMFA(userID, signOnPolicies, groupMembers) ||
+		mfaEnrollmentPolicyRequiresMFA(userID, mfaEnrollPolicies, groupMembers)
+}
+
+func signOnPolicyRequiresMFA(userID string, policies []scopedPolicy, groupMembers map[string]map[string]struct{}) bool {
+	for _, scopedPolicy := range policies {
+		if !matchesPeopleCondition(userID, scopedPolicy.policy.Conditions.People, groupMembers) {
+			continue
+		}
+
+		return firstMatchingSignOnRuleRequiresMFA(userID, scopedPolicy.rules, groupMembers)
+	}
+
+	return false
+}
+
+func firstMatchingSignOnRuleRequiresMFA(userID string, rules []okta.PolicyRule, groupMembers map[string]map[string]struct{}) bool {
+	for _, rule := range rules {
+		if rule.Status != StatusActive || rule.Actions.Signon == nil {
+			continue
+		}
+		if !matchesPeopleCondition(userID, rule.Conditions.People, groupMembers) {
+			continue
+		}
+
+		return rule.Actions.Signon.RequireFactor
+	}
+
+	return false
+}
+
+func mfaEnrollmentPolicyRequiresMFA(userID string, policies []scopedPolicy, groupMembers map[string]map[string]struct{}) bool {
+	for _, scopedPolicy := range policies {
+		if !matchesPeopleCondition(userID, scopedPolicy.policy.Conditions.People, groupMembers) {
+			continue
+		}
+
+		return firstMatchingMFAEnrollRuleRequiresMFA(userID, scopedPolicy.rules, groupMembers)
+	}
+
+	return false
+}
+
+func firstMatchingMFAEnrollRuleRequiresMFA(userID string, rules []okta.PolicyRule, groupMembers map[string]map[string]struct{}) bool {
 	for _, rule := range rules {
 		if rule.Status != StatusActive || rule.Actions.Enroll == nil {
 			continue
 		}
+		if !matchesPeopleCondition(userID, rule.Conditions.People, groupMembers) {
+			continue
+		}
 
 		enrollAction := strings.ToUpper(rule.Actions.Enroll.Self)
-		if enrollAction == MFAActionChallenge || enrollAction == MFAActionLogin {
-			metrics.mfaRequiredCount++
-		}
-		return // Use first active rule per policy
+		return enrollAction == MFAActionChallenge || enrollAction == MFAActionLogin
 	}
+
+	return false
+}
+
+func matchesPeopleCondition(userID string, people *okta.PolicyPeopleCondition, groupMembers map[string]map[string]struct{}) bool {
+	if people == nil {
+		return true
+	}
+
+	included := !hasPeopleIncludes(people)
+	if people.Users != nil && containsString(people.Users.Include, userID) {
+		included = true
+	}
+	if people.Groups != nil && userInAnyGroup(userID, people.Groups.Include, groupMembers) {
+		included = true
+	}
+	if !included {
+		return false
+	}
+
+	if people.Users != nil && containsString(people.Users.Exclude, userID) {
+		return false
+	}
+	if people.Groups != nil && userInAnyGroup(userID, people.Groups.Exclude, groupMembers) {
+		return false
+	}
+
+	return true
+}
+
+func hasPeopleIncludes(people *okta.PolicyPeopleCondition) bool {
+	if people == nil {
+		return false
+	}
+
+	return (people.Users != nil && len(people.Users.Include) > 0) ||
+		(people.Groups != nil && len(people.Groups.Include) > 0)
+}
+
+func userInAnyGroup(userID string, groupIDs []string, groupMembers map[string]map[string]struct{}) bool {
+	for _, groupID := range groupIDs {
+		if members, ok := groupMembers[groupID]; ok {
+			if _, ok := members[userID]; ok {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+
+	return false
+}
+
+// deviceAccessMetricsCollector holds device access enforcement state.
+type deviceAccessMetricsCollector struct {
+	managedDeviceRequired            bool
+	managedDeviceRequiredUsers       int
+	managedDeviceRequiredAdmins      int
+	deviceAssurancePoliciesCount     int
+	managedDeviceRequiredCoveragePct int
+	managedDeviceRequiredForAdmins   bool
+}
+
+func (c *Collector) collectDeviceAccessMetrics(
+	ctx context.Context,
+	userMetrics *userMetricsCollector,
+	privilegedUserIDs map[string]struct{},
+	signOnPolicies []scopedPolicy,
+	groupMembers map[string]map[string]struct{},
+) (*deviceAccessMetricsCollector, error) {
+	metrics := &deviceAccessMetricsCollector{}
+
+	// Fetch device assurance policies count
+	c.status("Checking device assurance policies...")
+	deviceAssurancePolicies, err := c.client.FetchDeviceAssurancePolicies(ctx)
+	if err != nil {
+		return nil, err
+	}
+	metrics.deviceAssurancePoliciesCount = len(deviceAssurancePolicies)
+
+	// Check if any sign-on rule requires managed devices
+	metrics.managedDeviceRequired = anySignOnRuleRequiresManagedDevice(signOnPolicies)
+
+	// Evaluate per-user coverage
+	c.status("Evaluating device access coverage...")
+	totalUsers := 0
+	totalAdmins := len(privilegedUserIDs)
+	for _, user := range userMetrics.users {
+		if user.Status == StatusDeprovisioned {
+			continue
+		}
+		totalUsers++
+
+		if userCoveredByManagedDeviceRequirement(user.ID, signOnPolicies, groupMembers) {
+			metrics.managedDeviceRequiredUsers++
+
+			if _, isAdmin := privilegedUserIDs[user.ID]; isAdmin {
+				metrics.managedDeviceRequiredAdmins++
+			}
+		}
+	}
+
+	metrics.managedDeviceRequiredCoveragePct = percent(metrics.managedDeviceRequiredUsers, totalUsers)
+	metrics.managedDeviceRequiredForAdmins = totalAdmins > 0 && metrics.managedDeviceRequiredAdmins == totalAdmins
+
+	return metrics, nil
+}
+
+// anySignOnRuleRequiresManagedDevice checks if any active sign-on rule has a managed device requirement.
+func anySignOnRuleRequiresManagedDevice(policies []scopedPolicy) bool {
+	for _, sp := range policies {
+		for _, rule := range sp.rules {
+			if rule.Status != StatusActive {
+				continue
+			}
+			if ruleRequiresManagedDevice(rule) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// userCoveredByManagedDeviceRequirement checks if a user is covered by a managed device requirement.
+func userCoveredByManagedDeviceRequirement(
+	userID string,
+	signOnPolicies []scopedPolicy,
+	groupMembers map[string]map[string]struct{},
+) bool {
+	for _, sp := range signOnPolicies {
+		if !matchesPeopleCondition(userID, sp.policy.Conditions.People, groupMembers) {
+			continue
+		}
+
+		if firstMatchingSignOnRuleRequiresManagedDevice(userID, sp.rules, groupMembers) {
+			return true
+		}
+	}
+	return false
+}
+
+// firstMatchingSignOnRuleRequiresManagedDevice checks if the first matching rule for a user requires managed device.
+func firstMatchingSignOnRuleRequiresManagedDevice(
+	userID string,
+	rules []okta.PolicyRule,
+	groupMembers map[string]map[string]struct{},
+) bool {
+	for _, rule := range rules {
+		if rule.Status != StatusActive {
+			continue
+		}
+		if !matchesPeopleCondition(userID, rule.Conditions.People, groupMembers) {
+			continue
+		}
+
+		// First matching rule determines the result
+		return ruleRequiresManagedDevice(rule)
+	}
+	return false
+}
+
+// ruleRequiresManagedDevice checks if a policy rule has a managed device condition.
+func ruleRequiresManagedDevice(rule okta.PolicyRule) bool {
+	if rule.Conditions.Device == nil {
+		return false
+	}
+	return strings.EqualFold(rule.Conditions.Device.Managed, "true")
 }
 
 // updateMinMax updates min/max pointers with a new value if applicable.

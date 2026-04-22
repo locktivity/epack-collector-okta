@@ -6,6 +6,7 @@ const (
 	StatusDeprovisioned   = "DEPROVISIONED"
 	StatusPasswordExpired = "PASSWORD_EXPIRED"
 	StatusLockedOut       = "LOCKED_OUT"
+	StatusSuspended       = "SUSPENDED"
 )
 
 // Policy types.
@@ -24,8 +25,8 @@ const (
 
 // Application provisioning features.
 const (
-	FeaturePushNewUsers        = "PUSH_NEW_USERS"
-	FeatureImportNewUsers      = "IMPORT_NEW_USERS"
+	FeaturePushNewUsers         = "PUSH_NEW_USERS"
+	FeatureImportNewUsers       = "IMPORT_NEW_USERS"
 	FeaturePushUserDeactivation = "PUSH_USER_DEACTIVATION"
 )
 
@@ -34,6 +35,9 @@ const (
 	FactorTypeWebAuthn = "webauthn"
 	FactorTypeU2F      = "u2f"
 )
+
+// Role types.
+const RoleTypeSuperAdmin = "SUPER_ADMIN"
 
 // MFA enrollment actions.
 const (

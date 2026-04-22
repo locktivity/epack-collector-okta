@@ -4,7 +4,7 @@
   "title": "Okta Organization Security Posture",
   "description": "Security posture metrics collected from an Okta organization",
   "type": "object",
-  "required": ["schema_version", "collected_at", "org_domain", "posture", "users", "apps", "policy"],
+  "required": ["schema_version", "collected_at", "org_domain", "posture", "users", "apps", "privileged_access", "policy", "device_access"],
   "properties": {
     "schema_version": {
       "type": "string",
@@ -48,7 +48,7 @@
     "users": {
       "type": "object",
       "description": "User status metrics",
-      "required": ["password_expired", "locked_out", "inactive"],
+      "required": ["password_expired", "locked_out", "inactive", "suspended"],
       "properties": {
         "password_expired": {
           "type": "integer",
@@ -67,6 +67,12 @@
           "minimum": 0,
           "maximum": 100,
           "description": "Percentage of users inactive for 90+ days"
+        },
+        "suspended": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of users currently suspended"
         }
       }
     },
@@ -89,10 +95,50 @@
         }
       }
     },
+    "privileged_access": {
+      "type": "object",
+      "description": "Privileged access counts and MFA coverage",
+      "required": [
+        "privileged_users_count",
+        "super_admin_count",
+        "standing_privileged_users_count",
+        "privileged_mfa_coverage_pct",
+        "privileged_phishing_resistant_pct"
+      ],
+      "properties": {
+        "privileged_users_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of active users with any effective Okta admin role"
+        },
+        "super_admin_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of active users with the SUPER_ADMIN role"
+        },
+        "standing_privileged_users_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of active users with standing privileged access"
+        },
+        "privileged_mfa_coverage_pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of privileged users with any MFA factor enrolled"
+        },
+        "privileged_phishing_resistant_pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of privileged users with phishing-resistant MFA"
+        }
+      }
+    },
     "policy": {
       "type": "object",
       "description": "Aggregated security policy settings across all active policies",
-      "required": ["policy_count", "mfa_required_all", "mfa_required_any"],
+      "required": ["policy_count", "mfa_required_all", "mfa_required_any", "mfa_required_coverage_pct"],
       "properties": {
         "policy_count": {
           "type": "integer",
@@ -101,31 +147,68 @@
         },
         "mfa_required_all": {
           "type": "boolean",
-          "description": "Whether all policies require MFA"
+          "description": "Whether MFA is required for all non-deprovisioned users after evaluating active policies and rules"
         },
         "mfa_required_any": {
           "type": "boolean",
-          "description": "Whether at least one policy requires MFA"
+          "description": "Whether MFA is required for at least one non-deprovisioned user after evaluating active policies and rules"
+        },
+        "mfa_required_coverage_pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of non-deprovisioned users covered by an MFA requirement"
         },
         "session_lifetime_min_minutes": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Shortest session lifetime across all policies (in minutes)"
+          "description": "Shortest session lifetime across active sign-on rules (in minutes)"
         },
         "session_lifetime_max_minutes": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Longest session lifetime across all policies (in minutes)"
+          "description": "Longest session lifetime across active sign-on rules (in minutes)"
         },
         "idle_timeout_min_minutes": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Shortest idle timeout across all policies (in minutes)"
+          "description": "Shortest idle timeout across active sign-on rules (in minutes)"
         },
         "idle_timeout_max_minutes": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Longest idle timeout across all policies (in minutes)"
+          "description": "Longest idle timeout across active sign-on rules (in minutes)"
+        }
+      }
+    },
+    "device_access": {
+      "type": "object",
+      "description": "Device access enforcement posture",
+      "required": [
+        "managed_device_required",
+        "managed_device_required_coverage_pct",
+        "managed_device_required_for_admins",
+        "device_assurance_policies_count"
+      ],
+      "properties": {
+        "managed_device_required": {
+          "type": "boolean",
+          "description": "Whether any sign-on policy rule requires managed devices"
+        },
+        "managed_device_required_coverage_pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of users covered by a managed device requirement"
+        },
+        "managed_device_required_for_admins": {
+          "type": "boolean",
+          "description": "Whether all privileged users are covered by a managed device requirement"
+        },
+        "device_assurance_policies_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of device assurance policies defined"
         }
       }
     }

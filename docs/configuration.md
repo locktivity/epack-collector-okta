@@ -36,8 +36,10 @@ OAuth 2.0 with private key JWT is the recommended authentication method. It prov
 1. Go to the **Okta API Scopes** tab
 2. Click **Grant** next to each of these scopes:
    - `okta.users.read`
+   - `okta.groups.read`
    - `okta.apps.read`
    - `okta.policies.read`
+   - `okta.roles.read`
 
 #### Step 4: Assign Admin Role
 
@@ -143,4 +145,6 @@ The collector handles rate limits automatically with exponential backoff. If you
 
 Some metrics require specific permissions:
 - Policy details require `okta.policies.read` scope
+- Policy coverage by group requires `okta.groups.read` scope
+- Privileged access metrics require `okta.roles.read` scope
 - If using API token, ensure the token creator has admin privileges
