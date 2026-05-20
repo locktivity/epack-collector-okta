@@ -2,18 +2,14 @@ package okta
 
 import (
 	"context"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // OktaClient defines the interface for Okta API operations.
@@ -25,9 +21,14 @@ type OktaClient interface {
 	FetchGroupUsers(ctx context.Context, groupID string, callback func([]User) error) error
 	FetchUsersWithRoleAssignments(ctx context.Context, callback func([]RoleAssignedUser) error) error
 	FetchUserRoleAssignments(ctx context.Context, userID string) ([]RoleAssignment, error)
+	FetchUserGroupIDs(ctx context.Context, userID string) ([]string, error)
 
 	// Application operations
 	FetchApplications(ctx context.Context, callback func([]Application) error) error
+
+	// Custom admin roles (Okta Identity Governance feature)
+	ListIAMRoles(ctx context.Context) ([]IAMRole, error)
+	ListRolePermissions(ctx context.Context, roleID string) ([]string, error)
 
 	// Policy operations
 	FetchPolicies(ctx context.Context, policyType string) ([]Policy, error)
@@ -36,8 +37,24 @@ type OktaClient interface {
 	// Device assurance operations
 	FetchDeviceAssurancePolicies(ctx context.Context) ([]DeviceAssurancePolicy, error)
 
+	// Authenticator catalog (org-level enabled factor types)
+	ListAuthenticators(ctx context.Context) ([]Authenticator, error)
+
+	// Group operations
+	ListGroups(ctx context.Context, callback func([]Group) error) error
+
+	// Network zones, identity providers, API tokens, hooks, and system log
+	ListNetworkZones(ctx context.Context) ([]NetworkZone, error)
+	ListIdentityProviders(ctx context.Context) ([]IdentityProvider, error)
+	ListAPITokens(ctx context.Context) ([]APIToken, error)
+	ListEventHooks(ctx context.Context) ([]EventHook, error)
+	ListInlineHooks(ctx context.Context) ([]InlineHook, error)
+	ListSystemLog(ctx context.Context, filter string, since time.Time, max int) ([]LogEvent, error)
+
 	// Org settings
 	FetchOrgSettings(ctx context.Context) (*OrgSettings, error)
+	FetchOrgPreferences(ctx context.Context) (*OrgPreferences, error)
+	FetchOrgContactUsers(ctx context.Context) ([]OrgContact, error)
 }
 
 // Client wraps the Okta REST API client.
@@ -61,39 +78,6 @@ func NewClient(orgDomain, apiToken string) *Client {
 	}
 }
 
-// NewClientWithOAuth creates a client using OAuth 2.0 private key JWT.
-// This is the recommended authentication method.
-// keyID is the key identifier from Okta (found in the public keys section of your app).
-func NewClientWithOAuth(orgDomain, clientID, keyID string, privateKey []byte) (*Client, error) {
-	baseURL := buildBaseURL(orgDomain)
-
-	// Parse the private key
-	key, err := parsePrivateKey(privateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
-	}
-
-	// Generate JWT for client credentials grant
-	token, err := generateClientAssertionJWT(clientID, baseURL, keyID, key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate JWT: %w", err)
-	}
-
-	// Exchange JWT for access token
-	accessToken, err := exchangeJWTForToken(baseURL, clientID, token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to exchange JWT for token: %w", err)
-	}
-
-	return &Client{
-		httpClient:  &http.Client{Timeout: HTTPTimeout},
-		baseURL:     baseURL,
-		accessToken: accessToken,
-		authType:    "Bearer",
-	}, nil
-}
-
-// NewClientWithHTTP creates a client with a custom HTTP client and base URL (for testing).
 func NewClientWithHTTP(httpClient *http.Client, baseURL string) *Client {
 	return &Client{
 		httpClient: httpClient,
@@ -115,91 +99,6 @@ func buildBaseURL(orgDomain string) string {
 	// Remove trailing slash
 	orgDomain = strings.TrimSuffix(orgDomain, "/")
 	return fmt.Sprintf("https://%s", orgDomain)
-}
-
-// parsePrivateKey parses a PEM-encoded RSA private key.
-func parsePrivateKey(keyData []byte) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode(keyData)
-	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block")
-	}
-
-	// Try PKCS#8 first (more common for OAuth)
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err == nil {
-		rsaKey, ok := key.(*rsa.PrivateKey)
-		if !ok {
-			return nil, fmt.Errorf("key is not an RSA private key")
-		}
-		return rsaKey, nil
-	}
-
-	// Fall back to PKCS#1
-	return x509.ParsePKCS1PrivateKey(block.Bytes)
-}
-
-// generateClientAssertionJWT creates a JWT for OAuth 2.0 client credentials flow.
-// keyID is the key identifier from Okta that must match the public key registered in your app.
-func generateClientAssertionJWT(clientID, baseURL, keyID string, key *rsa.PrivateKey) (string, error) {
-	now := time.Now()
-	claims := jwt.MapClaims{
-		"aud": fmt.Sprintf("%s/oauth2/v1/token", baseURL),
-		"iss": clientID,
-		"sub": clientID,
-		"iat": now.Unix(),
-		"exp": now.Add(jwtExpiry).Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	// Set the key ID in the JWT header - required by Okta to identify which public key to use
-	token.Header["kid"] = keyID
-	return token.SignedString(key)
-}
-
-// exchangeJWTForToken exchanges a client assertion JWT for an access token.
-func exchangeJWTForToken(baseURL, clientID, assertion string) (string, error) {
-	tokenURL := fmt.Sprintf("%s/oauth2/v1/token", baseURL)
-
-	data := url.Values{}
-	data.Set("grant_type", "client_credentials")
-	data.Set("scope", "okta.users.read okta.groups.read okta.apps.read okta.policies.read okta.roles.read")
-	data.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
-	data.Set("client_assertion", assertion)
-
-	resp, err := http.PostForm(tokenURL, data)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		// Read error response for debugging
-		var errResp struct {
-			Error            string `json:"error"`
-			ErrorDescription string `json:"error_description"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error != "" {
-			return "", fmt.Errorf("token exchange failed: %s - %s", errResp.Error, errResp.ErrorDescription)
-		}
-		return "", fmt.Errorf("token exchange failed with status %d", resp.StatusCode)
-	}
-
-	var result struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		ExpiresIn   int    `json:"expires_in"`
-		Scope       string `json:"scope"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-
-	if result.AccessToken == "" {
-		return "", fmt.Errorf("token exchange returned empty access token")
-	}
-
-	return result.AccessToken, nil
 }
 
 // doRequest performs an HTTP request with authentication and rate limit handling.
@@ -411,6 +310,19 @@ func (c *Client) FetchUserRoleAssignments(ctx context.Context, userID string) ([
 	return roles, nil
 }
 
+// FetchUserGroupIDs fetches the IDs of the groups a user belongs to.
+func (c *Client) FetchUserGroupIDs(ctx context.Context, userID string) ([]string, error) {
+	var groups []Group
+	if err := c.getJSON(ctx, fmt.Sprintf("/api/v1/users/%s/groups", userID), &groups); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(groups))
+	for _, g := range groups {
+		ids = append(ids, g.ID)
+	}
+	return ids, nil
+}
+
 // FetchApplications fetches all applications with pagination.
 func (c *Client) FetchApplications(ctx context.Context, callback func([]Application) error) error {
 	path := fmt.Sprintf("/api/v1/apps?limit=%d", paginationLimit)
@@ -497,6 +409,121 @@ func (c *Client) FetchPolicyRules(ctx context.Context, policyID string) ([]Polic
 	}
 
 	return rules, nil
+}
+
+// APIStatusError carries the HTTP status from a non-200 Okta response so callers
+// can branch on 403 (scope denied) vs 404 (feature not available) for graceful
+// per-surface degradation.
+type APIStatusError struct {
+	StatusCode int
+	Path       string
+}
+
+func (e *APIStatusError) Error() string {
+	return fmt.Sprintf("okta API %s returned status %d", e.Path, e.StatusCode)
+}
+
+// StatusCodeOf returns the HTTP status code from an APIStatusError, or 0 if err
+// is not one. Use it to distinguish scope-denied / feature-not-licensed surfaces
+// from transient failures.
+func StatusCodeOf(err error) int {
+	var apiErr *APIStatusError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode
+	}
+	return 0
+}
+
+// getJSON performs a GET and decodes a 200 body into dest. Non-200 responses
+// return an *APIStatusError carrying the status code.
+func (c *Client) getJSON(ctx context.Context, path string, dest any) error {
+	resp, err := c.doRequest(ctx, "GET", path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return &APIStatusError{StatusCode: resp.StatusCode, Path: path}
+	}
+
+	return json.NewDecoder(resp.Body).Decode(dest)
+}
+
+// ListGroups fetches all groups with pagination, expanding member-count stats.
+func (c *Client) ListGroups(ctx context.Context, callback func([]Group) error) error {
+	path := fmt.Sprintf("/api/v1/groups?expand=stats&limit=%d", paginationLimit)
+
+	for path != "" {
+		resp, err := c.doRequest(ctx, "GET", path)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != http.StatusOK {
+			_ = resp.Body.Close()
+			return &APIStatusError{StatusCode: resp.StatusCode, Path: path}
+		}
+
+		var groups []Group
+		if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
+			_ = resp.Body.Close()
+			return err
+		}
+		_ = resp.Body.Close()
+
+		if err := callback(groups); err != nil {
+			return err
+		}
+
+		path = getNextLink(resp.Header.Get("Link"))
+	}
+
+	return nil
+}
+
+// ListAuthenticators fetches the org-level authenticator catalog.
+func (c *Client) ListAuthenticators(ctx context.Context) ([]Authenticator, error) {
+	var authenticators []Authenticator
+	if err := c.getJSON(ctx, "/api/v1/authenticators", &authenticators); err != nil {
+		return nil, err
+	}
+	return authenticators, nil
+}
+
+// ListIAMRoles fetches the org's custom administrator roles (Okta Identity
+// Governance feature). Returns an *APIStatusError with status 404 when the
+// feature is not licensed, which callers treat as a graceful skip.
+func (c *Client) ListIAMRoles(ctx context.Context) ([]IAMRole, error) {
+	path := fmt.Sprintf("/api/v1/iam/roles?limit=%d", paginationLimit)
+	var roles []IAMRole
+
+	for path != "" {
+		var page IAMRolesResponse
+		if err := c.getJSON(ctx, path, &page); err != nil {
+			return nil, err
+		}
+		roles = append(roles, page.Roles...)
+
+		path = ""
+		if page.Links.Next != nil && page.Links.Next.Href != "" {
+			path = getPathAndQuery(page.Links.Next.Href)
+		}
+	}
+
+	return roles, nil
+}
+
+// ListRolePermissions fetches the permission labels granted to a custom role.
+func (c *Client) ListRolePermissions(ctx context.Context, roleID string) ([]string, error) {
+	var resp RolePermissionsResponse
+	if err := c.getJSON(ctx, fmt.Sprintf("/api/v1/iam/roles/%s/permissions", roleID), &resp); err != nil {
+		return nil, err
+	}
+	permissions := make([]string, 0, len(resp.Permissions))
+	for _, p := range resp.Permissions {
+		permissions = append(permissions, p.Label)
+	}
+	return permissions, nil
 }
 
 // FetchDeviceAssurancePolicies fetches all device assurance policies.

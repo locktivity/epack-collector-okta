@@ -32,6 +32,7 @@ type Config struct {
 type OrgPosture struct {
 	SchemaVersion    string                  `json:"schema_version"`
 	CollectedAt      string                  `json:"collected_at"`
+	CollectedAtLevel string                  `json:"collected_at_level"`
 	OrgDomain        string                  `json:"org_domain"`
 	Posture          Posture                 `json:"posture"`
 	Users            UserMetrics             `json:"users"`
@@ -39,56 +40,45 @@ type OrgPosture struct {
 	PrivilegedAccess PrivilegedAccessMetrics `json:"privileged_access"`
 	Policy           PolicyConfig            `json:"policy"`
 	DeviceAccess     DeviceAccessMetrics     `json:"device_access"`
+
+	// Each is a pointer so a surface that could not be collected is omitted
+	// rather than emitted empty.
+	Groups            *Groups            `json:"groups,omitempty"`
+	NetworkZones      *NetworkZones      `json:"network_zones,omitempty"`
+	IdentityProviders *IdentityProviders `json:"identity_providers,omitempty"`
+	APITokens         *APITokens         `json:"api_tokens,omitempty"`
+	Hooks             *Hooks             `json:"hooks,omitempty"`
+	SystemLog         *SystemLog         `json:"system_log,omitempty"`
+	OrgSettings       *OrgSettings       `json:"org_settings,omitempty"`
+
+	Diagnostics *Diagnostics `json:"diagnostics,omitempty"`
+}
+
+// Diagnostics contains warnings encountered during collection. It distinguishes
+// permission / feature-license gaps (which skip a surface) from genuine
+// disablement, so a customer can see which scopes to grant.
+type Diagnostics struct {
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Posture contains high-level security posture scores (all percentages 0-100).
+//
+// Audit adds per-factor-type enrollment counts and the MFA-disabled-user count.
 type Posture struct {
 	MFACoverage          int `json:"mfa_coverage"`           // % users with any MFA enrolled
-	MFAPhishingResistant int `json:"mfa_phishing_resistant"` // % users with WebAuthn/FIDO2
+	MFAPhishingResistant int `json:"mfa_phishing_resistant"` // % users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)
 	SSOCoverage          int `json:"sso_coverage"`           // % apps using SSO (SAML/OIDC/WS-Fed)
+
+	// Audit-level fields.
+	PerFactorType         []FactorTypeCount `json:"per_factor_type,omitempty"`          // Enrolled-user count per active factor type
+	MFADisabledUsersCount *int              `json:"mfa_disabled_users_count,omitempty"` // Non-deprovisioned users with no active MFA
 }
 
-// UserMetrics contains user status percentages (all 0-100).
-type UserMetrics struct {
-	PasswordExpired int `json:"password_expired"` // % users with expired passwords
-	LockedOut       int `json:"locked_out"`       // % users currently locked out
-	Inactive        int `json:"inactive"`         // % users inactive for 90+ days
-	Suspended       int `json:"suspended"`        // % users currently suspended
-}
-
-// AppMetrics contains application lifecycle percentages (all 0-100).
-type AppMetrics struct {
-	ProvisioningEnabled   int `json:"provisioning_enabled"`   // % apps with auto-provisioning
-	DeprovisioningEnabled int `json:"deprovisioning_enabled"` // % apps with auto-deprovisioning
-}
-
-// PrivilegedAccessMetrics contains privileged account counts and MFA coverage.
-type PrivilegedAccessMetrics struct {
-	PrivilegedUsersCount           int `json:"privileged_users_count"`
-	SuperAdminCount                int `json:"super_admin_count"`
-	StandingPrivilegedUsersCount   int `json:"standing_privileged_users_count"`
-	PrivilegedMFACoveragePct       int `json:"privileged_mfa_coverage_pct"`
-	PrivilegedPhishingResistantPct int `json:"privileged_phishing_resistant_pct"`
-}
-
-// PolicyConfig contains aggregated policy settings across all active policies.
-type PolicyConfig struct {
-	PolicyCount               int  `json:"policy_count"`                 // Number of active sign-on policies
-	MFARequiredAll            bool `json:"mfa_required_all"`             // MFA is required for all non-deprovisioned users
-	MFARequiredAny            bool `json:"mfa_required_any"`             // MFA is required for at least one non-deprovisioned user
-	MFARequiredCoveragePct    int  `json:"mfa_required_coverage_pct"`    // % of non-deprovisioned users covered by an MFA requirement
-	SessionLifetimeMinMinutes *int `json:"session_lifetime_min_minutes"` // Shortest session lifetime across active sign-on rules
-	SessionLifetimeMaxMinutes *int `json:"session_lifetime_max_minutes"` // Longest session lifetime across active sign-on rules
-	IdleTimeoutMinMinutes     *int `json:"idle_timeout_min_minutes"`     // Shortest idle timeout across active sign-on rules
-	IdleTimeoutMaxMinutes     *int `json:"idle_timeout_max_minutes"`     // Longest idle timeout across active sign-on rules
-}
-
-// DeviceAccessMetrics contains device access enforcement posture.
-type DeviceAccessMetrics struct {
-	ManagedDeviceRequired            bool `json:"managed_device_required"`              // Whether any sign-on policy rule requires managed devices
-	ManagedDeviceRequiredCoveragePct int  `json:"managed_device_required_coverage_pct"` // % of users covered by a managed device requirement
-	ManagedDeviceRequiredForAdmins   bool `json:"managed_device_required_for_admins"`   // Whether all privileged users are covered by a managed device requirement
-	DeviceAssurancePoliciesCount     int  `json:"device_assurance_policies_count"`      // Number of device assurance policies defined
+// FactorTypeCount records how many users have at least one active factor of a
+// given type (audit+).
+type FactorTypeCount struct {
+	FactorType    string `json:"factor_type"`    // e.g. push, webauthn, sms, token:software:totp
+	EnrolledUsers int    `json:"enrolled_users"` // Users with >= 1 active factor of this type
 }
 
 // NewOrgPosture creates a new OrgPosture with the current timestamp.

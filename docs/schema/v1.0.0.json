@@ -4,7 +4,8 @@
   "title": "Okta Organization Security Posture",
   "description": "Security posture metrics collected from an Okta organization",
   "type": "object",
-  "required": ["schema_version", "collected_at", "org_domain", "posture", "users", "apps", "privileged_access", "policy", "device_access"],
+  "required": ["schema_version", "collected_at", "collected_at_level", "org_domain", "posture", "users", "apps", "privileged_access", "policy", "device_access"],
+  "comment": "Optional fields are gated by collected_at_level: fields annotated 'audit+' are present at audit and internal; fields annotated 'internal' are present only at internal.",
   "properties": {
     "schema_version": {
       "type": "string",
@@ -15,6 +16,11 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 timestamp when data was collected"
+    },
+    "collected_at_level": {
+      "type": "string",
+      "enum": ["trust", "audit", "internal"],
+      "description": "Collection level this artifact was produced at. Levels are cumulative: audit is a superset of trust, internal of audit."
     },
     "org_domain": {
       "type": "string",
@@ -35,13 +41,29 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 100,
-          "description": "Percentage of users with phishing-resistant MFA (WebAuthn/FIDO2)"
+          "description": "Percentage of users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)"
         },
         "sso_coverage": {
           "type": "integer",
           "minimum": 0,
           "maximum": 100,
           "description": "Percentage of apps using SSO (SAML/OIDC/WS-Fed)"
+        },
+        "per_factor_type": {
+          "type": "array",
+          "description": "audit+: enrolled-user count per active factor type",
+          "items": {
+            "type": "object",
+            "properties": {
+              "factor_type": {"type": "string"},
+              "enrolled_users": {"type": "integer", "minimum": 0}
+            }
+          }
+        },
+        "mfa_disabled_users_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "audit+: count of non-deprovisioned users with no active MFA"
         }
       }
     },
@@ -73,7 +95,28 @@
           "minimum": 0,
           "maximum": 100,
           "description": "Percentage of users currently suspended"
-        }
+        },
+        "inventory": {
+          "type": "array",
+          "description": "audit+: per-user inventory. Login is the only identifier; profile attributes beyond login are excluded. Internal adds last_login_at, last_updated_at, status_changed_at, password_changed_at, factors[], group_ids[]. Capped at 50000 (ACTIVE-first, login-asc).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "login": {"type": "string"},
+              "status": {"type": "string"},
+              "user_type": {"type": "string", "enum": ["Human", "Service"], "description": "Coarse classification; raw userType never emitted"},
+              "created_at": {"type": "string", "format": "date-time"},
+              "last_login_at": {"type": "string", "format": "date-time", "description": "internal"},
+              "last_updated_at": {"type": "string", "format": "date-time", "description": "internal"},
+              "status_changed_at": {"type": "string", "format": "date-time", "description": "internal"},
+              "password_changed_at": {"type": "string", "format": "date-time", "description": "internal"},
+              "factors": {"type": "array", "description": "internal", "items": {"type": "object"}},
+              "group_ids": {"type": "array", "description": "internal", "items": {"type": "string"}}
+            }
+          }
+        },
+        "inventory_truncated": {"type": "boolean", "description": "audit+: true when the user inventory hit the 50000 cap"},
+        "inventory_dropped": {"type": "integer", "minimum": 0, "description": "audit+: rows dropped on truncation"}
       }
     },
     "apps": {
@@ -92,7 +135,14 @@
           "minimum": 0,
           "maximum": 100,
           "description": "Percentage of apps with automatic user deprovisioning"
-        }
+        },
+        "inventory": {
+          "type": "array",
+          "description": "audit+: per-app inventory (label, name, type, sign_on_mode, status, sso_configured, provisioning_configured). Capped at 5000 (ACTIVE-first, label-asc).",
+          "items": {"type": "object"}
+        },
+        "inventory_truncated": {"type": "boolean", "description": "audit+"},
+        "inventory_dropped": {"type": "integer", "minimum": 0, "description": "audit+"}
       }
     },
     "privileged_access": {
@@ -132,6 +182,16 @@
           "minimum": 0,
           "maximum": 100,
           "description": "Percentage of privileged users with phishing-resistant MFA"
+        },
+        "inventory": {
+          "type": "array",
+          "description": "audit+: per-privileged-user login + roles[]. Internal adds role_assignment_source (direct/group/mixed), last_login_at, last_admin_action_at.",
+          "items": {"type": "object"}
+        },
+        "custom_roles": {
+          "type": "array",
+          "description": "audit+: custom admin roles (Okta Identity Governance feature). Empty + diagnostic when IG is not licensed.",
+          "items": {"type": "object"}
         }
       }
     },
@@ -178,6 +238,11 @@
           "type": ["integer", "null"],
           "minimum": 0,
           "description": "Longest idle timeout across active sign-on rules (in minutes)"
+        },
+        "policies": {
+          "type": "array",
+          "description": "audit+: per-policy summary (name, type, status, priority, rule_count, scope_summary) for sign-on and MFA-enroll policies. Internal adds rules[] with conditions and actions.",
+          "items": {"type": "object"}
         }
       }
     },
@@ -209,7 +274,93 @@
           "type": "integer",
           "minimum": 0,
           "description": "Number of device assurance policies defined"
+        },
+        "policies": {
+          "type": "array",
+          "description": "audit+: per-device-assurance-policy summary (name, platform, status, min_os_version, disk_encryption_required, screen_lock_required, jailbreak_protection).",
+          "items": {"type": "object"}
         }
+      }
+    },
+    "groups": {
+      "type": "object",
+      "description": "Group inventory and counts. Collected at audit and above; omitted at trust. audit: total_count, count_by_source, inventory[]. internal: per-group member_logins[] (capped at 200000 total rows; smallest groups truncated first).",
+      "properties": {
+        "total_count": {"type": "integer", "minimum": 0},
+        "count_by_source": {"type": "object"},
+        "inventory": {"type": "array", "description": "audit+", "items": {"type": "object"}},
+        "truncated_memberships": {"type": "boolean", "description": "internal"},
+        "truncated_memberships_dropped": {"type": "integer", "description": "internal"}
+      }
+    },
+    "network_zones": {
+      "type": "object",
+      "description": "Network zone inventory and counts. Collected at audit and above; omitted at trust. audit: counts by type + gateway/proxy zone counts + inventory[]. internal: per-zone gateways/proxies/locations/asns.",
+      "properties": {
+        "total_count": {"type": "integer", "minimum": 0},
+        "count_by_type": {"type": "object"},
+        "gateway_zone_count": {"type": "integer", "minimum": 0},
+        "proxy_zone_count": {"type": "integer", "minimum": 0},
+        "inventory": {"type": "array", "description": "audit+", "items": {"type": "object"}}
+      }
+    },
+    "identity_providers": {
+      "type": "object",
+      "description": "Federation identity providers. Collected at audit and above; omitted at trust. audit: count_by_protocol + per-IdP name/type/status/issuer_host (host only). internal: signing_cert_thumbprint (kid), jit_provisioning, group_mapping_count. Client secrets, signing keys, and full SSO URLs are never emitted.",
+      "properties": {
+        "total_count": {"type": "integer", "minimum": 0},
+        "count_by_protocol": {"type": "object"},
+        "inventory": {"type": "array", "description": "audit+", "items": {"type": "object"}}
+      }
+    },
+    "api_tokens": {
+      "type": "object",
+      "description": "SSWS API tokens. Collected at audit and above; omitted at trust. audit: total_active_count + recently_used_count + per-token id/name/status/created_at. internal: created_by_login/last_used_at/network_zone_scoped. Requires SUPER_ADMIN-level scope; omitted + diagnostic on 403. Token secret values are never exposed by the API.",
+      "properties": {
+        "total_active_count": {"type": "integer", "minimum": 0},
+        "recently_used_count": {"type": "integer", "minimum": 0},
+        "inventory": {"type": "array", "description": "audit+", "items": {"type": "object"}}
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Event and inline hooks. Collected at audit and above; omitted at trust. audit: counts + count by status + per-hook name/type/status/subscribed_events. internal: endpoint_host (host only) + channel_type. Hook auth headers, full URLs, and secrets are never emitted.",
+      "properties": {
+        "event_hook_count": {"type": "integer", "minimum": 0},
+        "inline_hook_count": {"type": "integer", "minimum": 0},
+        "active_count": {"type": "integer", "minimum": 0},
+        "inactive_count": {"type": "integer", "minimum": 0},
+        "event_hooks": {"type": "array", "description": "audit+", "items": {"type": "object"}},
+        "inline_hooks": {"type": "array", "description": "audit+", "items": {"type": "object"}}
+      }
+    },
+    "system_log": {
+      "type": "object",
+      "description": "Security-relevant system-log events. Absent at trust. audit: count_by_category over the last 7 days. internal: events[] (event_type, published, actor login+type, targets[], outcome, client_ip, user_agent; no debug-context). Capped at 5000, newest first.",
+      "properties": {
+        "window_days": {"type": "integer"},
+        "count_by_category": {"type": "object"},
+        "events": {"type": "array", "description": "internal", "items": {"type": "object"}},
+        "truncated": {"type": "boolean"},
+        "oldest_event_id": {"type": "string"},
+        "newest_event_id": {"type": "string"}
+      }
+    },
+    "org_settings": {
+      "type": "object",
+      "description": "Organization settings. Collected at audit and above; omitted at trust. audit: subdomain + status + self_service_recovery_enabled. internal: notification_contact_logins[].",
+      "properties": {
+        "subdomain": {"type": "string"},
+        "status": {"type": "string"},
+        "self_service_recovery_enabled": {"type": "boolean", "description": "audit+"},
+        "notification_contact_logins": {"type": "array", "description": "internal", "items": {"type": "string"}}
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "description": "Present when any surface was skipped (missing scope, feature not licensed, transient error). Carries the detail so the customer knows what to grant.",
+      "properties": {
+        "warnings": {"type": "array", "items": {"type": "string"}}
       }
     }
   }

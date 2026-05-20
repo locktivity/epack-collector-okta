@@ -1,13 +1,21 @@
 # Okta Collector Overview
 
-The Okta collector gathers security posture metrics from your Okta organization. All metrics are percentages (0-100) or policy settings, designed to be actionable and comparable across organizations.
+The Okta collector gathers security posture metrics from your Okta organization.
+At the default `trust` level these are org-level aggregates (percentages 0-100,
+counts, and policy settings) designed to be actionable and comparable across
+organizations. Higher [collection levels](levels.md) add per-entity detail and
+additional surfaces (see [Collection levels](#collection-levels) below).
 
 ## Output Schema
+
+The example below is `trust`-level output. The `collected_at_level` field records
+the level a given artifact was produced at.
 
 ```json
 {
   "schema_version": "1.0.0",
   "collected_at": "2026-02-25T19:46:39Z",
+  "collected_at_level": "trust",
   "org_domain": "company.okta.com",
 
   "posture": {
@@ -65,7 +73,7 @@ High-level security scores for quick assessment.
 | Metric | Why It Matters |
 |--------|----------------|
 | `mfa_coverage` | **Account takeover protection.** MFA significantly reduces credential-based attacks. Low coverage leaves accounts vulnerable to password spraying and phishing. |
-| `mfa_phishing_resistant` | **Strong authentication.** WebAuthn/FIDO2 factors can't be phished, unlike SMS or TOTP. This is the gold standard for sensitive accounts. |
+| `mfa_phishing_resistant` | **Strong authentication.** Phishing-resistant factors (WebAuthn/FIDO2, U2F, and Okta FastPass) can't be phished, unlike SMS or TOTP. This is the gold standard for sensitive accounts. |
 | `sso_coverage` | **Credential sprawl reduction.** Apps not using SSO require separate passwords, increasing password fatigue and reuse risk. |
 
 ### users
@@ -125,6 +133,27 @@ Device access enforcement posture based on sign-on policy rule conditions.
 | `managed_device_required_coverage_pct` | **Device trust coverage.** Percentage of non-deprovisioned users covered by a managed device requirement after evaluating policy and rule scope, including group targeting. |
 | `managed_device_required_for_admins` | **Admin device trust.** True if all privileged users are covered by a managed device requirement. Critical for protecting high-value admin accounts from untrusted endpoints. |
 | `device_assurance_policies_count` | **Device assurance policies.** Number of device assurance policies defined. These policies specify device requirements (OS version, encryption, etc.) that can be referenced in sign-on rules. |
+
+## Collection levels
+
+The surfaces above are the `trust` level. The `level` config knob (`trust` /
+`audit` / `internal`) controls collection depth; levels are cumulative. See
+[levels.md](levels.md) for the full per-surface, per-level breakdown.
+
+- **trust** (default): the org-level aggregates documented above.
+- **audit**: adds per-entity detail (user / app / group / network-zone / IdP /
+  hook / API-token inventories, per-policy and per-admin summaries, and 7-day
+  counts of security-relevant system-log events).
+- **internal**: adds the rawest detail (per-user factor lists and activity
+  timestamps, group member logins, per-policy rule conditions and actions,
+  network-zone and IdP definitions, and the system-log event slice).
+
+User profile attributes beyond login, passwords, session tokens, signing keys,
+client secrets, and hook auth headers are never emitted at any level.
+
+When a surface can't be collected (a missing scope, an unlicensed feature, or an
+insufficient admin role), the run still succeeds and records why under a
+top-level `diagnostics.warnings` array.
 
 ## Use Cases
 

@@ -9,6 +9,7 @@ type User struct {
 	Status          string      `json:"status"` // STAGED, PROVISIONED, ACTIVE, RECOVERY, LOCKED_OUT, PASSWORD_EXPIRED, SUSPENDED, DEPROVISIONED
 	Created         time.Time   `json:"created"`
 	Activated       time.Time   `json:"activated"`
+	StatusChanged   time.Time   `json:"statusChanged"`
 	LastLogin       time.Time   `json:"lastLogin"`
 	LastUpdated     time.Time   `json:"lastUpdated"`
 	PasswordChanged time.Time   `json:"passwordChanged"`
@@ -26,11 +27,12 @@ type UserProfile struct {
 
 // Factor represents an MFA factor enrolled by a user.
 type Factor struct {
-	ID         string `json:"id"`
-	FactorType string `json:"factorType"` // sms, call, email, token:software:totp, token:hotp, push, u2f, webauthn, token:hardware, question
-	Provider   string `json:"provider"`   // OKTA, GOOGLE, RSA, SYMANTEC, YUBICO, etc.
-	VendorName string `json:"vendorName"`
-	Status     string `json:"status"` // ACTIVE, PENDING_ACTIVATION, ENROLLED, INACTIVE, NOT_SETUP
+	ID         string    `json:"id"`
+	FactorType string    `json:"factorType"` // sms, call, email, token:software:totp, token:hotp, push, u2f, webauthn, token:hardware, question
+	Provider   string    `json:"provider"`   // OKTA, GOOGLE, RSA, SYMANTEC, YUBICO, etc.
+	VendorName string    `json:"vendorName"`
+	Status     string    `json:"status"` // ACTIVE, PENDING_ACTIVATION, ENROLLED, INACTIVE, NOT_SETUP
+	Created    time.Time `json:"created"`
 }
 
 // RoleAssignedUser represents a user that has at least one role assignment.
@@ -46,6 +48,30 @@ type RoleAssignment struct {
 	Type           string `json:"type"`
 	Status         string `json:"status"`
 	AssignmentType string `json:"assignmentType"` // USER or GROUP
+}
+
+// IAMRole represents a custom administrator role (Okta Identity Governance feature).
+type IAMRole struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+// IAMRolesResponse is the paginated response for custom admin roles.
+type IAMRolesResponse struct {
+	Roles []IAMRole `json:"roles"`
+	Links struct {
+		Next *struct {
+			Href string `json:"href"`
+		} `json:"next,omitempty"`
+	} `json:"_links,omitempty"`
+}
+
+// RolePermissionsResponse is the response for a custom role's permissions.
+type RolePermissionsResponse struct {
+	Permissions []struct {
+		Label string `json:"label"`
+	} `json:"permissions"`
 }
 
 // RoleAssignedUsersResponse is the paginated response for users with roles.
@@ -264,12 +290,31 @@ type EnrollActions struct {
 	Self string `json:"self"` // CHALLENGE, LOGIN, NEVER
 }
 
+// Authenticator represents an org-level authenticator from the authenticator
+// catalog (GET /api/v1/authenticators). It records which factor types are
+// enabled for the org, independent of per-user enrollment.
+type Authenticator struct {
+	ID     string `json:"id"`
+	Key    string `json:"key"`  // e.g. okta_verify, webauthn, phone_number, google_otp
+	Type   string `json:"type"` // e.g. app, security_key, phone, email
+	Name   string `json:"name"`
+	Status string `json:"status"` // ACTIVE, INACTIVE
+}
+
 // Group represents an Okta group.
 type Group struct {
-	ID      string       `json:"id"`
-	Created time.Time    `json:"created"`
-	Profile GroupProfile `json:"profile"`
-	Type    string       `json:"type"` // OKTA_GROUP, APP_GROUP, BUILT_IN
+	ID       string         `json:"id"`
+	Created  time.Time      `json:"created"`
+	Profile  GroupProfile   `json:"profile"`
+	Type     string         `json:"type"` // OKTA_GROUP, APP_GROUP, BUILT_IN, IDP_GROUP
+	Embedded *GroupEmbedded `json:"_embedded,omitempty"`
+}
+
+// GroupEmbedded holds expanded group data (member count via ?expand=stats).
+type GroupEmbedded struct {
+	Stats *struct {
+		UsersCount int `json:"usersCount"`
+	} `json:"stats,omitempty"`
 }
 
 // GroupProfile contains group profile information.
@@ -292,6 +337,18 @@ type DeviceAssurancePolicy struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Platform    string    `json:"platform"` // IOS, ANDROID, MACOS, WINDOWS, CHROMEOS
+	Status      string    `json:"status"`
 	CreatedDate time.Time `json:"createdDate"`
 	LastUpdate  time.Time `json:"lastUpdate"`
+
+	OSVersion *struct {
+		Minimum string `json:"minimum"`
+	} `json:"osVersion,omitempty"`
+	DiskEncryptionType *struct {
+		Include []string `json:"include"`
+	} `json:"diskEncryptionType,omitempty"`
+	ScreenLockType *struct {
+		Include []string `json:"include"`
+	} `json:"screenLockType,omitempty"`
+	Jailbreak *bool `json:"jailbreak,omitempty"`
 }

@@ -9,11 +9,12 @@ stream: myorg/okta-posture
 
 collectors:
   okta:
-    source: locktivity/epack-collector-okta@^0.1
+    source: locktivity/epack-collector-okta@^0.2
     config:
       org_domain: company.okta.com
       client_id: 0oa1234567890abcdef
       key_id: abc123xyz
+      level: trust   # optional: trust (default) | audit | internal — see levels.md
     secrets:
       - OKTA_PRIVATE_KEY
 ```
@@ -34,7 +35,7 @@ stream: myorg/okta-posture
 
 collectors:
   okta:
-    source: locktivity/epack-collector-okta@^0.1
+    source: locktivity/epack-collector-okta@^0.2
     config:
       org_domain: company.okta.com
     secrets:
@@ -56,6 +57,7 @@ epack collect
   "data": {
     "schema_version": "1.0.0",
     "collected_at": "2026-02-25T14:00:00Z",
+    "collected_at_level": "trust",
     "org_domain": "company.okta.com",
     "posture": {
       "mfa_coverage": 85,
@@ -93,7 +95,10 @@ epack collect
 }
 ```
 
-All coverage values are percentages (0-100). See [Overview](overview.md) for detailed metric descriptions.
+This is `trust`-level output (org-level aggregates; coverage values are percentages
+0-100). The `audit` and `internal` levels add per-entity inventories and extra
+surfaces. See [Overview](overview.md) for metric descriptions and [levels.md](levels.md)
+for the per-level breakdown.
 
 ## CI/CD Integration
 
@@ -142,7 +147,7 @@ stream: mycompany/identity-posture
 
 collectors:
   okta-prod:
-    source: locktivity/epack-collector-okta@^0.1
+    source: locktivity/epack-collector-okta@^0.2
     config:
       org_domain: company.okta.com
       client_id: 0oa1234567890abcdef
@@ -151,7 +156,7 @@ collectors:
       - OKTA_PROD_PRIVATE_KEY
 
   okta-preview:
-    source: locktivity/epack-collector-okta@^0.1
+    source: locktivity/epack-collector-okta@^0.2
     config:
       org_domain: company.oktapreview.com
       client_id: 0oa0987654321fedcba

@@ -11,6 +11,36 @@ This collector gathers security posture metrics from an Okta organization, inclu
 - **Apps**: Provisioning and deprovisioning automation
 - **Privileged Access**: Admin role coverage, super admins, and privileged MFA strength
 - **Policy**: MFA coverage evaluation, session settings
+- **Device access**: Managed-device enforcement and device-assurance policies
+- **Groups, network zones, identity providers, hooks, API tokens, org settings, and a security-relevant system-log slice** (surfaced at `audit` / `internal`)
+
+## Collection levels
+
+The collector supports three cumulative levels, selected by the `level` key in
+`epack.yaml`. Each higher level is a strict superset of the one below it.
+
+- **trust** (default): org-level aggregates only (counts, percentages, on/off flags). No user logins, app names, policy details, or system-log events. Matches the collector's long-standing output.
+- **audit**: adds per-entity detail for an auditor: user / app / group / network-zone / IdP / hook / API-token inventories, per-policy and per-admin summaries, and 7-day counts of security-relevant system-log events. Login is the only user identifier; profile attributes beyond login are excluded.
+- **internal**: adds the rawest data for ongoing internal monitoring and review: per-user factor lists and activity timestamps, group member logins, per-policy rule conditions and actions, network-zone and IdP definitions, and the security-relevant system-log event slice.
+
+User profile attributes beyond login, password hashes, session tokens, IdP
+signing keys / client secrets, hook authentication headers, and full hook / SSO
+URLs are **never** emitted at any level. See [docs/levels.md](docs/levels.md)
+for the full per-surface, per-level breakdown.
+
+For very large orgs, internal-level inventories are capped (50,000 users, 5,000
+apps, 10,000 groups, 200,000 total group-membership rows, 5,000 system-log
+events); a `*_truncated` flag and dropped-row count mark any cap that fires.
+Recommend `--timeout 30m` for orgs over 10,000 users at `internal`.
+
+```yaml
+collectors:
+  okta:
+    source: locktivity/epack-collector-okta@^0.2
+    level: audit   # trust | audit | internal
+    config:
+      org_domain: company.okta.com
+```
 
 ## Installation
 
@@ -31,7 +61,8 @@ make build
 ```yaml
 collectors:
   okta:
-    source: locktivity/epack-collector-okta@^0.1
+    source: locktivity/epack-collector-okta@^0.2
+    level: trust                           # trust | audit | internal
     config:
       org_domain: company.okta.com
       client_id: 0oa1234567890abcdef
@@ -49,17 +80,53 @@ collectors:
 3. Uncheck **Require Demonstrating Proof of Possession (DPoP)**
 4. Download the private key in **PEM format** (not JWK/JSON)
 5. Copy the **Key ID** from the public key settings (General → Client Credentials → Public Keys)
-6. Grant API scopes: `okta.users.read`, `okta.groups.read`, `okta.apps.read`, `okta.policies.read`, `okta.roles.read`
-7. Assign **Read Only Administrator** role to the service app (Security → Administrators)
+6. Grant the API scopes for the levels you intend to run (see [Required OAuth scopes](#required-oauth-scopes))
+7. Assign **Read Only Administrator** role to the service app (Security → Administrators). The API-token surface at `audit` / `internal` additionally requires a **Super Administrator**-equivalent role.
 8. Set `OKTA_PRIVATE_KEY` environment variable:
    ```bash
    export OKTA_PRIVATE_KEY="$(cat ~/.okta/epack-private-key.pem)"
    ```
 
+### Required OAuth scopes
+
+The collector requests the scopes for the level it runs at; each level includes
+the scopes of the levels below it. A scope the service app has not been granted
+is dropped from the issued token, and the surfaces that need it are then skipped
+with a `diagnostics.warnings` entry. Grant the scopes for your level **before**
+running to collect every surface.
+
+| Scope | Levels | Surface |
+|---|---|---|
+| `okta.users.read` | trust+ | Users, posture, privileged access, policy coverage |
+| `okta.groups.read` | trust+ | Group resolution, groups surface |
+| `okta.apps.read` | trust+ | Apps |
+| `okta.policies.read` | trust+ | Policy |
+| `okta.roles.read` | trust+ | Privileged access (role assignments, custom roles); listing role assignments needs a Super Administrator-level role |
+| `okta.deviceAssurance.read` | trust+ | Device access (requires the Device Assurance feature) |
+| `okta.authenticators.read` | audit+ | Per-factor-type counts; per-user factor list (internal) |
+| `okta.networkZones.read` | audit+ | Network zones |
+| `okta.idps.read` | audit+ | Identity providers |
+| `okta.eventHooks.read` | audit+ | Event hooks |
+| `okta.inlineHooks.read` | audit+ | Inline hooks |
+| `okta.logs.read` | audit+ | System log |
+| `okta.orgs.read` | audit+ | Org settings |
+| `okta.apiTokens.read` | audit+ | API tokens (also requires a Super Administrator-level role) |
+
+When a scope is missing or a feature is not licensed (for example custom admin
+roles without Okta Identity Governance), the affected surface is skipped and a
+warning is recorded under `diagnostics.warnings` rather than failing the run.
+
 #### API Token (Legacy)
 
 1. Create an API token in Okta Admin Console
 2. Set `OKTA_API_TOKEN` environment variable
+
+The SSWS API-token path is deprecated; prefer an OAuth 2.0 service app. With an
+SSWS token, surface access is governed by the token owner's assigned admin role
+rather than OAuth scopes: a **Read Only Administrator** covers most surfaces at
+`trust` and `audit`, while the API-token and admin-role inventories at `audit` /
+`internal` require a **Super Administrator**-equivalent role. Migrate to an OAuth
+service app to use the scope-based model above.
 
 ## Output Schema
 
@@ -71,6 +138,7 @@ See [docs/schema/v1.0.0.json](docs/schema/v1.0.0.json) for the full JSON schema.
 {
   "schema_version": "1.0.0",
   "collected_at": "2026-02-25T14:00:00Z",
+  "collected_at_level": "trust",
   "org_domain": "company.okta.com",
   "posture": {
     "mfa_coverage": 85,

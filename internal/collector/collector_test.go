@@ -3,34 +3,62 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/locktivity/epack-collector-okta/internal/okta"
+	"github.com/locktivity/epack/componentsdk"
 )
 
 // mockOktaClient implements okta.OktaClient for testing.
 type mockOktaClient struct {
-	users                     []okta.User
-	usersErr                  error
-	factors                   map[string][]okta.Factor // userID -> factors
-	factorsErr                error
-	groupUsers                map[string][]okta.User // groupID -> users
-	groupUsersErr             error
-	roleAssignees             []okta.RoleAssignedUser
-	roleAssigneesErr          error
-	userRoles                 map[string][]okta.RoleAssignment
-	userRolesErr              error
-	apps                      []okta.Application
-	appsErr                   error
-	policies                  map[string][]okta.Policy // policyType -> policies
-	policiesErr               error
-	policyRules               map[string][]okta.PolicyRule // policyID -> rules
-	rulesErr                  error
-	deviceAssurancePolicies   []okta.DeviceAssurancePolicy
+	users                      []okta.User
+	usersErr                   error
+	factors                    map[string][]okta.Factor // userID -> factors
+	factorsErr                 error
+	groupUsers                 map[string][]okta.User // groupID -> users
+	groupUsersErr              error
+	roleAssignees              []okta.RoleAssignedUser
+	roleAssigneesErr           error
+	userRoles                  map[string][]okta.RoleAssignment
+	userRolesErr               error
+	userGroupIDs               map[string][]string
+	userGroupIDsErr            error
+	apps                       []okta.Application
+	appsErr                    error
+	policies                   map[string][]okta.Policy // policyType -> policies
+	policiesErr                error
+	policyRules                map[string][]okta.PolicyRule // policyID -> rules
+	rulesErr                   error
+	deviceAssurancePolicies    []okta.DeviceAssurancePolicy
 	deviceAssurancePoliciesErr error
-	orgSettings               *okta.OrgSettings
-	orgErr                    error
+	authenticators             []okta.Authenticator
+	authenticatorsErr          error
+	groups                     []okta.Group
+	groupsErr                  error
+	iamRoles                   []okta.IAMRole
+	iamRolesErr                error
+	rolePermissions            map[string][]string
+	rolePermissionsErr         error
+	networkZones               []okta.NetworkZone
+	networkZonesErr            error
+	identityProviders          []okta.IdentityProvider
+	identityProvidersErr       error
+	apiTokens                  []okta.APIToken
+	apiTokensErr               error
+	eventHooks                 []okta.EventHook
+	eventHooksErr              error
+	inlineHooks                []okta.InlineHook
+	inlineHooksErr             error
+	systemLog                  []okta.LogEvent
+	systemLogErr               error
+	orgSettings                *okta.OrgSettings
+	orgErr                     error
+	orgPreferences             *okta.OrgPreferences
+	orgPreferencesErr          error
+	orgContacts                []okta.OrgContact
+	orgContactsErr             error
 }
 
 func (m *mockOktaClient) FetchUsers(ctx context.Context, callback func([]okta.User) error) error {
@@ -68,6 +96,13 @@ func (m *mockOktaClient) FetchUserRoleAssignments(ctx context.Context, userID st
 	return m.userRoles[userID], nil
 }
 
+func (m *mockOktaClient) FetchUserGroupIDs(ctx context.Context, userID string) ([]string, error) {
+	if m.userGroupIDsErr != nil {
+		return nil, m.userGroupIDsErr
+	}
+	return m.userGroupIDs[userID], nil
+}
+
 func (m *mockOktaClient) FetchApplications(ctx context.Context, callback func([]okta.Application) error) error {
 	if m.appsErr != nil {
 		return m.appsErr
@@ -96,11 +131,78 @@ func (m *mockOktaClient) FetchDeviceAssurancePolicies(ctx context.Context) ([]ok
 	return m.deviceAssurancePolicies, nil
 }
 
+func (m *mockOktaClient) ListIAMRoles(ctx context.Context) ([]okta.IAMRole, error) {
+	if m.iamRolesErr != nil {
+		return nil, m.iamRolesErr
+	}
+	return m.iamRoles, nil
+}
+
+func (m *mockOktaClient) ListRolePermissions(ctx context.Context, roleID string) ([]string, error) {
+	if m.rolePermissionsErr != nil {
+		return nil, m.rolePermissionsErr
+	}
+	return m.rolePermissions[roleID], nil
+}
+
+func (m *mockOktaClient) ListGroups(ctx context.Context, callback func([]okta.Group) error) error {
+	if m.groupsErr != nil {
+		return m.groupsErr
+	}
+	return callback(m.groups)
+}
+
+func (m *mockOktaClient) ListAuthenticators(ctx context.Context) ([]okta.Authenticator, error) {
+	if m.authenticatorsErr != nil {
+		return nil, m.authenticatorsErr
+	}
+	return m.authenticators, nil
+}
+
 func (m *mockOktaClient) FetchOrgSettings(ctx context.Context) (*okta.OrgSettings, error) {
 	if m.orgErr != nil {
 		return nil, m.orgErr
 	}
 	return m.orgSettings, nil
+}
+
+func (m *mockOktaClient) ListNetworkZones(ctx context.Context) ([]okta.NetworkZone, error) {
+	return m.networkZones, m.networkZonesErr
+}
+
+func (m *mockOktaClient) ListIdentityProviders(ctx context.Context) ([]okta.IdentityProvider, error) {
+	return m.identityProviders, m.identityProvidersErr
+}
+
+func (m *mockOktaClient) ListAPITokens(ctx context.Context) ([]okta.APIToken, error) {
+	return m.apiTokens, m.apiTokensErr
+}
+
+func (m *mockOktaClient) ListEventHooks(ctx context.Context) ([]okta.EventHook, error) {
+	return m.eventHooks, m.eventHooksErr
+}
+
+func (m *mockOktaClient) ListInlineHooks(ctx context.Context) ([]okta.InlineHook, error) {
+	return m.inlineHooks, m.inlineHooksErr
+}
+
+func (m *mockOktaClient) ListSystemLog(ctx context.Context, filter string, since time.Time, max int) ([]okta.LogEvent, error) {
+	if m.systemLogErr != nil {
+		return nil, m.systemLogErr
+	}
+	events := m.systemLog
+	if len(events) > max {
+		events = events[:max]
+	}
+	return events, nil
+}
+
+func (m *mockOktaClient) FetchOrgPreferences(ctx context.Context) (*okta.OrgPreferences, error) {
+	return m.orgPreferences, m.orgPreferencesErr
+}
+
+func (m *mockOktaClient) FetchOrgContactUsers(ctx context.Context) ([]okta.OrgContact, error) {
+	return m.orgContacts, m.orgContactsErr
 }
 
 func TestCollect_EmptyOrganization(t *testing.T) {
@@ -112,7 +214,7 @@ func TestCollect_EmptyOrganization(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -157,7 +259,7 @@ func TestCollect_WithUsers(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -226,7 +328,7 @@ func TestCollect_WithPrivilegedAccess(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -262,7 +364,7 @@ func TestCollect_WithApps(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -324,7 +426,7 @@ func TestCollect_WithPolicy(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -446,7 +548,7 @@ func TestCollect_WithMultiplePolicies(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -488,11 +590,476 @@ func TestCollect_WithMultiplePolicies(t *testing.T) {
 	}
 }
 
+func TestCollect_TrustOmitsAuditFields(t *testing.T) {
+	client := &mockOktaClient{
+		users: []okta.User{
+			{ID: "user1", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "user1@acme.com"}},
+		},
+		factors: map[string][]okta.Factor{
+			"user1": {{ID: "f1", FactorType: "push", Status: "ACTIVE"}},
+		},
+		apps: []okta.Application{
+			{ID: "app1", Label: "App One", Name: "app_one", SignOnMode: "SAML_2_0", Status: "ACTIVE"},
+		},
+		policies: make(map[string][]okta.Policy),
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if posture.CollectedAtLevel != "trust" {
+		t.Errorf("expected collected_at_level=trust, got %q", posture.CollectedAtLevel)
+	}
+	if posture.Users.Inventory != nil {
+		t.Errorf("expected nil user inventory at trust, got %v", posture.Users.Inventory)
+	}
+	if posture.Apps.Inventory != nil {
+		t.Errorf("expected nil app inventory at trust, got %v", posture.Apps.Inventory)
+	}
+	if posture.Posture.PerFactorType != nil {
+		t.Errorf("expected nil per_factor_type at trust, got %v", posture.Posture.PerFactorType)
+	}
+	if posture.Posture.MFADisabledUsersCount != nil {
+		t.Errorf("expected nil mfa_disabled_users_count at trust, got %v", posture.Posture.MFADisabledUsersCount)
+	}
+}
+
+func TestCollect_AuditInventory(t *testing.T) {
+	client := &mockOktaClient{
+		users: []okta.User{
+			{ID: "u1", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "human@acme.com", UserType: "Employee"}},
+			{ID: "u2", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "svc-ci@acme.com", UserType: "Service Account"}},
+		},
+		factors: map[string][]okta.Factor{
+			"u1": {{ID: "f1", FactorType: "webauthn", Status: "ACTIVE"}},
+			"u2": {{ID: "f2", FactorType: "push", Status: "ACTIVE"}},
+		},
+		apps: []okta.Application{
+			{ID: "app1", Label: "SAML App", Name: "saml_app", SignOnMode: "SAML_2_0", Status: "ACTIVE", Features: []string{"PUSH_NEW_USERS"}},
+			{ID: "app2", Label: "SWA App", Name: "swa_app", SignOnMode: "BROWSER_PLUGIN", Status: "ACTIVE"},
+		},
+		policies: make(map[string][]okta.Policy),
+		authenticators: []okta.Authenticator{
+			{Key: "okta_email", Status: "ACTIVE"}, // enabled but unenrolled -> zero-count seed
+		},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if posture.CollectedAtLevel != "audit" {
+		t.Errorf("expected collected_at_level=audit, got %q", posture.CollectedAtLevel)
+	}
+
+	if len(posture.Users.Inventory) != 2 {
+		t.Fatalf("expected 2 user inventory rows, got %d", len(posture.Users.Inventory))
+	}
+	byLogin := map[string]User{}
+	for _, u := range posture.Users.Inventory {
+		byLogin[u.Login] = u
+	}
+	if byLogin["human@acme.com"].UserType != "Human" {
+		t.Errorf("expected Human, got %q", byLogin["human@acme.com"].UserType)
+	}
+	if byLogin["svc-ci@acme.com"].UserType != "Service" {
+		t.Errorf("expected Service, got %q", byLogin["svc-ci@acme.com"].UserType)
+	}
+
+	if len(posture.Apps.Inventory) != 2 {
+		t.Fatalf("expected 2 app inventory rows, got %d", len(posture.Apps.Inventory))
+	}
+	for _, a := range posture.Apps.Inventory {
+		switch a.Name {
+		case "saml_app":
+			if a.Type != "SAML" || !a.SSOConfigured || !a.ProvisioningConfigured {
+				t.Errorf("saml_app row wrong: %+v", a)
+			}
+		case "swa_app":
+			if a.Type != "SWA" || a.SSOConfigured {
+				t.Errorf("swa_app row wrong: %+v", a)
+			}
+		}
+	}
+
+	// Per-factor-type: push (1), webauthn (1), and email seeded at 0 from catalog.
+	counts := map[string]int{}
+	for _, ftc := range posture.Posture.PerFactorType {
+		counts[ftc.FactorType] = ftc.EnrolledUsers
+	}
+	if counts["push"] != 1 || counts["webauthn"] != 1 {
+		t.Errorf("expected push=1 webauthn=1, got %v", counts)
+	}
+	if v, ok := counts["email"]; !ok || v != 0 {
+		t.Errorf("expected email seeded at 0 from catalog, got %v (present=%v)", v, ok)
+	}
+	if posture.Posture.MFADisabledUsersCount == nil || *posture.Posture.MFADisabledUsersCount != 0 {
+		t.Errorf("expected mfa_disabled_users_count=0, got %v", posture.Posture.MFADisabledUsersCount)
+	}
+}
+
+func TestCollect_AuditPrivilegedAndPolicy(t *testing.T) {
+	client := &mockOktaClient{
+		users: []okta.User{
+			{ID: "admin1", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "admin1@acme.com"}},
+			{ID: "user1", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "user1@acme.com"}},
+		},
+		factors:       make(map[string][]okta.Factor),
+		apps:          []okta.Application{},
+		roleAssignees: []okta.RoleAssignedUser{{ID: "admin1"}},
+		userRoles: map[string][]okta.RoleAssignment{
+			"admin1": {{ID: "r1", Type: "SUPER_ADMIN"}, {ID: "r2", Type: "CUSTOM", Label: "Billing Admin"}},
+		},
+		policies: map[string][]okta.Policy{
+			"OKTA_SIGN_ON": {
+				{ID: "p1", Name: "Default Sign-on", Type: "OKTA_SIGN_ON", Status: "ACTIVE", Priority: 1},
+			},
+		},
+		policyRules: map[string][]okta.PolicyRule{
+			"p1": {{ID: "rule1", Status: "ACTIVE", Actions: okta.PolicyRuleActions{Signon: &okta.SignonActions{RequireFactor: true}}}},
+		},
+		iamRoles: []okta.IAMRole{
+			{ID: "cr1", Label: "Billing Admin", Description: "manages billing"},
+		},
+		rolePermissions: map[string][]string{
+			"cr1": {"okta.users.read", "okta.apps.read"},
+		},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(posture.PrivilegedAccess.Inventory) != 1 {
+		t.Fatalf("expected 1 privileged inventory row, got %d", len(posture.PrivilegedAccess.Inventory))
+	}
+	row := posture.PrivilegedAccess.Inventory[0]
+	if row.Login != "admin1@acme.com" || len(row.Roles) != 2 || row.Roles[0] != "SUPER_ADMIN" || row.Roles[1] != "Billing Admin" {
+		t.Errorf("privileged inventory row wrong: %+v", row)
+	}
+
+	if len(posture.PrivilegedAccess.CustomRoles) != 1 {
+		t.Fatalf("expected 1 custom role, got %d", len(posture.PrivilegedAccess.CustomRoles))
+	}
+	cr := posture.PrivilegedAccess.CustomRoles[0]
+	if cr.Label != "Billing Admin" || cr.PermissionCount != 2 {
+		t.Errorf("custom role wrong: %+v", cr)
+	}
+
+	if len(posture.Policy.Policies) != 1 {
+		t.Fatalf("expected 1 policy summary, got %d", len(posture.Policy.Policies))
+	}
+	ps := posture.Policy.Policies[0]
+	if ps.Name != "Default Sign-on" || ps.RuleCount != 1 || ps.ScopeSummary != "everyone" {
+		t.Errorf("policy summary wrong: %+v", ps)
+	}
+}
+
+func TestPrivileged_DegradesOnNonIdentityGovernance(t *testing.T) {
+	client := &mockOktaClient{
+		users: []okta.User{
+			{ID: "admin1", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "admin1@acme.com"}},
+		},
+		factors:       make(map[string][]okta.Factor),
+		apps:          []okta.Application{},
+		roleAssignees: []okta.RoleAssignedUser{{ID: "admin1"}},
+		userRoles: map[string][]okta.RoleAssignment{
+			"admin1": {{ID: "r1", Type: "SUPER_ADMIN"}},
+		},
+		policies:    make(map[string][]okta.Policy),
+		iamRolesErr: &okta.APIStatusError{StatusCode: 404, Path: "/api/v1/iam/roles"},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("expected graceful degradation, got error: %v", err)
+	}
+
+	// Built-in roles still surface in the inventory.
+	if len(posture.PrivilegedAccess.Inventory) != 1 {
+		t.Errorf("expected built-in role inventory to survive, got %d rows", len(posture.PrivilegedAccess.Inventory))
+	}
+	// Custom roles normalize to [] (collected, none available).
+	if posture.PrivilegedAccess.CustomRoles == nil {
+		t.Error("expected non-nil custom_roles at audit (normalized)")
+	}
+	// A diagnostic explains why custom roles are absent.
+	if posture.Diagnostics == nil {
+		t.Fatal("expected diagnostics for IG-not-licensed degradation")
+	}
+	found := false
+	for _, w := range posture.Diagnostics.Warnings {
+		if strings.Contains(w, "Identity Governance") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected an Identity Governance diagnostic, got %v", posture.Diagnostics.Warnings)
+	}
+}
+
+func TestPrivileged_DegradesOnAssigneesForbidden(t *testing.T) {
+	// A least-privilege (Read-Only Administrator) service app gets a 403 listing
+	// admin-role assignments. The run must still succeed with the other surfaces,
+	// emitting zeroed privileged metrics plus a diagnostic.
+	client := &mockOktaClient{
+		users: []okta.User{
+			{ID: "user1", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "user1@acme.com"}},
+		},
+		factors:          map[string][]okta.Factor{"user1": {{ID: "f1", FactorType: "webauthn", Status: "ACTIVE"}}},
+		apps:             []okta.Application{{ID: "app1", SignOnMode: "SAML_2_0", Status: "ACTIVE"}},
+		policies:         make(map[string][]okta.Policy),
+		roleAssigneesErr: &okta.APIStatusError{StatusCode: 403, Path: "/api/v1/iam/assignees/users"},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
+	if err != nil {
+		t.Fatalf("expected graceful degradation, got error: %v", err)
+	}
+
+	// Other surfaces still collected.
+	if posture.Posture.MFACoverage != 100 {
+		t.Errorf("expected MFA coverage to be collected despite privileged 403, got %d", posture.Posture.MFACoverage)
+	}
+	// Privileged metrics degrade to zero (not collected).
+	if posture.PrivilegedAccess.PrivilegedUsersCount != 0 {
+		t.Errorf("expected zero privileged users on 403, got %d", posture.PrivilegedAccess.PrivilegedUsersCount)
+	}
+	// A diagnostic explains the 403.
+	if posture.Diagnostics == nil {
+		t.Fatal("expected diagnostics for privileged-access 403")
+	}
+	found := false
+	for _, w := range posture.Diagnostics.Warnings {
+		if strings.Contains(w, "admin-role assignments") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a privileged-access 403 diagnostic, got %v", posture.Diagnostics.Warnings)
+	}
+}
+
+func TestCoreSurfaces_DegradeOnForbidden(t *testing.T) {
+	// Every core surface returns 403 (a maximally locked-down service app). The
+	// run must still succeed, emitting zeroed core metrics and a diagnostic per
+	// skipped surface rather than failing outright.
+	forbidden := func(path string) error { return &okta.APIStatusError{StatusCode: 403, Path: path} }
+	client := &mockOktaClient{
+		usersErr:                   forbidden("/api/v1/users"),
+		appsErr:                    forbidden("/api/v1/apps"),
+		policiesErr:                forbidden("/api/v1/policies"),
+		deviceAssurancePoliciesErr: forbidden("/api/v1/device-assurances"),
+		roleAssigneesErr:           forbidden("/api/v1/iam/assignees/users"),
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
+	if err != nil {
+		t.Fatalf("expected degraded success, got error: %v", err)
+	}
+
+	if posture.Posture.MFACoverage != 0 || posture.Apps.ProvisioningEnabled != 0 ||
+		posture.PrivilegedAccess.PrivilegedUsersCount != 0 || posture.Policy.PolicyCount != 0 ||
+		posture.DeviceAccess.DeviceAssurancePoliciesCount != 0 {
+		t.Error("expected all core metrics to degrade to zero")
+	}
+	if posture.Diagnostics == nil || len(posture.Diagnostics.Warnings) < 4 {
+		t.Fatalf("expected a diagnostic per skipped surface, got %+v", posture.Diagnostics)
+	}
+}
+
+func TestCollect_AuditDeviceAssurance(t *testing.T) {
+	trueVal := true
+	client := &mockOktaClient{
+		users:    []okta.User{},
+		factors:  make(map[string][]okta.Factor),
+		apps:     []okta.Application{},
+		policies: make(map[string][]okta.Policy),
+		deviceAssurancePolicies: []okta.DeviceAssurancePolicy{
+			{
+				ID: "dap1", Name: "iOS Baseline", Platform: "IOS", Status: "ACTIVE",
+				OSVersion: &struct {
+					Minimum string `json:"minimum"`
+				}{Minimum: "17.0"},
+				DiskEncryptionType: &struct {
+					Include []string `json:"include"`
+				}{Include: []string{"FULL"}},
+				ScreenLockType: &struct {
+					Include []string `json:"include"`
+				}{Include: []string{"BIOMETRIC"}},
+				Jailbreak: &trueVal,
+			},
+		},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(posture.DeviceAccess.Policies) != 1 {
+		t.Fatalf("expected 1 device assurance summary, got %d", len(posture.DeviceAccess.Policies))
+	}
+	d := posture.DeviceAccess.Policies[0]
+	if d.Name != "iOS Baseline" || d.Platform != "IOS" || d.MinOSVersion != "17.0" {
+		t.Errorf("device summary wrong: %+v", d)
+	}
+	if !d.DiskEncryptionReq || !d.ScreenLockReq || !d.JailbreakProtection {
+		t.Errorf("expected requirement flags set: %+v", d)
+	}
+}
+
+func TestCollect_InternalDetails(t *testing.T) {
+	now := time.Now()
+	client := &mockOktaClient{
+		users: []okta.User{
+			{ID: "admin1", Status: "ACTIVE", LastLogin: now, LastUpdated: now, Created: now, Profile: okta.UserProfile{Login: "admin1@acme.com"}},
+		},
+		factors: map[string][]okta.Factor{
+			"admin1": {{ID: "f1", FactorType: "webauthn", Status: "ACTIVE", Created: now}},
+		},
+		userGroupIDs: map[string][]string{
+			"admin1": {"grp-1", "grp-2"},
+		},
+		apps:          []okta.Application{},
+		roleAssignees: []okta.RoleAssignedUser{{ID: "admin1"}},
+		userRoles: map[string][]okta.RoleAssignment{
+			"admin1": {{ID: "r1", Type: "SUPER_ADMIN", AssignmentType: "GROUP"}},
+		},
+		policies: map[string][]okta.Policy{
+			"OKTA_SIGN_ON": {{ID: "p1", Name: "Default", Type: "OKTA_SIGN_ON", Status: "ACTIVE", Priority: 1}},
+		},
+		policyRules: map[string][]okta.PolicyRule{
+			"p1": {{
+				ID: "rule1", Name: "Require MFA", Status: "ACTIVE", Priority: 1,
+				Actions: okta.PolicyRuleActions{Signon: &okta.SignonActions{Access: "ALLOW", RequireFactor: true}},
+			}},
+		},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelInternal)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if posture.CollectedAtLevel != "internal" {
+		t.Errorf("expected collected_at_level=internal, got %q", posture.CollectedAtLevel)
+	}
+
+	if len(posture.Users.Inventory) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(posture.Users.Inventory))
+	}
+	u := posture.Users.Inventory[0]
+	if u.LastLoginAt == "" || u.LastUpdatedAt == "" {
+		t.Errorf("expected internal timestamps, got %+v", u)
+	}
+	if len(u.Factors) != 1 || u.Factors[0].FactorType != "webauthn" || u.Factors[0].EnrolledAt == "" {
+		t.Errorf("expected webauthn factor with enrolled_at, got %+v", u.Factors)
+	}
+	if len(u.GroupIDs) != 2 {
+		t.Errorf("expected 2 group IDs, got %v", u.GroupIDs)
+	}
+
+	if len(posture.PrivilegedAccess.Inventory) != 1 {
+		t.Fatalf("expected 1 privileged user, got %d", len(posture.PrivilegedAccess.Inventory))
+	}
+	pu := posture.PrivilegedAccess.Inventory[0]
+	if pu.RoleAssignmentSource != "group" || pu.LastLoginAt == "" {
+		t.Errorf("expected group source + last login, got %+v", pu)
+	}
+
+	if len(posture.Policy.Policies) != 1 || len(posture.Policy.Policies[0].Rules) != 1 {
+		t.Fatalf("expected 1 policy with 1 rule detail, got %+v", posture.Policy.Policies)
+	}
+	rule := posture.Policy.Policies[0].Rules[0]
+	if rule.Name != "Require MFA" || rule.Access != "ALLOW" || rule.RequireFactor == nil || !*rule.RequireFactor {
+		t.Errorf("rule detail wrong: %+v", rule)
+	}
+}
+
+func TestPhishingResistant_CountsFastPass(t *testing.T) {
+	// Okta FastPass enrolls as the "signed_nonce" factor type and is
+	// phishing-resistant, like WebAuthn.
+	client := &mockOktaClient{
+		users: []okta.User{
+			{ID: "u1", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "u1@acme.com"}},
+			{ID: "u2", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "u2@acme.com"}},
+		},
+		factors: map[string][]okta.Factor{
+			"u1": {{ID: "f1", FactorType: "signed_nonce", Status: "ACTIVE"}},
+			"u2": {{ID: "f2", FactorType: "token:software:totp", Status: "ACTIVE"}},
+		},
+		apps:     []okta.Application{},
+		policies: make(map[string][]okta.Policy),
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// u1 (FastPass) counts as phishing-resistant; u2 (TOTP) does not = 50%.
+	if posture.Posture.MFAPhishingResistant != 50 {
+		t.Errorf("expected 50%% phishing-resistant (FastPass counts), got %d", posture.Posture.MFAPhishingResistant)
+	}
+}
+
+func TestNetworkZones_WarnsOnUnexpectedShape(t *testing.T) {
+	client := &mockOktaClient{
+		users:    []okta.User{},
+		factors:  make(map[string][]okta.Factor),
+		apps:     []okta.Application{},
+		policies: make(map[string][]okta.Policy),
+		networkZones: []okta.NetworkZone{
+			// Empty object for locations/asns is treated as empty (no warning);
+			// a populated but wrong shape for gateways must warn.
+			{ID: "z1", Name: "Weird", Type: "IP", Status: "ACTIVE", Usage: "POLICY",
+				Gateways:  json.RawMessage(`{"unexpected":"object"}`),
+				Locations: json.RawMessage(`{}`)},
+		},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelInternal)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if posture.Diagnostics == nil {
+		t.Fatal("expected a diagnostic for the unexpected gateways shape")
+	}
+	found := false
+	for _, w := range posture.Diagnostics.Warnings {
+		if strings.Contains(w, `zone "Weird" gateways: unexpected shape`) {
+			found = true
+		}
+		if strings.Contains(w, "locations") {
+			t.Errorf("empty-object locations must not warn, got %q", w)
+		}
+	}
+	if !found {
+		t.Errorf("expected a gateways shape-mismatch diagnostic, got %v", posture.Diagnostics.Warnings)
+	}
+}
+
 func TestCollect_MissingOrgDomain(t *testing.T) {
 	client := &mockOktaClient{}
 	c := NewWithClient(Config{OrgDomain: ""}, client)
 
-	_, err := c.Collect(context.Background())
+	_, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 	if err == nil {
 		t.Error("expected error for missing org_domain")
 	}
@@ -557,7 +1124,7 @@ func TestOutputJSONStructure(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -973,7 +1540,7 @@ func TestCollect_WithDeviceAccessRequired(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1009,7 +1576,7 @@ func TestCollect_WithoutDeviceAccessRequired(t *testing.T) {
 	}
 
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
-	posture, err := c.Collect(context.Background())
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

@@ -9,6 +9,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/locktivity/epack/componentsdk"
 )
 
 // E2E tests run against a real Okta organization.
@@ -41,6 +43,7 @@ func getE2EConfig(t *testing.T) Config {
 	config := Config{
 		OrgDomain:  orgDomain,
 		ClientID:   os.Getenv("OKTA_CLIENT_ID"),
+		KeyID:      os.Getenv("OKTA_KEY_ID"),
 		PrivateKey: os.Getenv("OKTA_PRIVATE_KEY"),
 		APIToken:   os.Getenv("OKTA_API_TOKEN"),
 	}
@@ -55,10 +58,24 @@ func getE2EConfig(t *testing.T) Config {
 	return config
 }
 
+// e2eLevel reads the collection level for e2e runs from OKTA_LEVEL (trust /
+// audit / internal), defaulting to trust. Run at each level to exercise the
+// three-level boundary against a real org.
+func e2eLevel() componentsdk.Level {
+	switch os.Getenv("OKTA_LEVEL") {
+	case "audit":
+		return componentsdk.LevelAudit
+	case "internal":
+		return componentsdk.LevelInternal
+	default:
+		return componentsdk.LevelTrust
+	}
+}
+
 func TestE2E_RealOktaCollection(t *testing.T) {
 	config := getE2EConfig(t)
 
-	collector, err := New(config)
+	collector, err := New(config, e2eLevel())
 	if err != nil {
 		t.Fatalf("failed to create collector: %v", err)
 	}
@@ -66,7 +83,7 @@ func TestE2E_RealOktaCollection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	posture, err := collector.Collect(ctx)
+	posture, err := collector.Collect(ctx, e2eLevel())
 	if err != nil {
 		t.Fatalf("failed to collect: %v", err)
 	}
@@ -99,7 +116,7 @@ func TestE2E_RealOktaCollection(t *testing.T) {
 func TestE2E_ValidatePostureMetrics(t *testing.T) {
 	config := getE2EConfig(t)
 
-	collector, err := New(config)
+	collector, err := New(config, e2eLevel())
 	if err != nil {
 		t.Fatalf("failed to create collector: %v", err)
 	}
@@ -107,7 +124,7 @@ func TestE2E_ValidatePostureMetrics(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	posture, err := collector.Collect(ctx)
+	posture, err := collector.Collect(ctx, e2eLevel())
 	if err != nil {
 		t.Fatalf("failed to collect: %v", err)
 	}
@@ -143,7 +160,7 @@ func TestE2E_ValidatePostureMetrics(t *testing.T) {
 func TestE2E_ValidatePolicySettings(t *testing.T) {
 	config := getE2EConfig(t)
 
-	collector, err := New(config)
+	collector, err := New(config, e2eLevel())
 	if err != nil {
 		t.Fatalf("failed to create collector: %v", err)
 	}
@@ -151,7 +168,7 @@ func TestE2E_ValidatePolicySettings(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	posture, err := collector.Collect(ctx)
+	posture, err := collector.Collect(ctx, e2eLevel())
 	if err != nil {
 		t.Fatalf("failed to collect: %v", err)
 	}
@@ -190,7 +207,7 @@ func TestE2E_ValidatePolicySettings(t *testing.T) {
 func TestE2E_OutputValidJSON(t *testing.T) {
 	config := getE2EConfig(t)
 
-	collector, err := New(config)
+	collector, err := New(config, e2eLevel())
 	if err != nil {
 		t.Fatalf("failed to create collector: %v", err)
 	}
@@ -198,7 +215,7 @@ func TestE2E_OutputValidJSON(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	posture, err := collector.Collect(ctx)
+	posture, err := collector.Collect(ctx, e2eLevel())
 	if err != nil {
 		t.Fatalf("failed to collect: %v", err)
 	}

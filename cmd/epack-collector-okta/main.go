@@ -48,12 +48,14 @@ func run(ctx componentsdk.CollectorContext) error {
 		return componentsdk.NewConfigError("authentication required: provide client_id + key_id + OKTA_PRIVATE_KEY or OKTA_API_TOKEN")
 	}
 
-	// Create collector and collect posture
-	c, err := collector.New(config)
+	// Create collector and collect posture. The level selects both the OAuth
+	// scope set requested at token exchange and the depth of collection.
+	level := ctx.Level()
+	c, err := collector.New(config, level)
 	if err != nil {
 		return componentsdk.NewConfigError("creating collector: %v", err)
 	}
-	posture, err := c.Collect(ctx.Context())
+	posture, err := c.Collect(ctx.Context(), level)
 	if err != nil {
 		return componentsdk.NewNetworkError("collecting posture: %v", err)
 	}

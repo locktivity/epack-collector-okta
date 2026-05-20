@@ -34,12 +34,24 @@ OAuth 2.0 with private key JWT is the recommended authentication method. It prov
 #### Step 3: Grant API Scopes
 
 1. Go to the **Okta API Scopes** tab
-2. Click **Grant** next to each of these scopes:
+The scopes you need depend on the collection [level](levels.md). A scope you
+don't grant isn't fatal: the surfaces that need it are skipped with a
+`diagnostics.warnings` entry rather than failing the run.
+
+2. Click **Grant** next to each scope you need:
+
+   **Trust level (the default):**
    - `okta.users.read`
    - `okta.groups.read`
    - `okta.apps.read`
    - `okta.policies.read`
    - `okta.roles.read`
+   - `okta.deviceAssurance.read` (device-access surface; needs the Device Assurance feature)
+
+   **Audit and internal additionally need:** `okta.authenticators.read`,
+   `okta.networkZones.read`, `okta.idps.read`, `okta.eventHooks.read`,
+   `okta.inlineHooks.read`, `okta.logs.read`, `okta.orgs.read`,
+   `okta.apiTokens.read`.
 
 #### Step 4: Assign Admin Role
 
@@ -48,19 +60,26 @@ OAuth scopes alone aren't enough - the service app needs an admin role to access
 1. Go to **Security → Administrators**
 2. Click **Add Administrator**
 3. In the "Admin" field, search for and select your service app (e.g., "epack-collector")
-4. Under "Role", select **Read Only Administrator**
+4. Under "Role", select **Read Only Administrator** (assign it org-wide, not constrained to a resource set)
 5. Click **Save Changes**
+
+**Privileged-access note:** listing *who holds admin roles* is gated behind a
+Super Administrator-level role; Read-Only Administrator cannot. With Read-Only
+Admin, the `privileged_access` surface is skipped with a diagnostic. Grant the
+app **Super Administrator** if you need privileged-user counts; otherwise
+Read-Only Admin is sufficient for every other surface.
 
 #### Step 5: Configure epack
 
 ```yaml
 collectors:
   okta:
-    source: locktivity/epack-collector-okta@^0.1
+    source: locktivity/epack-collector-okta@^0.2
     config:
       org_domain: your-org.okta.com
       client_id: 0oa1234567890abcdef   # From app settings
       key_id: abc123xyz                # From public key settings
+      level: trust                     # trust (default) | audit | internal
     secrets:
       - OKTA_PRIVATE_KEY               # PEM-encoded private key
 ```
@@ -90,7 +109,7 @@ API tokens are simpler to set up but less secure:
 ```yaml
 collectors:
   okta:
-    source: locktivity/epack-collector-okta@^0.1
+    source: locktivity/epack-collector-okta@^0.2
     config:
       org_domain: your-org.okta.com
     secrets:
@@ -110,6 +129,7 @@ export OKTA_API_TOKEN="00abcdef..."
 | `org_domain` | Yes | Your Okta organization domain (e.g., `company.okta.com`) |
 | `client_id` | For OAuth | OAuth 2.0 client ID from your service app |
 | `key_id` | For OAuth | Key ID from the public key settings in your Okta app |
+| `level` | No | Collection depth: `trust` (default), `audit`, or `internal`. See [levels.md](levels.md). Unrecognized values fall back to `trust`. |
 
 ## Environment Variables
 
@@ -133,7 +153,10 @@ For OAuth 2.0:
 - Verify the `key_id` matches the Key ID shown in Okta (General → Client Credentials → Public Keys)
 - Ensure the private key matches the public key configured in Okta (they're a matched pair)
 - Make sure DPoP is disabled
-- Check that all required scopes are granted
+
+(A missing OAuth scope does **not** fail the token exchange — Okta drops ungranted
+scopes from the issued token, and the affected surface degrades; see "Missing
+data" below.)
 
 ### "Rate limited" errors
 
@@ -141,10 +164,19 @@ The collector handles rate limits automatically with exponential backoff. If you
 - Reduce collection frequency
 - Contact Okta support to increase rate limits
 
-### Missing data
+### Missing data / a surface is zeroed
 
-Some metrics require specific permissions:
-- Policy details require `okta.policies.read` scope
-- Policy coverage by group requires `okta.groups.read` scope
-- Privileged access metrics require `okta.roles.read` scope
-- If using API token, ensure the token creator has admin privileges
+When a surface can't be collected, the run still succeeds and records why under
+`diagnostics.warnings` in the output. Common causes:
+
+- **Missing scope.** Each surface needs its scope granted for the level you're
+  running (see [Step 3](#step-3-grant-api-scopes) and [levels.md](levels.md)).
+- **`privileged_access` is zero.** Listing admin-role assignments needs a Super
+  Administrator-level role; Read-Only Admin can't (see the privileged-access note
+  in [Step 4](#step-4-assign-admin-role)).
+- **`device_access` is empty.** Needs `okta.deviceAssurance.read` and the Device
+  Assurance feature.
+- **A feature isn't licensed.** Custom admin roles need Okta Identity Governance;
+  the custom-role inventory is skipped otherwise.
+- **API token auth.** Access is governed by the token owner's admin role rather
+  than scopes; ensure that role covers the surfaces you need.
