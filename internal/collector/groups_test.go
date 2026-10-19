@@ -80,8 +80,8 @@ func TestGroups_MembershipCapFires(t *testing.T) {
 	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, groupsTestClient())
 	out := &Groups{
 		Inventory: []GroupSummary{
-			{ID: "g1", MemberCount: 2},
-			{ID: "g2", MemberCount: 1},
+			{ID: "g1", MemberCount: intPtr(2)},
+			{ID: "g2", MemberCount: intPtr(1)},
 		},
 	}
 	// Shrink the effective budget by pre-filling: simulate via a tiny cap path.

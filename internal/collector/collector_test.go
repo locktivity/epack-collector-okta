@@ -3,6 +3,8 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 
 // mockOktaClient implements okta.OktaClient for testing.
 type mockOktaClient struct {
+	signInErr                  error
 	users                      []okta.User
 	usersErr                   error
 	factors                    map[string][]okta.Factor // userID -> factors
@@ -59,6 +62,13 @@ type mockOktaClient struct {
 	orgPreferencesErr          error
 	orgContacts                []okta.OrgContact
 	orgContactsErr             error
+}
+
+func (m *mockOktaClient) SignIn(ctx context.Context) (*okta.Identity, error) {
+	if m.signInErr != nil {
+		return nil, m.signInErr
+	}
+	return &okta.Identity{Kind: "api_token", ID: "00u-token-owner"}, nil
 }
 
 func (m *mockOktaClient) FetchUsers(ctx context.Context, callback func([]okta.User) error) error {
@@ -159,9 +169,14 @@ func (m *mockOktaClient) ListAuthenticators(ctx context.Context) ([]okta.Authent
 	return m.authenticators, nil
 }
 
+// FetchOrgSettings answers like the client, which never returns a nil org
+// without an error.
 func (m *mockOktaClient) FetchOrgSettings(ctx context.Context) (*okta.OrgSettings, error) {
 	if m.orgErr != nil {
 		return nil, m.orgErr
+	}
+	if m.orgSettings == nil {
+		return nil, &okta.APIStatusError{StatusCode: 404, Path: "/api/v1/org"}
 	}
 	return m.orgSettings, nil
 }
@@ -198,6 +213,9 @@ func (m *mockOktaClient) ListSystemLog(ctx context.Context, filter string, since
 }
 
 func (m *mockOktaClient) FetchOrgPreferences(ctx context.Context) (*okta.OrgPreferences, error) {
+	if m.orgPreferencesErr == nil && m.orgPreferences == nil {
+		return nil, &okta.APIStatusError{StatusCode: 404, Path: "/api/v1/org/preferences"}
+	}
 	return m.orgPreferences, m.orgPreferencesErr
 }
 
@@ -224,14 +242,13 @@ func TestCollect_EmptyOrganization(t *testing.T) {
 		t.Errorf("expected org_domain=test.okta.com, got %s", posture.OrgDomain)
 	}
 
-	// All percentages should be 0 for empty org
-	if posture.Posture.MFACoverage != 0 {
-		t.Errorf("expected 0%% MFA coverage, got %d%%", posture.Posture.MFACoverage)
+	// A percentage of no users or no apps has no value, and the zero
+	// population says why.
+	if posture.Posture.MFACoverage != nil || posture.Posture.SSOCoverage != nil {
+		t.Errorf("expected null coverage for an empty org, got mfa=%s sso=%s", showInt(posture.Posture.MFACoverage), showInt(posture.Posture.SSOCoverage))
 	}
-
-	if posture.Posture.SSOCoverage != 0 {
-		t.Errorf("expected 0%% SSO coverage, got %d%%", posture.Posture.SSOCoverage)
-	}
+	assertInt(t, "Users.TotalCount", posture.Users.TotalCount, 0)
+	assertInt(t, "Apps.TotalCount", posture.Apps.TotalCount, 0)
 }
 
 func TestCollect_WithUsers(t *testing.T) {
@@ -267,29 +284,19 @@ func TestCollect_WithUsers(t *testing.T) {
 
 	// 3 users with MFA (user1, user2, user4) out of 5
 	// MFA coverage = 60%
-	if posture.Posture.MFACoverage != 60 {
-		t.Errorf("expected 60%% MFA coverage, got %d%%", posture.Posture.MFACoverage)
-	}
+	assertInt(t, "Posture.MFACoverage", posture.Posture.MFACoverage, 60)
 
 	// Only user4 has phishing-resistant MFA (webauthn) = 20%
-	if posture.Posture.MFAPhishingResistant != 20 {
-		t.Errorf("expected 20%% phishing resistant, got %d%%", posture.Posture.MFAPhishingResistant)
-	}
+	assertInt(t, "Posture.MFAPhishingResistant", posture.Posture.MFAPhishingResistant, 20)
 
 	// 1 user locked out = 20%
-	if posture.Users.LockedOut != 20 {
-		t.Errorf("expected 20%% locked out, got %d%%", posture.Users.LockedOut)
-	}
+	assertInt(t, "Users.LockedOut", posture.Users.LockedOut, 20)
 
 	// 1 user inactive (user3) = 20%
-	if posture.Users.Inactive != 20 {
-		t.Errorf("expected 20%% inactive, got %d%%", posture.Users.Inactive)
-	}
+	assertInt(t, "Users.Inactive", posture.Users.Inactive, 20)
 
 	// 1 user suspended (user6) = 20%
-	if posture.Users.Suspended != 20 {
-		t.Errorf("expected 20%% suspended, got %d%%", posture.Users.Suspended)
-	}
+	assertInt(t, "Users.Suspended", posture.Users.Suspended, 20)
 }
 
 func TestCollect_WithPrivilegedAccess(t *testing.T) {
@@ -333,21 +340,11 @@ func TestCollect_WithPrivilegedAccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if posture.PrivilegedAccess.PrivilegedUsersCount != 2 {
-		t.Fatalf("expected 2 privileged users, got %d", posture.PrivilegedAccess.PrivilegedUsersCount)
-	}
-	if posture.PrivilegedAccess.SuperAdminCount != 1 {
-		t.Fatalf("expected 1 super admin, got %d", posture.PrivilegedAccess.SuperAdminCount)
-	}
-	if posture.PrivilegedAccess.StandingPrivilegedUsersCount != 2 {
-		t.Fatalf("expected 2 standing privileged users, got %d", posture.PrivilegedAccess.StandingPrivilegedUsersCount)
-	}
-	if posture.PrivilegedAccess.PrivilegedMFACoveragePct != 100 {
-		t.Fatalf("expected 100%% privileged MFA coverage, got %d%%", posture.PrivilegedAccess.PrivilegedMFACoveragePct)
-	}
-	if posture.PrivilegedAccess.PrivilegedPhishingResistantPct != 50 {
-		t.Fatalf("expected 50%% privileged phishing-resistant coverage, got %d%%", posture.PrivilegedAccess.PrivilegedPhishingResistantPct)
-	}
+	assertInt(t, "PrivilegedAccess.PrivilegedUsersCount", posture.PrivilegedAccess.PrivilegedUsersCount, 2)
+	assertInt(t, "PrivilegedAccess.SuperAdminCount", posture.PrivilegedAccess.SuperAdminCount, 1)
+	assertInt(t, "PrivilegedAccess.StandingPrivilegedUsersCount", posture.PrivilegedAccess.StandingPrivilegedUsersCount, 2)
+	assertInt(t, "PrivilegedAccess.PrivilegedMFACoveragePct", posture.PrivilegedAccess.PrivilegedMFACoveragePct, 100)
+	assertInt(t, "PrivilegedAccess.PrivilegedPhishingResistantPct", posture.PrivilegedAccess.PrivilegedPhishingResistantPct, 50)
 }
 
 func TestCollect_WithApps(t *testing.T) {
@@ -371,19 +368,13 @@ func TestCollect_WithApps(t *testing.T) {
 	}
 
 	// SSO coverage = SAML + OIDC + WS-Fed = 3/4 = 75%
-	if posture.Posture.SSOCoverage != 75 {
-		t.Errorf("expected 75%% SSO coverage, got %d%%", posture.Posture.SSOCoverage)
-	}
+	assertInt(t, "Posture.SSOCoverage", posture.Posture.SSOCoverage, 75)
 
 	// 1 app with provisioning = 25%
-	if posture.Apps.ProvisioningEnabled != 25 {
-		t.Errorf("expected 25%% provisioning enabled, got %d%%", posture.Apps.ProvisioningEnabled)
-	}
+	assertInt(t, "Apps.ProvisioningEnabled", posture.Apps.ProvisioningEnabled, 25)
 
 	// 1 app with deprovisioning = 25%
-	if posture.Apps.DeprovisioningEnabled != 25 {
-		t.Errorf("expected 25%% deprovisioning enabled, got %d%%", posture.Apps.DeprovisioningEnabled)
-	}
+	assertInt(t, "Apps.DeprovisioningEnabled", posture.Apps.DeprovisioningEnabled, 25)
 }
 
 func TestCollect_WithPolicy(t *testing.T) {
@@ -432,21 +423,13 @@ func TestCollect_WithPolicy(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if posture.Policy.PolicyCount != 1 {
-		t.Errorf("expected policy count 1, got %d", posture.Policy.PolicyCount)
-	}
+	assertInt(t, "Policy.PolicyCount", posture.Policy.PolicyCount, 1)
 
-	if !posture.Policy.MFARequiredAll {
-		t.Error("expected MFA required all to be true")
-	}
+	assertBool(t, "Policy.MFARequiredAll", posture.Policy.MFARequiredAll, true)
 
-	if !posture.Policy.MFARequiredAny {
-		t.Error("expected MFA required any to be true")
-	}
+	assertBool(t, "Policy.MFARequiredAny", posture.Policy.MFARequiredAny, true)
 
-	if posture.Policy.MFARequiredCoveragePct != 100 {
-		t.Errorf("expected MFA required coverage 100%%, got %d%%", posture.Policy.MFARequiredCoveragePct)
-	}
+	assertInt(t, "Policy.MFARequiredCoveragePct", posture.Policy.MFARequiredCoveragePct, 100)
 
 	if posture.Policy.SessionLifetimeMinMinutes == nil || *posture.Policy.SessionLifetimeMinMinutes != 1440 {
 		t.Errorf("expected session lifetime min 1440, got %v", posture.Policy.SessionLifetimeMinMinutes)
@@ -554,22 +537,14 @@ func TestCollect_WithMultiplePolicies(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if posture.Policy.PolicyCount != 2 {
-		t.Errorf("expected policy count 2, got %d", posture.Policy.PolicyCount)
-	}
+	assertInt(t, "Policy.PolicyCount", posture.Policy.PolicyCount, 2)
 
 	// Only one policy requires MFA
-	if posture.Policy.MFARequiredAll {
-		t.Error("expected MFA required all to be false (only admins policy requires MFA)")
-	}
+	assertBool(t, "Policy.MFARequiredAll", posture.Policy.MFARequiredAll, false)
 
-	if !posture.Policy.MFARequiredAny {
-		t.Error("expected MFA required any to be true (admins policy requires MFA)")
-	}
+	assertBool(t, "Policy.MFARequiredAny", posture.Policy.MFARequiredAny, true)
 
-	if posture.Policy.MFARequiredCoveragePct != 33 {
-		t.Errorf("expected MFA required coverage 33%%, got %d%%", posture.Policy.MFARequiredCoveragePct)
-	}
+	assertInt(t, "Policy.MFARequiredCoveragePct", posture.Policy.MFARequiredCoveragePct, 33)
 
 	// Session lifetime: min=15 (admins), max=1440 (default)
 	if posture.Policy.SessionLifetimeMinMinutes == nil || *posture.Policy.SessionLifetimeMinMinutes != 15 {
@@ -749,9 +724,10 @@ func TestCollect_AuditPrivilegedAndPolicy(t *testing.T) {
 		t.Fatalf("expected 1 custom role, got %d", len(posture.PrivilegedAccess.CustomRoles))
 	}
 	cr := posture.PrivilegedAccess.CustomRoles[0]
-	if cr.Label != "Billing Admin" || cr.PermissionCount != 2 {
+	if cr.Label != "Billing Admin" {
 		t.Errorf("custom role wrong: %+v", cr)
 	}
+	assertInt(t, "CustomRoles[0].PermissionCount", cr.PermissionCount, 2)
 
 	if len(posture.Policy.Policies) != 1 {
 		t.Fatalf("expected 1 policy summary, got %d", len(posture.Policy.Policies))
@@ -777,7 +753,8 @@ func TestPrivileged_DegradesOnNonIdentityGovernance(t *testing.T) {
 		iamRolesErr: &okta.APIStatusError{StatusCode: 404, Path: "/api/v1/iam/roles"},
 	}
 
-	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	rec := &componentsdk.Recorder{}
+	c := NewWithClient(Config{OrgDomain: "test.okta.com", Recorder: rec}, client)
 	posture, err := c.Collect(context.Background(), componentsdk.LevelAudit)
 	if err != nil {
 		t.Fatalf("expected graceful degradation, got error: %v", err)
@@ -787,9 +764,12 @@ func TestPrivileged_DegradesOnNonIdentityGovernance(t *testing.T) {
 	if len(posture.PrivilegedAccess.Inventory) != 1 {
 		t.Errorf("expected built-in role inventory to survive, got %d rows", len(posture.PrivilegedAccess.Inventory))
 	}
-	// Custom roles normalize to [] (collected, none available).
-	if posture.PrivilegedAccess.CustomRoles == nil {
-		t.Error("expected non-nil custom_roles at audit (normalized)")
+	// Custom roles are left out with a not_licensed gap, never an empty list.
+	if posture.PrivilegedAccess.CustomRoles != nil {
+		t.Errorf("expected custom_roles left out, got %v", posture.PrivilegedAccess.CustomRoles)
+	}
+	if g, ok := gapAt(rec, "/privileged_access/custom_roles"); !ok || g.Code != componentsdk.CodeNotLicensed {
+		t.Errorf("expected a not_licensed gap at custom_roles, got %+v", rec.Gaps())
 	}
 	// A diagnostic explains why custom roles are absent.
 	if posture.Diagnostics == nil {
@@ -809,7 +789,7 @@ func TestPrivileged_DegradesOnNonIdentityGovernance(t *testing.T) {
 func TestPrivileged_DegradesOnAssigneesForbidden(t *testing.T) {
 	// A least-privilege (Read-Only Administrator) service app gets a 403 listing
 	// admin-role assignments. The run must still succeed with the other surfaces,
-	// emitting zeroed privileged metrics plus a diagnostic.
+	// leaving the privileged metrics out with a gap plus a diagnostic.
 	client := &mockOktaClient{
 		users: []okta.User{
 			{ID: "user1", Status: "ACTIVE", LastLogin: time.Now(), Profile: okta.UserProfile{Login: "user1@acme.com"}},
@@ -820,19 +800,21 @@ func TestPrivileged_DegradesOnAssigneesForbidden(t *testing.T) {
 		roleAssigneesErr: &okta.APIStatusError{StatusCode: 403, Path: "/api/v1/iam/assignees/users"},
 	}
 
-	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	rec := &componentsdk.Recorder{}
+	c := NewWithClient(Config{OrgDomain: "test.okta.com", Recorder: rec}, client)
 	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 	if err != nil {
 		t.Fatalf("expected graceful degradation, got error: %v", err)
 	}
 
 	// Other surfaces still collected.
-	if posture.Posture.MFACoverage != 100 {
-		t.Errorf("expected MFA coverage to be collected despite privileged 403, got %d", posture.Posture.MFACoverage)
+	assertInt(t, "Posture.MFACoverage", posture.Posture.MFACoverage, 100)
+	// Privileged metrics are left out, never zero.
+	if posture.PrivilegedAccess.PrivilegedUsersCount != nil {
+		t.Errorf("expected privileged_users_count left out on 403, got %d", *posture.PrivilegedAccess.PrivilegedUsersCount)
 	}
-	// Privileged metrics degrade to zero (not collected).
-	if posture.PrivilegedAccess.PrivilegedUsersCount != 0 {
-		t.Errorf("expected zero privileged users on 403, got %d", posture.PrivilegedAccess.PrivilegedUsersCount)
+	if g, ok := gapAt(rec, "/privileged_access/privileged_users_count"); !ok || g.Code != componentsdk.CodePermissionDenied {
+		t.Errorf("expected a permission_denied gap at privileged_users_count, got %+v", rec.Gaps())
 	}
 	// A diagnostic explains the 403.
 	if posture.Diagnostics == nil {
@@ -851,8 +833,8 @@ func TestPrivileged_DegradesOnAssigneesForbidden(t *testing.T) {
 
 func TestCoreSurfaces_DegradeOnForbidden(t *testing.T) {
 	// Every core surface returns 403 (a maximally locked-down service app). The
-	// run must still succeed, emitting zeroed core metrics and a diagnostic per
-	// skipped surface rather than failing outright.
+	// run must still succeed, leaving the core metrics out with a gap each and
+	// a diagnostic per skipped surface rather than failing outright.
 	forbidden := func(path string) error { return &okta.APIStatusError{StatusCode: 403, Path: path} }
 	client := &mockOktaClient{
 		usersErr:                   forbidden("/api/v1/users"),
@@ -862,16 +844,27 @@ func TestCoreSurfaces_DegradeOnForbidden(t *testing.T) {
 		roleAssigneesErr:           forbidden("/api/v1/iam/assignees/users"),
 	}
 
-	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	rec := &componentsdk.Recorder{}
+	c := NewWithClient(Config{OrgDomain: "test.okta.com", Recorder: rec}, client)
 	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 	if err != nil {
 		t.Fatalf("expected degraded success, got error: %v", err)
 	}
 
-	if posture.Posture.MFACoverage != 0 || posture.Apps.ProvisioningEnabled != 0 ||
-		posture.PrivilegedAccess.PrivilegedUsersCount != 0 || posture.Policy.PolicyCount != 0 ||
-		posture.DeviceAccess.DeviceAssurancePoliciesCount != 0 {
-		t.Error("expected all core metrics to degrade to zero")
+	core := map[string]*int{
+		"/posture/mfa_coverage":                          posture.Posture.MFACoverage,
+		"/apps/provisioning_enabled":                     posture.Apps.ProvisioningEnabled,
+		"/privileged_access/privileged_users_count":      posture.PrivilegedAccess.PrivilegedUsersCount,
+		"/policy/policy_count":                           posture.Policy.PolicyCount,
+		"/device_access/device_assurance_policies_count": posture.DeviceAccess.DeviceAssurancePoliciesCount,
+	}
+	for pointer, value := range core {
+		if value != nil {
+			t.Errorf("%s = %d, want it left out", pointer, *value)
+		}
+		if g, ok := gapAt(rec, pointer); !ok || g.Code != componentsdk.CodePermissionDenied {
+			t.Errorf("expected a permission_denied gap at %s, got %+v", pointer, g)
+		}
 	}
 	if posture.Diagnostics == nil || len(posture.Diagnostics.Warnings) < 4 {
 		t.Fatalf("expected a diagnostic per skipped surface, got %+v", posture.Diagnostics)
@@ -1012,9 +1005,7 @@ func TestPhishingResistant_CountsFastPass(t *testing.T) {
 	}
 
 	// u1 (FastPass) counts as phishing-resistant; u2 (TOTP) does not = 50%.
-	if posture.Posture.MFAPhishingResistant != 50 {
-		t.Errorf("expected 50%% phishing-resistant (FastPass counts), got %d", posture.Posture.MFAPhishingResistant)
-	}
+	assertInt(t, "Posture.MFAPhishingResistant", posture.Posture.MFAPhishingResistant, 50)
 }
 
 func TestNetworkZones_WarnsOnUnexpectedShape(t *testing.T) {
@@ -1071,7 +1062,6 @@ func TestPercent(t *testing.T) {
 		total    int
 		expected int
 	}{
-		{0, 0, 0},
 		{0, 100, 0},
 		{50, 100, 50},
 		{1, 3, 33},
@@ -1080,10 +1070,12 @@ func TestPercent(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := percent(tt.count, tt.total)
-		if result != tt.expected {
-			t.Errorf("percent(%d, %d) = %d, want %d", tt.count, tt.total, result, tt.expected)
-		}
+		assertInt(t, fmt.Sprintf("percent(%d, %d)", tt.count, tt.total), percent(tt.count, tt.total), tt.expected)
+	}
+
+	// A percentage of nothing has no value.
+	if got := percent(0, 0); got != nil {
+		t.Errorf("percent(0, 0) = %d, want nil", *got)
 	}
 }
 
@@ -1094,7 +1086,7 @@ func TestSchemaVersion(t *testing.T) {
 }
 
 func TestNewOrgPosture(t *testing.T) {
-	posture := NewOrgPosture("test.okta.com")
+	posture := NewOrgPosture("test.okta.com", time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
 
 	if posture.SchemaVersion != SchemaVersion {
 		t.Errorf("expected schema version %s, got %s", SchemaVersion, posture.SchemaVersion)
@@ -1108,10 +1100,9 @@ func TestNewOrgPosture(t *testing.T) {
 		t.Error("expected collected_at to be set")
 	}
 
-	// Verify it's valid RFC3339
-	_, err := time.Parse(time.RFC3339, posture.CollectedAt)
-	if err != nil {
-		t.Errorf("collected_at is not valid RFC3339: %v", err)
+	// collected_at is the run clock's time in RFC 3339.
+	if posture.CollectedAt != "2026-01-01T12:00:00Z" {
+		t.Errorf("collected_at = %s, want 2026-01-01T12:00:00Z", posture.CollectedAt)
 	}
 }
 
@@ -1150,8 +1141,45 @@ func TestOutputJSONStructure(t *testing.T) {
 	}
 }
 
-func intPtr(i int) *int {
-	return &i
+// assertInt fails unless got points to want.
+func assertInt(t *testing.T, name string, got *int, want int) {
+	t.Helper()
+	if got == nil || *got != want {
+		t.Errorf("%s = %s, want %d", name, showInt(got), want)
+	}
+}
+
+// assertFloat fails unless got points to want.
+func assertFloat(t *testing.T, name string, got *float64, want float64) {
+	t.Helper()
+	if got == nil || *got != want {
+		t.Errorf("%s = %v, want %v", name, got, want)
+	}
+}
+
+// assertBool fails unless got points to want.
+func assertBool(t *testing.T, name string, got *bool, want bool) {
+	t.Helper()
+	if got == nil || *got != want {
+		t.Errorf("%s = %v, want %v", name, got, want)
+	}
+}
+
+func showInt(p *int) string {
+	if p == nil {
+		return "null"
+	}
+	return strconv.Itoa(*p)
+}
+
+// gapAt returns the gap recorded at pointer in the detailed artifact.
+func gapAt(rec *componentsdk.Recorder, pointer string) (componentsdk.Gap, bool) {
+	for _, g := range rec.Gaps() {
+		if g.Path == detailedPath && g.Pointer == pointer {
+			return g, true
+		}
+	}
+	return componentsdk.Gap{}, false
 }
 
 func TestToIDPPosture(t *testing.T) {
@@ -1161,32 +1189,34 @@ func TestToIDPPosture(t *testing.T) {
 		CollectedAt:   "2024-01-15T10:00:00Z",
 		OrgDomain:     "acme.okta.com",
 		Posture: Posture{
-			MFACoverage:          95,
-			MFAPhishingResistant: 40,
-			SSOCoverage:          85,
+			MFACoverage:          intPtr(95),
+			MFAPhishingResistant: intPtr(40),
+			SSOCoverage:          intPtr(85),
 		},
 		Users: UserMetrics{
-			PasswordExpired: 5,
-			LockedOut:       2,
-			Inactive:        8,
-			Suspended:       7,
+			TotalCount:      intPtr(100),
+			PasswordExpired: intPtr(5),
+			LockedOut:       intPtr(2),
+			Inactive:        intPtr(8),
+			Suspended:       intPtr(7),
 		},
 		Apps: AppMetrics{
-			ProvisioningEnabled:   60,
-			DeprovisioningEnabled: 45,
+			TotalCount:            intPtr(20),
+			ProvisioningEnabled:   intPtr(60),
+			DeprovisioningEnabled: intPtr(45),
 		},
 		PrivilegedAccess: PrivilegedAccessMetrics{
-			PrivilegedUsersCount:           3,
-			SuperAdminCount:                1,
-			StandingPrivilegedUsersCount:   3,
-			PrivilegedMFACoveragePct:       67,
-			PrivilegedPhishingResistantPct: 33,
+			PrivilegedUsersCount:           intPtr(3),
+			SuperAdminCount:                intPtr(1),
+			StandingPrivilegedUsersCount:   intPtr(3),
+			PrivilegedMFACoveragePct:       intPtr(67),
+			PrivilegedPhishingResistantPct: intPtr(33),
 		},
 		Policy: PolicyConfig{
-			PolicyCount:               3,
-			MFARequiredAll:            false,
-			MFARequiredAny:            true,
-			MFARequiredCoveragePct:    66,
+			PolicyCount:               intPtr(3),
+			MFARequiredAll:            boolPtr(false),
+			MFARequiredAny:            boolPtr(true),
+			MFARequiredCoveragePct:    intPtr(66),
 			SessionLifetimeMinMinutes: intPtr(15),
 			SessionLifetimeMaxMinutes: intPtr(1440),
 			IdleTimeoutMinMinutes:     intPtr(5),
@@ -1206,75 +1236,47 @@ func TestToIDPPosture(t *testing.T) {
 	if idpPosture.OrgDomain != "acme.okta.com" {
 		t.Errorf("OrgDomain = %q, want %q", idpPosture.OrgDomain, "acme.okta.com")
 	}
+	if idpPosture.CollectedAt != orgPosture.CollectedAt {
+		t.Errorf("CollectedAt = %q, want the detailed artifact's %q", idpPosture.CollectedAt, orgPosture.CollectedAt)
+	}
 
 	// Verify user_security mappings
-	if idpPosture.UserSecurity.MFACoveragePct != 95 {
-		t.Errorf("UserSecurity.MFACoveragePct = %v, want 95", idpPosture.UserSecurity.MFACoveragePct)
+	if idpPosture.UserSecurity == nil {
+		t.Fatal("UserSecurity = nil, want non-nil")
 	}
-	if idpPosture.UserSecurity.MFAPhishingResistantPct != 40 {
-		t.Errorf("UserSecurity.MFAPhishingResistantPct = %v, want 40", idpPosture.UserSecurity.MFAPhishingResistantPct)
-	}
-	if idpPosture.UserSecurity.InactivePct != 8 {
-		t.Errorf("UserSecurity.InactivePct = %v, want 8", idpPosture.UserSecurity.InactivePct)
-	}
-	if idpPosture.UserSecurity.LockedOutPct != 2 {
-		t.Errorf("UserSecurity.LockedOutPct = %v, want 2", idpPosture.UserSecurity.LockedOutPct)
-	}
+	assertFloat(t, "UserSecurity.MFACoveragePct", idpPosture.UserSecurity.MFACoveragePct, 95)
+	assertFloat(t, "UserSecurity.MFAPhishingResistantPct", idpPosture.UserSecurity.MFAPhishingResistantPct, 40)
+	assertFloat(t, "UserSecurity.InactivePct", idpPosture.UserSecurity.InactivePct, 8)
+	assertFloat(t, "UserSecurity.LockedOutPct", idpPosture.UserSecurity.LockedOutPct, 2)
 	if idpPosture.Lifecycle == nil {
 		t.Fatal("Lifecycle = nil, want non-nil")
 	}
-	if idpPosture.Lifecycle.SuspendedPct == nil || *idpPosture.Lifecycle.SuspendedPct != 7 {
-		t.Fatalf("Lifecycle.SuspendedPct = %v, want 7", idpPosture.Lifecycle.SuspendedPct)
-	}
+	assertFloat(t, "Lifecycle.SuspendedPct", idpPosture.Lifecycle.SuspendedPct, 7)
 	if idpPosture.PrivilegedAccess == nil {
 		t.Fatal("PrivilegedAccess = nil, want non-nil")
 	}
-	if idpPosture.PrivilegedAccess.PrivilegedUsersCount != 3 {
-		t.Fatalf("PrivilegedUsersCount = %d, want 3", idpPosture.PrivilegedAccess.PrivilegedUsersCount)
-	}
-	if idpPosture.PrivilegedAccess.SuperAdminCount != 1 {
-		t.Fatalf("SuperAdminCount = %d, want 1", idpPosture.PrivilegedAccess.SuperAdminCount)
-	}
-	if idpPosture.PrivilegedAccess.StandingPrivilegedUsersCount == nil || *idpPosture.PrivilegedAccess.StandingPrivilegedUsersCount != 3 {
-		t.Fatalf("StandingPrivilegedUsersCount = %v, want 3", idpPosture.PrivilegedAccess.StandingPrivilegedUsersCount)
-	}
-	if idpPosture.PrivilegedAccess.PrivilegedMFACoveragePct == nil || *idpPosture.PrivilegedAccess.PrivilegedMFACoveragePct != 67 {
-		t.Fatalf("PrivilegedMFACoveragePct = %v, want 67", idpPosture.PrivilegedAccess.PrivilegedMFACoveragePct)
-	}
-	if idpPosture.PrivilegedAccess.PrivilegedPhishingResistantPct == nil || *idpPosture.PrivilegedAccess.PrivilegedPhishingResistantPct != 33 {
-		t.Fatalf("PrivilegedPhishingResistantPct = %v, want 33", idpPosture.PrivilegedAccess.PrivilegedPhishingResistantPct)
-	}
+	assertInt(t, "PrivilegedUsersCount", idpPosture.PrivilegedAccess.PrivilegedUsersCount, 3)
+	assertInt(t, "SuperAdminCount", idpPosture.PrivilegedAccess.SuperAdminCount, 1)
+	assertInt(t, "StandingPrivilegedUsersCount", idpPosture.PrivilegedAccess.StandingPrivilegedUsersCount, 3)
+	assertFloat(t, "PrivilegedMFACoveragePct", idpPosture.PrivilegedAccess.PrivilegedMFACoveragePct, 67)
+	assertFloat(t, "PrivilegedPhishingResistantPct", idpPosture.PrivilegedAccess.PrivilegedPhishingResistantPct, 33)
 
 	// Verify app_security mappings
 	if idpPosture.AppSecurity == nil {
 		t.Fatal("AppSecurity = nil, want non-nil")
 	}
-	if idpPosture.AppSecurity.SSOCoveragePct != 85 {
-		t.Errorf("AppSecurity.SSOCoveragePct = %v, want 85", idpPosture.AppSecurity.SSOCoveragePct)
-	}
-	if idpPosture.AppSecurity.ProvisioningEnabledPct != 60 {
-		t.Errorf("AppSecurity.ProvisioningEnabledPct = %v, want 60", idpPosture.AppSecurity.ProvisioningEnabledPct)
-	}
-	if idpPosture.AppSecurity.DeprovisioningEnabledPct != 45 {
-		t.Errorf("AppSecurity.DeprovisioningEnabledPct = %v, want 45", idpPosture.AppSecurity.DeprovisioningEnabledPct)
-	}
+	assertFloat(t, "AppSecurity.SSOCoveragePct", idpPosture.AppSecurity.SSOCoveragePct, 85)
+	assertFloat(t, "AppSecurity.ProvisioningEnabledPct", idpPosture.AppSecurity.ProvisioningEnabledPct, 60)
+	assertFloat(t, "AppSecurity.DeprovisioningEnabledPct", idpPosture.AppSecurity.DeprovisioningEnabledPct, 45)
 
 	// Verify policy mappings
 	if idpPosture.Policy == nil {
 		t.Fatal("Policy = nil, want non-nil")
 	}
-	if idpPosture.Policy.MFARequired {
-		t.Error("Policy.MFARequired = true, want false when MFA is not required for all policies")
-	}
-	if idpPosture.Policy.MFARequiredCoveragePct == nil || *idpPosture.Policy.MFARequiredCoveragePct != 66 {
-		t.Fatalf("Policy.MFARequiredCoveragePct = %v, want 66", idpPosture.Policy.MFARequiredCoveragePct)
-	}
-	if idpPosture.Policy.SessionLifetimeMaxMin == nil || *idpPosture.Policy.SessionLifetimeMaxMin != 1440 {
-		t.Fatalf("Policy.SessionLifetimeMaxMin = %v, want 1440", idpPosture.Policy.SessionLifetimeMaxMin)
-	}
-	if idpPosture.Policy.IdleTimeoutMaxMin == nil || *idpPosture.Policy.IdleTimeoutMaxMin != 120 {
-		t.Fatalf("Policy.IdleTimeoutMaxMin = %v, want 120", idpPosture.Policy.IdleTimeoutMaxMin)
-	}
+	assertBool(t, "Policy.MFARequired", idpPosture.Policy.MFARequired, false)
+	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct, 66)
+	assertInt(t, "Policy.SessionLifetimeMaxMin", idpPosture.Policy.SessionLifetimeMaxMin, 1440)
+	assertInt(t, "Policy.IdleTimeoutMaxMin", idpPosture.Policy.IdleTimeoutMaxMin, 120)
 }
 
 func TestToIDPPosture_MFARequiredAll(t *testing.T) {
@@ -1282,20 +1284,16 @@ func TestToIDPPosture_MFARequiredAll(t *testing.T) {
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
 		Policy: PolicyConfig{
-			MFARequiredAll:         true,
-			MFARequiredAny:         true,
-			MFARequiredCoveragePct: 100,
+			MFARequiredAll:         boolPtr(true),
+			MFARequiredAny:         boolPtr(true),
+			MFARequiredCoveragePct: intPtr(100),
 		},
 	}
 
 	idpPosture := orgPosture.ToIDPPosture()
 
-	if !idpPosture.Policy.MFARequired {
-		t.Error("Policy.MFARequired = false, want true (MFARequiredAll is true)")
-	}
-	if idpPosture.Policy.MFARequiredCoveragePct == nil || *idpPosture.Policy.MFARequiredCoveragePct != 100 {
-		t.Fatalf("Policy.MFARequiredCoveragePct = %v, want 100", idpPosture.Policy.MFARequiredCoveragePct)
-	}
+	assertBool(t, "Policy.MFARequired", idpPosture.Policy.MFARequired, true)
+	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct, 100)
 }
 
 func TestToIDPPosture_NoMFARequired(t *testing.T) {
@@ -1303,26 +1301,23 @@ func TestToIDPPosture_NoMFARequired(t *testing.T) {
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
 		Policy: PolicyConfig{
-			MFARequiredAll:         false,
-			MFARequiredAny:         false,
-			MFARequiredCoveragePct: 0,
+			MFARequiredAll:         boolPtr(false),
+			MFARequiredAny:         boolPtr(false),
+			MFARequiredCoveragePct: intPtr(0),
 		},
 	}
 
 	idpPosture := orgPosture.ToIDPPosture()
 
-	if idpPosture.Policy.MFARequired {
-		t.Error("Policy.MFARequired = true, want false")
-	}
-	if idpPosture.Policy.MFARequiredCoveragePct == nil || *idpPosture.Policy.MFARequiredCoveragePct != 0 {
-		t.Fatalf("Policy.MFARequiredCoveragePct = %v, want 0", idpPosture.Policy.MFARequiredCoveragePct)
-	}
+	assertBool(t, "Policy.MFARequired", idpPosture.Policy.MFARequired, false)
+	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct, 0)
 }
 
 func TestToIDPPosture_NilPolicyValues(t *testing.T) {
-	// Test that nil policy values result in zero values
+	// Values the detailed artifact left out are left out here too.
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
+		Apps:      AppMetrics{TotalCount: intPtr(1), ProvisioningEnabled: intPtr(100)},
 		Policy: PolicyConfig{
 			SessionLifetimeMaxMinutes: nil,
 			IdleTimeoutMaxMinutes:     nil,
@@ -1331,11 +1326,19 @@ func TestToIDPPosture_NilPolicyValues(t *testing.T) {
 
 	idpPosture := orgPosture.ToIDPPosture()
 
-	if idpPosture.Policy.SessionLifetimeMaxMin != nil {
-		t.Errorf("Policy.SessionLifetimeMaxMin = %v, want nil (nil input)", *idpPosture.Policy.SessionLifetimeMaxMin)
+	if idpPosture.Policy != nil {
+		t.Errorf("Policy = %+v, want nil when the detailed policy values are all null", idpPosture.Policy)
 	}
-	if idpPosture.Policy.IdleTimeoutMaxMin != nil {
-		t.Errorf("Policy.IdleTimeoutMaxMin = %v, want nil (nil input)", *idpPosture.Policy.IdleTimeoutMaxMin)
+	if idpPosture.UserSecurity != nil {
+		t.Errorf("UserSecurity = %+v, want nil when the user values are all null", idpPosture.UserSecurity)
+	}
+}
+
+func TestToIDPPosture_NoEvidence(t *testing.T) {
+	// A detailed artifact with every value left out has no normalized posture.
+	orgPosture := &OrgPosture{OrgDomain: "test.okta.com"}
+	if idpPosture := orgPosture.ToIDPPosture(); idpPosture != nil {
+		t.Errorf("ToIDPPosture() = %+v, want nil", idpPosture)
 	}
 }
 
@@ -1344,28 +1347,30 @@ func TestIDPPostureJSONStructure(t *testing.T) {
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
 		Posture: Posture{
-			MFACoverage:          100,
-			MFAPhishingResistant: 50,
-			SSOCoverage:          90,
+			MFACoverage:          intPtr(100),
+			MFAPhishingResistant: intPtr(50),
+			SSOCoverage:          intPtr(90),
 		},
 		Users: UserMetrics{
-			LockedOut: 1,
-			Inactive:  5,
-			Suspended: 4,
+			LockedOut: intPtr(1),
+			Inactive:  intPtr(5),
+			Suspended: intPtr(4),
 		},
 		Apps: AppMetrics{
-			ProvisioningEnabled: 75,
+			ProvisioningEnabled:   intPtr(75),
+			DeprovisioningEnabled: intPtr(0),
 		},
 		PrivilegedAccess: PrivilegedAccessMetrics{
-			PrivilegedUsersCount:           2,
-			SuperAdminCount:                1,
-			StandingPrivilegedUsersCount:   2,
-			PrivilegedMFACoveragePct:       100,
-			PrivilegedPhishingResistantPct: 50,
+			PrivilegedUsersCount:           intPtr(2),
+			SuperAdminCount:                intPtr(1),
+			StandingPrivilegedUsersCount:   intPtr(2),
+			PrivilegedMFACoveragePct:       intPtr(100),
+			PrivilegedPhishingResistantPct: intPtr(50),
 		},
 		Policy: PolicyConfig{
-			MFARequiredAny:            true,
-			MFARequiredCoveragePct:    50,
+			MFARequiredAll:            boolPtr(false),
+			MFARequiredAny:            boolPtr(true),
+			MFARequiredCoveragePct:    intPtr(50),
 			SessionLifetimeMaxMinutes: intPtr(480),
 			IdleTimeoutMaxMinutes:     intPtr(30),
 		},
@@ -1431,10 +1436,6 @@ func TestIDPPostureJSONStructure(t *testing.T) {
 		if _, ok := policy[field]; !ok {
 			t.Errorf("policy missing required field: %s", field)
 		}
-	}
-
-	if _, ok := policy["mfa_required_coverage_pct"]; !ok {
-		t.Error("policy missing mfa_required_coverage_pct")
 	}
 
 	lifecycle, ok := data["lifecycle"].(map[string]interface{})
@@ -1546,23 +1547,15 @@ func TestCollect_WithDeviceAccessRequired(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !posture.DeviceAccess.ManagedDeviceRequired {
-		t.Error("expected ManagedDeviceRequired to be true")
-	}
+	assertBool(t, "DeviceAccess.ManagedDeviceRequired", posture.DeviceAccess.ManagedDeviceRequired, true)
 
 	// Only admin1 is covered by managed device requirement (1 out of 3 = 33%)
-	if posture.DeviceAccess.ManagedDeviceRequiredCoveragePct != 33 {
-		t.Errorf("expected ManagedDeviceRequiredCoveragePct=33, got %d", posture.DeviceAccess.ManagedDeviceRequiredCoveragePct)
-	}
+	assertInt(t, "DeviceAccess.ManagedDeviceRequiredCoveragePct", posture.DeviceAccess.ManagedDeviceRequiredCoveragePct, 33)
 
 	// admin1 is covered by managed device requirement
-	if !posture.DeviceAccess.ManagedDeviceRequiredForAdmins {
-		t.Error("expected ManagedDeviceRequiredForAdmins to be true")
-	}
+	assertBool(t, "DeviceAccess.ManagedDeviceRequiredForAdmins", posture.DeviceAccess.ManagedDeviceRequiredForAdmins, true)
 
-	if posture.DeviceAccess.DeviceAssurancePoliciesCount != 2 {
-		t.Errorf("expected DeviceAssurancePoliciesCount=2, got %d", posture.DeviceAccess.DeviceAssurancePoliciesCount)
-	}
+	assertInt(t, "DeviceAccess.DeviceAssurancePoliciesCount", posture.DeviceAccess.DeviceAssurancePoliciesCount, 2)
 }
 
 func TestCollect_WithoutDeviceAccessRequired(t *testing.T) {
@@ -1582,31 +1575,26 @@ func TestCollect_WithoutDeviceAccessRequired(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if posture.DeviceAccess.ManagedDeviceRequired {
-		t.Error("expected ManagedDeviceRequired to be false when no policies have device conditions")
+	assertBool(t, "DeviceAccess.ManagedDeviceRequired", posture.DeviceAccess.ManagedDeviceRequired, false)
+
+	assertInt(t, "DeviceAccess.ManagedDeviceRequiredCoveragePct", posture.DeviceAccess.ManagedDeviceRequiredCoveragePct, 0)
+
+	// With no privileged users, "every admin is covered" has no answer.
+	if posture.DeviceAccess.ManagedDeviceRequiredForAdmins != nil {
+		t.Errorf("expected null ManagedDeviceRequiredForAdmins with no admins, got %v", *posture.DeviceAccess.ManagedDeviceRequiredForAdmins)
 	}
 
-	if posture.DeviceAccess.ManagedDeviceRequiredCoveragePct != 0 {
-		t.Errorf("expected ManagedDeviceRequiredCoveragePct=0, got %d", posture.DeviceAccess.ManagedDeviceRequiredCoveragePct)
-	}
-
-	if posture.DeviceAccess.ManagedDeviceRequiredForAdmins {
-		t.Error("expected ManagedDeviceRequiredForAdmins to be false when no admins and no policies")
-	}
-
-	if posture.DeviceAccess.DeviceAssurancePoliciesCount != 0 {
-		t.Errorf("expected DeviceAssurancePoliciesCount=0, got %d", posture.DeviceAccess.DeviceAssurancePoliciesCount)
-	}
+	assertInt(t, "DeviceAccess.DeviceAssurancePoliciesCount", posture.DeviceAccess.DeviceAssurancePoliciesCount, 0)
 }
 
 func TestToIDPPosture_WithDeviceAccess(t *testing.T) {
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
 		DeviceAccess: DeviceAccessMetrics{
-			ManagedDeviceRequired:            true,
-			ManagedDeviceRequiredCoveragePct: 75,
-			ManagedDeviceRequiredForAdmins:   true,
-			DeviceAssurancePoliciesCount:     3,
+			ManagedDeviceRequired:            boolPtr(true),
+			ManagedDeviceRequiredCoveragePct: intPtr(75),
+			ManagedDeviceRequiredForAdmins:   boolPtr(true),
+			DeviceAssurancePoliciesCount:     intPtr(3),
 		},
 	}
 
@@ -1626,11 +1614,12 @@ func TestToIDPPosture_WithDeviceAccess(t *testing.T) {
 func TestToIDPPosture_WithoutDeviceAccess(t *testing.T) {
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
+		Users:     UserMetrics{TotalCount: intPtr(1), Suspended: intPtr(0)},
 		DeviceAccess: DeviceAccessMetrics{
-			ManagedDeviceRequired:            false,
-			ManagedDeviceRequiredCoveragePct: 0,
-			ManagedDeviceRequiredForAdmins:   false,
-			DeviceAssurancePoliciesCount:     0,
+			ManagedDeviceRequired:            boolPtr(false),
+			ManagedDeviceRequiredCoveragePct: intPtr(0),
+			ManagedDeviceRequiredForAdmins:   boolPtr(false),
+			DeviceAssurancePoliciesCount:     intPtr(0),
 		},
 	}
 

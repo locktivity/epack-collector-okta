@@ -11,61 +11,62 @@ import (
 
 // privilegedMetricsCollector holds privileged access counts and MFA coverage.
 type privilegedMetricsCollector struct {
-	privilegedUsersCount           int
-	superAdminCount                int
-	standingPrivilegedUsersCount   int
-	privilegedMFAEnrolledCount     int
-	privilegedPhishingFactorCount  int
-	privilegedMFACoveragePct       int
-	privilegedPhishingResistantPct int
-	privilegedUserIDs              map[string]struct{} // Set of privileged user IDs for reuse
-	inventory                      []PrivilegedUser    // Audit-level per-privileged-user rows
-	customRoles                    []CustomRole        // Audit-level custom admin roles
+	err                           error // the user list or the role assignees could not be read
+	rolesFailed                   int   // role-assigned users whose roles could not be read
+	firstRolesErr                 error
+	mfaUnknown                    int // privileged users whose factors could not be read
+	firstMFAErr                   error
+	privilegedUsersCount          int
+	superAdminCount               int
+	standingPrivilegedUsersCount  int
+	privilegedMFAEnrolledCount    int
+	privilegedPhishingFactorCount int
+	privilegedUserIDs             map[string]struct{} // Set of privileged user IDs for reuse
+	inventory                     []PrivilegedUser    // Audit-level per-privileged-user rows
 }
 
-// toPrivilegedAccess maps the collected privileged-access state onto the output DTO.
-func (m *privilegedMetricsCollector) toPrivilegedAccess() PrivilegedAccessMetrics {
-	return PrivilegedAccessMetrics{
-		PrivilegedUsersCount:           m.privilegedUsersCount,
-		SuperAdminCount:                m.superAdminCount,
-		StandingPrivilegedUsersCount:   m.standingPrivilegedUsersCount,
-		PrivilegedMFACoveragePct:       m.privilegedMFACoveragePct,
-		PrivilegedPhishingResistantPct: m.privilegedPhishingResistantPct,
-		Inventory:                      m.inventory,
-		CustomRoles:                    m.customRoles,
-	}
-}
-
-func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *userMetricsCollector, level componentsdk.Level) (*privilegedMetricsCollector, error) {
+func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *userMetricsCollector, level componentsdk.Level) *privilegedMetricsCollector {
 	metrics := &privilegedMetricsCollector{
 		privilegedUserIDs: make(map[string]struct{}),
 	}
-	roleAssignedUserIDs := make(map[string]struct{})
+	if userMetrics.err != nil {
+		// Role assignments name users by ID; without the user list their
+		// status and login are unknown.
+		metrics.err = userMetrics.err
+		return metrics
+	}
 
+	// Kept in the order Okta lists them, so the inventory and the order of
+	// the per-user calls are stable.
+	var roleAssignedUserIDs []string
+	seen := make(map[string]struct{})
 	err := c.client.FetchUsersWithRoleAssignments(ctx, func(users []okta.RoleAssignedUser) error {
 		for _, user := range users {
-			roleAssignedUserIDs[user.ID] = struct{}{}
+			if _, dup := seen[user.ID]; dup {
+				continue
+			}
+			seen[user.ID] = struct{}{}
+			roleAssignedUserIDs = append(roleAssignedUserIDs, user.ID)
 		}
 		return nil
 	})
 	if err != nil {
 		// Reading admin-role assignments is privileged: Read-Only Administrator
 		// cannot list them, so least-privilege service apps get a 403 here.
-		// Degrade rather than fail the whole run; the surface emits zeros and a
-		// diagnostic names what to grant.
+		// The privileged metrics are left out and a diagnostic names what to
+		// grant.
 		if okta.StatusCodeOf(err) == 403 {
 			c.warn("privileged access: cannot list admin-role assignments (403); the service app's admin role cannot read role assignments")
 		} else {
 			c.warn("privileged access: failed to list admin-role assignments: %v", err)
 		}
-		return metrics, nil
+		metrics.err = err
+		return metrics
 	}
 
 	total := int64(len(roleAssignedUserIDs))
-	current := int64(0)
-	for userID := range roleAssignedUserIDs {
-		current++
-		c.progress(current, total, fmt.Sprintf("Checking privileged roles for user %d of %d", current, total))
+	for i, userID := range roleAssignedUserIDs {
+		c.progress(int64(i+1), total, fmt.Sprintf("Checking privileged roles for user %d of %d", i+1, total))
 
 		user, ok := userMetrics.userByID[userID]
 		if !ok {
@@ -79,6 +80,10 @@ func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *u
 		roles, err := c.client.FetchUserRoleAssignments(ctx, userID)
 		if err != nil {
 			c.warn("privileged access: failed to fetch roles for user %s: %v", userID, err)
+			metrics.rolesFailed++
+			if metrics.firstRolesErr == nil {
+				metrics.firstRolesErr = err
+			}
 			continue
 		}
 		if len(roles) == 0 {
@@ -89,11 +94,18 @@ func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *u
 		metrics.standingPrivilegedUsersCount++
 		metrics.privilegedUserIDs[userID] = struct{}{}
 
-		if userMetrics.hasMFAByUser[userID] {
-			metrics.privilegedMFAEnrolledCount++
-		}
-		if userMetrics.hasPhishingByUser[userID] {
-			metrics.privilegedPhishingFactorCount++
+		if factorErr, failed := userMetrics.factorErrs[userID]; failed {
+			metrics.mfaUnknown++
+			if metrics.firstMFAErr == nil {
+				metrics.firstMFAErr = factorErr
+			}
+		} else {
+			if userMetrics.hasMFAByUser[userID] {
+				metrics.privilegedMFAEnrolledCount++
+			}
+			if userMetrics.hasPhishingByUser[userID] {
+				metrics.privilegedPhishingFactorCount++
+			}
 		}
 		if hasRoleType(roles, RoleTypeSuperAdmin) {
 			metrics.superAdminCount++
@@ -104,14 +116,47 @@ func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *u
 		}
 	}
 
-	metrics.privilegedMFACoveragePct = percent(metrics.privilegedMFAEnrolledCount, metrics.privilegedUsersCount)
-	metrics.privilegedPhishingResistantPct = percent(metrics.privilegedPhishingFactorCount, metrics.privilegedUsersCount)
+	return metrics
+}
 
-	if level.AtLeast(componentsdk.LevelAudit) {
-		metrics.customRoles = c.collectCustomRoles(ctx)
+// fillPrivileged writes the privileged access metrics into the posture,
+// leaving out with a gap each value the reads it needs did not give.
+func (c *Collector) fillPrivileged(p *OrgPosture, m *privilegedMetricsCollector, level componentsdk.Level) {
+	audit := level.AtLeast(componentsdk.LevelAudit)
+	counts := []string{
+		"/privileged_access/privileged_users_count",
+		"/privileged_access/super_admin_count",
+		"/privileged_access/standing_privileged_users_count",
 	}
-
-	return metrics, nil
+	coverage := []string{
+		"/privileged_access/privileged_mfa_coverage_pct",
+		"/privileged_access/privileged_phishing_resistant_pct",
+	}
+	switch {
+	case m.err != nil:
+		c.gaps.notCollected(m.err, append(counts, coverage...)...)
+		if audit {
+			c.gaps.notCollected(m.err, "/privileged_access/inventory")
+		}
+	case m.rolesFailed > 0:
+		c.gaps.partial(m.rolesFailed, m.firstRolesErr, append(counts, coverage...)...)
+		if audit {
+			c.gaps.partial(m.rolesFailed, m.firstRolesErr, "/privileged_access/inventory")
+		}
+	default:
+		p.PrivilegedAccess.PrivilegedUsersCount = intPtr(m.privilegedUsersCount)
+		p.PrivilegedAccess.SuperAdminCount = intPtr(m.superAdminCount)
+		p.PrivilegedAccess.StandingPrivilegedUsersCount = intPtr(m.standingPrivilegedUsersCount)
+		if m.mfaUnknown > 0 {
+			c.gaps.partial(m.mfaUnknown, m.firstMFAErr, coverage...)
+		} else {
+			p.PrivilegedAccess.PrivilegedMFACoveragePct = percent(m.privilegedMFAEnrolledCount, m.privilegedUsersCount)
+			p.PrivilegedAccess.PrivilegedPhishingResistantPct = percent(m.privilegedPhishingFactorCount, m.privilegedUsersCount)
+		}
+		if audit {
+			p.PrivilegedAccess.Inventory = m.inventory
+		}
+	}
 }
 
 // privilegedUserRow builds the audit-level inventory row for a privileged user.
@@ -165,30 +210,38 @@ func roleAssignmentSource(roles []okta.RoleAssignment) string {
 }
 
 // collectCustomRoles fetches the custom-admin-role inventory (Identity Governance
-// feature). A 404 means the feature is not licensed and a 403 means the scope is
-// missing; both emit a diagnostic and return nil so built-in roles still emit
-// cleanly. Standard built-in roles are surfaced via the per-user inventory.
-func (c *Collector) collectCustomRoles(ctx context.Context) []CustomRole {
+// feature). A 404 means the feature is not licensed; any other failure leaves
+// the inventory out with a gap. Standard built-in roles are surfaced via the
+// per-user inventory. Returns nil below audit level.
+func (c *Collector) collectCustomRoles(ctx context.Context, level componentsdk.Level) []CustomRole {
+	if !level.AtLeast(componentsdk.LevelAudit) {
+		return nil
+	}
+
 	roles, err := c.client.ListIAMRoles(ctx)
 	if err != nil {
 		switch okta.StatusCodeOf(err) {
 		case 404:
 			c.warn("custom admin roles: not available (Okta Identity Governance not licensed)")
+			c.gaps.notLicensed("/privileged_access/custom_roles", "custom admin roles need Okta Identity Governance")
 		case 403:
 			c.warn("custom admin roles: access denied (missing scope okta.roles.read?)")
+			c.gaps.notCollected(err, "/privileged_access/custom_roles")
 		default:
 			c.warn("custom admin roles: %s", err)
+			c.gaps.notCollected(err, "/privileged_access/custom_roles")
 		}
 		return nil
 	}
 
 	result := make([]CustomRole, 0, len(roles))
-	for _, r := range roles {
+	for i, r := range roles {
 		row := CustomRole{Name: r.ID, Label: r.Label, Description: r.Description}
 		if permissions, err := c.client.ListRolePermissions(ctx, r.ID); err != nil {
 			c.warn("custom admin role %s: failed to fetch permissions: %s", r.Label, err)
+			c.gaps.notCollected(err, rowPointer("/privileged_access/custom_roles", i, "permission_count"))
 		} else {
-			row.PermissionCount = len(permissions)
+			row.PermissionCount = intPtr(len(permissions))
 		}
 		result = append(result, row)
 	}
@@ -205,15 +258,18 @@ func hasRoleType(roles []okta.RoleAssignment, roleType string) bool {
 }
 
 // PrivilegedAccessMetrics contains privileged account counts and MFA coverage.
+// Each is null when the users, the role assignments, or (for the coverage
+// percentages) the privileged users' factors could not be read, and a
+// percentage is null when there are no privileged users.
 //
 // Audit adds the per-privileged-user inventory and the custom-admin-role
 // inventory (Identity Governance feature; absent when not licensed).
 type PrivilegedAccessMetrics struct {
-	PrivilegedUsersCount           int `json:"privileged_users_count"`
-	SuperAdminCount                int `json:"super_admin_count"`
-	StandingPrivilegedUsersCount   int `json:"standing_privileged_users_count"`
-	PrivilegedMFACoveragePct       int `json:"privileged_mfa_coverage_pct"`
-	PrivilegedPhishingResistantPct int `json:"privileged_phishing_resistant_pct"`
+	PrivilegedUsersCount           *int `json:"privileged_users_count"`
+	SuperAdminCount                *int `json:"super_admin_count"`
+	StandingPrivilegedUsersCount   *int `json:"standing_privileged_users_count"`
+	PrivilegedMFACoveragePct       *int `json:"privileged_mfa_coverage_pct"`
+	PrivilegedPhishingResistantPct *int `json:"privileged_phishing_resistant_pct"`
 
 	// Audit-level fields.
 	Inventory   []PrivilegedUser `json:"inventory,omitempty"`
@@ -238,5 +294,5 @@ type CustomRole struct {
 	Name            string `json:"name"`
 	Label           string `json:"label"`
 	Description     string `json:"description,omitempty"`
-	PermissionCount int    `json:"permission_count"`
+	PermissionCount *int   `json:"permission_count"`
 }

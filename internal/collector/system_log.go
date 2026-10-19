@@ -148,10 +148,11 @@ func (c *Collector) collectSystemLog(ctx context.Context, level componentsdk.Lev
 	}
 
 	c.status("Collecting system log...")
-	since := time.Now().Add(-systemLogWindow)
+	since := c.config.now().Add(-systemLogWindow)
 	events, err := c.client.ListSystemLog(ctx, buildSystemLogFilter(), since, SystemLogCap)
 	if err != nil {
 		c.warnSurface("system log", "okta.logs.read", err)
+		c.gaps.notCollected(err, "/system_log")
 		return nil
 	}
 

@@ -1,7 +1,13 @@
 // Package collector provides Okta organization posture collection functionality.
 package collector
 
-import "time"
+import (
+	"net/http"
+	"time"
+
+	"github.com/locktivity/epack-collector-okta/internal/okta"
+	"github.com/locktivity/epack/componentsdk"
+)
 
 // SchemaVersion is the version of the output schema.
 const SchemaVersion = "1.0.0"
@@ -26,6 +32,47 @@ type Config struct {
 	// Progress callbacks (optional, set by main to report status)
 	OnStatus   StatusFunc   `json:"-"`
 	OnProgress ProgressFunc `json:"-"`
+
+	// HTTPClient makes every Okta call. Run builds it with
+	// componentsdk.NewHTTPClient.
+	HTTPClient *http.Client `json:"-"`
+	// Recorder takes a gap for each value the collector leaves out.
+	Recorder *componentsdk.Recorder `json:"-"`
+	// Now is the run's clock. It defaults to the wall clock.
+	Now func() time.Time `json:"-"`
+}
+
+// Validate checks the configuration before any call is made.
+func (c Config) Validate() error {
+	if c.OrgDomain == "" {
+		return componentsdk.NewConfigError("org_domain is required")
+	}
+	if okta.Host(c.OrgDomain) == "" {
+		return componentsdk.NewConfigError("org_domain %q does not name a host", c.OrgDomain)
+	}
+	switch {
+	case c.usesOAuth():
+		if c.KeyID == "" {
+			return componentsdk.NewConfigError("key_id is required for OAuth 2.0 authentication")
+		}
+	case c.APIToken != "":
+	default:
+		return componentsdk.NewConfigError("authentication required: provide client_id + key_id + OKTA_PRIVATE_KEY or OKTA_API_TOKEN")
+	}
+	return nil
+}
+
+// usesOAuth reports whether the service-app credentials are set, which take
+// precedence over an API token.
+func (c Config) usesOAuth() bool {
+	return c.ClientID != "" && c.PrivateKey != ""
+}
+
+func (c Config) now() time.Time {
+	if c.Now != nil {
+		return c.Now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // OrgPosture represents the collected security posture of an Okta organization.
@@ -62,12 +109,14 @@ type Diagnostics struct {
 }
 
 // Posture contains high-level security posture scores (all percentages 0-100).
+// A score is null when it could not be read, or when there are no users or
+// apps to measure.
 //
 // Audit adds per-factor-type enrollment counts and the MFA-disabled-user count.
 type Posture struct {
-	MFACoverage          int `json:"mfa_coverage"`           // % users with any MFA enrolled
-	MFAPhishingResistant int `json:"mfa_phishing_resistant"` // % users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)
-	SSOCoverage          int `json:"sso_coverage"`           // % apps using SSO (SAML/OIDC/WS-Fed)
+	MFACoverage          *int `json:"mfa_coverage"`           // % users with any MFA enrolled
+	MFAPhishingResistant *int `json:"mfa_phishing_resistant"` // % users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)
+	SSOCoverage          *int `json:"sso_coverage"`           // % apps using SSO (SAML/OIDC/WS-Fed)
 
 	// Audit-level fields.
 	PerFactorType         []FactorTypeCount `json:"per_factor_type,omitempty"`          // Enrolled-user count per active factor type
@@ -81,11 +130,11 @@ type FactorTypeCount struct {
 	EnrolledUsers int    `json:"enrolled_users"` // Users with >= 1 active factor of this type
 }
 
-// NewOrgPosture creates a new OrgPosture with the current timestamp.
-func NewOrgPosture(orgDomain string) *OrgPosture {
+// NewOrgPosture creates a new OrgPosture collected at now.
+func NewOrgPosture(orgDomain string, now time.Time) *OrgPosture {
 	return &OrgPosture{
 		SchemaVersion: SchemaVersion,
-		CollectedAt:   time.Now().UTC().Format(time.RFC3339),
+		CollectedAt:   now.UTC().Format(time.RFC3339),
 		OrgDomain:     orgDomain,
 	}
 }

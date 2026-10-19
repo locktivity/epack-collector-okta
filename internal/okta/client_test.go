@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/locktivity/epack/componentsdk"
 )
 
 func TestFetchUsers(t *testing.T) {
@@ -138,16 +140,14 @@ func TestFetchUserFactors_NotFound(t *testing.T) {
 	client := NewClientWithHTTP(server.Client(), server.URL)
 	client.SetToken("test-token")
 
-	// 404 means user has no factors - should return empty slice, no error
+	// A user with no factors gets an empty list. A 404 means the user is
+	// gone, so it is an error, never "no factors enrolled".
 	factors, err := client.FetchUserFactors(context.Background(), "user123")
-	if err != nil {
-		t.Errorf("expected no error for 404, got %v", err)
+	if err == nil {
+		t.Fatalf("expected an error for 404, got %d factors", len(factors))
 	}
-	if factors == nil {
-		t.Errorf("expected empty slice for 404, got nil")
-	}
-	if len(factors) != 0 {
-		t.Errorf("expected empty slice for 404, got %d factors", len(factors))
+	if code := componentsdk.Classify(err); code != componentsdk.CodeInvalidResponse {
+		t.Errorf("Classify(404) = %s, want invalid_response", code)
 	}
 }
 
@@ -217,7 +217,7 @@ func TestFetchUsersWithRoleAssignments(t *testing.T) {
 
 		if page == 0 {
 			_ = json.NewEncoder(w).Encode(RoleAssignedUsersResponse{
-				Value: []RoleAssignedUser{{ID: "user1"}},
+				Value: &[]RoleAssignedUser{{ID: "user1"}},
 				Links: struct {
 					Next *struct {
 						Href string `json:"href"`
@@ -233,7 +233,7 @@ func TestFetchUsersWithRoleAssignments(t *testing.T) {
 		}
 
 		_ = json.NewEncoder(w).Encode(RoleAssignedUsersResponse{
-			Value: []RoleAssignedUser{{ID: "user2"}},
+			Value: &[]RoleAssignedUser{{ID: "user2"}},
 		})
 	}))
 	defer server.Close()

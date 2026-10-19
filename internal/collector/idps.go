@@ -49,6 +49,7 @@ func (c *Collector) collectIdentityProviders(ctx context.Context, level componen
 	idps, err := c.client.ListIdentityProviders(ctx)
 	if err != nil {
 		c.warnSurface("identity providers", "okta.idps.read", err)
+		c.gaps.notCollected(err, "/identity_providers")
 		return nil
 	}
 

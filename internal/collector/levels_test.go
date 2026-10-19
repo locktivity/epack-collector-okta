@@ -15,7 +15,11 @@ import (
 // source values (PII, signing keys, hook auth headers, full URLs) embedded so
 // privacy tests can assert they never reach the output.
 func richClient() *mockOktaClient {
-	now := time.Now()
+	return richClientAt(time.Now())
+}
+
+// richClientAt is richClient with its timestamps at now.
+func richClientAt(now time.Time) *mockOktaClient {
 	return &mockOktaClient{
 		users: []okta.User{
 			{ID: "u1", Status: "ACTIVE", LastLogin: now, Created: now, Profile: okta.UserProfile{
@@ -81,7 +85,7 @@ func richClient() *mockOktaClient {
 		},
 		orgSettings:    &okta.OrgSettings{Subdomain: "acme", Status: "ACTIVE"},
 		orgPreferences: &okta.OrgPreferences{SelfServiceUnlock: true},
-		orgContacts:    []okta.OrgContact{{Login: "admin@acme.com"}},
+		orgContacts:    []okta.OrgContact{{Type: "TECHNICAL", UserID: "u1"}},
 	}
 }
 

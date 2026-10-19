@@ -14,13 +14,15 @@ import (
 // Audit: counts + count by status + per-hook name + type + status + subscribed events.
 // Internal: + endpoint host (host only) + channel type.
 //
+// A count is null when the hook list it covers could not be read.
+//
 // Hard rule: hook authentication headers, full hook URLs, and hook secrets are
 // never emitted. Only the endpoint host is surfaced, at internal.
 type Hooks struct {
-	EventHookCount  int `json:"event_hook_count"`
-	InlineHookCount int `json:"inline_hook_count"`
-	ActiveCount     int `json:"active_count"`
-	InactiveCount   int `json:"inactive_count"`
+	EventHookCount  *int `json:"event_hook_count"`
+	InlineHookCount *int `json:"inline_hook_count"`
+	ActiveCount     *int `json:"active_count"`
+	InactiveCount   *int `json:"inactive_count"`
 
 	EventHooks  []HookSummary `json:"event_hooks,omitempty"`
 	InlineHooks []HookSummary `json:"inline_hooks,omitempty"`
@@ -53,36 +55,39 @@ func (c *Collector) collectHooks(ctx context.Context, level componentsdk.Level) 
 		c.warnSurface("inline hooks", "okta.inlineHooks.read", inlineErr)
 	}
 	if eventErr != nil && inlineErr != nil {
+		c.gaps.notCollected(eventErr, "/hooks")
 		return nil
 	}
 
-	out := &Hooks{
-		EventHookCount:  len(eventHooks),
-		InlineHookCount: len(inlineHooks),
-	}
-	for _, h := range eventHooks {
-		countHookStatus(out, h.Status)
-	}
-	for _, h := range inlineHooks {
-		countHookStatus(out, h.Status)
-	}
-
-	if !level.AtLeast(componentsdk.LevelAudit) {
-		return out
-	}
-
 	internal := level.AtLeast(componentsdk.LevelInternal)
-
-	out.EventHooks = make([]HookSummary, 0, len(eventHooks))
-	for _, h := range eventHooks {
-		// Event hooks always carry their subscribed-event list, emitted as []
-		// even when empty.
-		out.EventHooks = append(out.EventHooks, hookSummary(h.Name, h.Events.Type, h.Status, append([]string{}, h.Events.Items...), h.Channel, internal))
+	out := &Hooks{}
+	active, inactive := 0, 0
+	if eventErr != nil {
+		c.gaps.notCollected(eventErr, "/hooks/event_hook_count", "/hooks/event_hooks")
+	} else {
+		out.EventHookCount = intPtr(len(eventHooks))
+		out.EventHooks = make([]HookSummary, 0, len(eventHooks))
+		for _, h := range eventHooks {
+			countHookStatus(h.Status, &active, &inactive)
+			out.EventHooks = append(out.EventHooks, hookSummary(h.Name, h.Events.Type, h.Status, append([]string{}, h.Events.Items...), h.Channel, internal))
+		}
+	}
+	if inlineErr != nil {
+		c.gaps.notCollected(inlineErr, "/hooks/inline_hook_count", "/hooks/inline_hooks")
+	} else {
+		out.InlineHookCount = intPtr(len(inlineHooks))
+		out.InlineHooks = make([]HookSummary, 0, len(inlineHooks))
+		for _, h := range inlineHooks {
+			countHookStatus(h.Status, &active, &inactive)
+			out.InlineHooks = append(out.InlineHooks, hookSummary(h.Name, h.Type, h.Status, nil, h.Channel, internal))
+		}
 	}
 
-	out.InlineHooks = make([]HookSummary, 0, len(inlineHooks))
-	for _, h := range inlineHooks {
-		out.InlineHooks = append(out.InlineHooks, hookSummary(h.Name, h.Type, h.Status, nil, h.Channel, internal))
+	if err := firstError(eventErr, inlineErr); err != nil {
+		c.gaps.notCollected(err, "/hooks/active_count", "/hooks/inactive_count")
+	} else {
+		out.ActiveCount = intPtr(active)
+		out.InactiveCount = intPtr(inactive)
 	}
 
 	return out
@@ -105,10 +110,10 @@ func hookSummary(name, hookType, status string, subscribedEvents []string, chann
 	return row
 }
 
-func countHookStatus(out *Hooks, status string) {
+func countHookStatus(status string, active, inactive *int) {
 	if status == StatusActive {
-		out.ActiveCount++
+		*active++
 	} else {
-		out.InactiveCount++
+		*inactive++
 	}
 }

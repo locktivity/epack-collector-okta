@@ -39,8 +39,9 @@ The active level appears in the output artifact as the top-level
 
 `audit` and `internal` require additional OAuth scopes beyond `trust`. See
 [Required OAuth scopes](../README.md#required-oauth-scopes). When a scope is
-missing or a feature is not licensed, the affected surface is skipped and a
-warning is recorded under `diagnostics.warnings` rather than failing the run.
+missing or a feature is not licensed, the affected values are left out rather
+than failing the run: the collector result records a gap for each, and
+`diagnostics.warnings` says what to grant.
 
 ## What each level adds, per surface
 
@@ -84,8 +85,8 @@ a trust run stays minimal.
 ### Groups (`groups`)
 
 - **trust**: omitted.
-- **audit**: total count, count by source, and `inventory[]` per-group rows (id, name, type, source, description, member count, created-at).
-- **internal**: each group gains `member_logins[]` (capped; see Truncation).
+- **audit**: total count, count by source, and `inventory[]` per-group rows (id, name, type, source, description, member count, created-at). The member count is Okta's group statistics.
+- **internal**: each group gains `member_logins[]` (capped; see Truncation), and its member count becomes the number of members read, so the two agree. A group past the cap keeps the statistics.
 
 ### Network zones (`network_zones`)
 
@@ -105,7 +106,7 @@ a trust run stays minimal.
 - **audit**: active SSWS-token count, recently-used (30d) count, and `inventory[]` per-token rows (id, name, status, created-at).
 - **internal**: each token gains created-by login, last-used, network-zone-scoped flag.
 
-Reading API tokens requires a SUPER_ADMIN-level scope; on denial the surface is omitted and a diagnostic is recorded.
+Reading API tokens requires a SUPER_ADMIN-level scope; on denial the surface is omitted with a gap and a diagnostic.
 
 ### Hooks (`hooks`)
 
@@ -125,14 +126,15 @@ Reading API tokens requires a SUPER_ADMIN-level scope; on denial the surface is 
 - **audit**: subdomain, status, self-service-account-recovery flag.
 - **internal**: system-notification contact logins.
 
-## Artifact contract: null vs `[]` vs `[...]`
+## Artifact contract: what a missing value means
 
-For level-gated arrays, a consumer can tell "not collected at this level" from
-"collected, none found" without reading `collected_at_level`:
-
-- **trust**: audit/internal arrays emit as `null` (not collected).
-- **audit**: audit arrays emit as `[]` (collected, empty) or `[...]`; internal arrays stay `null`.
-- **internal**: both audit and internal arrays emit as `[]` or `[...]`.
+A field gated by level is absent below its level; `collected_at_level` records
+the level that ran. At or above its level, a value the collector could not read
+is left out too: a top-level metric is `null`, and an inventory or a whole
+surface is absent. The collector result artifact,
+`artifacts/okta.collector-result.json`, lists a gap for each value left out, so
+"not collected" never reads as "none found". An inventory with no rows is also
+absent; with no gap for it, none were found.
 
 ## Truncation
 
@@ -148,7 +150,9 @@ within the per-collector size limit:
 | System log | 5,000 events | published descending |
 
 When a cap fires, the surface sets a `*_truncated` flag and a dropped-row count.
-For orgs over 10,000 users, run `internal` with `--timeout 30m`.
+A group's member logins are emitted whole or not at all: once a group does not
+fit, it and every smaller group have none. For orgs over 10,000 users, run
+`internal` with `--timeout 30m`.
 
 ## Never emitted, at any level
 

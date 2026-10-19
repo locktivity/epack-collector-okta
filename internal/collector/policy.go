@@ -11,14 +11,13 @@ import (
 
 // policyMetricsCollector holds intermediate policy collection state.
 type policyMetricsCollector struct {
-	policyCount            int
-	totalUsers             int
-	mfaRequiredUsers       int
-	mfaRequiredAll         bool
-	mfaRequiredAny         bool
-	mfaRequiredCoveragePct int
-	sessionLifetime        minMax
-	idleTimeout            minMax
+	signOnErr        error // the sign-on policies or their rules could not be read
+	enrollErr        error // the MFA-enrollment policies or their rules could not be read
+	groupsErr        error // a policy group's members could not be read
+	policyCount      int
+	mfaRequiredUsers int
+	sessionLifetime  minMax
+	idleTimeout      minMax
 	// Shared data for device access metrics
 	signOnPolicies []scopedPolicy
 	groupMembers   groupMembership
@@ -31,29 +30,14 @@ type scopedPolicy struct {
 	rules  []okta.PolicyRule
 }
 
-// toPolicyConfig maps the collected policy state onto the output DTO.
-func (m *policyMetricsCollector) toPolicyConfig() PolicyConfig {
-	return PolicyConfig{
-		PolicyCount:               m.policyCount,
-		MFARequiredAll:            m.mfaRequiredAll,
-		MFARequiredAny:            m.mfaRequiredAny,
-		MFARequiredCoveragePct:    m.mfaRequiredCoveragePct,
-		SessionLifetimeMinMinutes: m.sessionLifetime.min,
-		SessionLifetimeMaxMinutes: m.sessionLifetime.max,
-		IdleTimeoutMinMinutes:     m.idleTimeout.min,
-		IdleTimeoutMaxMinutes:     m.idleTimeout.max,
-		Policies:                  m.policies,
-	}
-}
-
-func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userMetricsCollector, level componentsdk.Level) (*policyMetricsCollector, error) {
+func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userMetricsCollector, level componentsdk.Level) *policyMetricsCollector {
 	metrics := &policyMetricsCollector{}
 
 	c.status("Checking sign-on policies...")
 	signOnPolicies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypeSignOn)
 	if err != nil {
 		c.warnSurface("sign-on policies", "okta.policies.read", err)
-		signOnPolicies = nil
+		metrics.signOnErr = err
 	}
 	metrics.policyCount = len(signOnPolicies)
 	metrics.signOnPolicies = signOnPolicies
@@ -63,7 +47,7 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 	mfaEnrollPolicies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypeMFAEnroll)
 	if err != nil {
 		c.warnSurface("MFA-enrollment policies", "okta.policies.read", err)
-		mfaEnrollPolicies = nil
+		metrics.enrollErr = err
 	}
 
 	allPolicies := make([]scopedPolicy, 0, len(signOnPolicies)+len(mfaEnrollPolicies))
@@ -77,15 +61,22 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 		}
 	}
 
+	// Group members only serve the per-user coverage, which needs the users
+	// and the sign-on policies.
+	if userMetrics.err != nil || metrics.signOnErr != nil {
+		return metrics
+	}
 	c.status("Resolving policy group memberships...")
 	groupMembers, err := c.fetchGroupMembersForPolicies(ctx, allPolicies)
 	if err != nil {
 		c.warnSurface("policy group memberships", "okta.groups.read", err)
-		groupMembers = groupMembership{}
+		metrics.groupsErr = err
 	}
 	metrics.groupMembers = groupMembers
 
-	metrics.totalUsers = userMetrics.totalUsers
+	if firstError(metrics.signOnErr, metrics.enrollErr, metrics.groupsErr) != nil {
+		return metrics
+	}
 	total := int64(len(userMetrics.users))
 	for i, user := range userMetrics.users {
 		c.progress(int64(i+1), total, fmt.Sprintf("Evaluating MFA policy coverage for user %d of %d", i+1, len(userMetrics.users)))
@@ -99,11 +90,43 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 		}
 	}
 
-	metrics.mfaRequiredCoveragePct = percent(metrics.mfaRequiredUsers, metrics.totalUsers)
-	metrics.mfaRequiredAny = metrics.mfaRequiredUsers > 0
-	metrics.mfaRequiredAll = metrics.totalUsers > 0 && metrics.mfaRequiredUsers == metrics.totalUsers
+	return metrics
+}
 
-	return metrics, nil
+// fillPolicy writes the policy metrics into the posture, leaving out with a
+// gap each value the reads it needs did not give.
+func (c *Collector) fillPolicy(p *OrgPosture, users *userMetricsCollector, m *policyMetricsCollector, level componentsdk.Level) {
+	if m.signOnErr != nil {
+		c.gaps.notCollected(m.signOnErr, "/policy/policy_count",
+			"/policy/session_lifetime_min_minutes", "/policy/session_lifetime_max_minutes",
+			"/policy/idle_timeout_min_minutes", "/policy/idle_timeout_max_minutes")
+	} else {
+		p.Policy.PolicyCount = intPtr(m.policyCount)
+		p.Policy.SessionLifetimeMinMinutes = m.sessionLifetime.min
+		p.Policy.SessionLifetimeMaxMinutes = m.sessionLifetime.max
+		p.Policy.IdleTimeoutMinMinutes = m.idleTimeout.min
+		p.Policy.IdleTimeoutMaxMinutes = m.idleTimeout.max
+	}
+
+	if err := firstError(users.err, m.signOnErr, m.enrollErr, m.groupsErr); err != nil {
+		c.gaps.notCollected(err, "/policy/mfa_required_all", "/policy/mfa_required_any", "/policy/mfa_required_coverage_pct")
+	} else {
+		total := users.totalUsers
+		p.Policy.MFARequiredCoveragePct = percent(m.mfaRequiredUsers, total)
+		p.Policy.MFARequiredAny = boolPtr(m.mfaRequiredUsers > 0)
+		if total > 0 {
+			p.Policy.MFARequiredAll = boolPtr(m.mfaRequiredUsers == total)
+		}
+	}
+
+	if !level.AtLeast(componentsdk.LevelAudit) {
+		return
+	}
+	if err := firstError(m.signOnErr, m.enrollErr); err != nil {
+		c.gaps.notCollected(err, "/policy/policies")
+		return
+	}
+	p.Policy.Policies = m.policies
 }
 
 func (m *policyMetricsCollector) updateSignOnTimeouts(policies []scopedPolicy) {
@@ -195,6 +218,9 @@ func policyScopeSummary(people *okta.PolicyPeopleCondition) string {
 	return "everyone"
 }
 
+// fetchActivePoliciesWithRules reads the active policies of one type and
+// their rules. Any failure fails the whole type, so a policy set read in part
+// never stands in for the whole.
 func (c *Collector) fetchActivePoliciesWithRules(ctx context.Context, policyType string) ([]scopedPolicy, error) {
 	policies, err := c.client.FetchPolicies(ctx, policyType)
 	if err != nil {
@@ -283,15 +309,17 @@ func (mm *minMax) observe(value int) {
 }
 
 // PolicyConfig contains aggregated policy settings across all active policies.
+// A value is null when a policy read it needs failed; mfa_required_all and
+// mfa_required_coverage_pct are also null when the org has no users.
 type PolicyConfig struct {
-	PolicyCount               int  `json:"policy_count"`                 // Number of active sign-on policies
-	MFARequiredAll            bool `json:"mfa_required_all"`             // MFA is required for all non-deprovisioned users
-	MFARequiredAny            bool `json:"mfa_required_any"`             // MFA is required for at least one non-deprovisioned user
-	MFARequiredCoveragePct    int  `json:"mfa_required_coverage_pct"`    // % of non-deprovisioned users covered by an MFA requirement
-	SessionLifetimeMinMinutes *int `json:"session_lifetime_min_minutes"` // Shortest session lifetime across active sign-on rules
-	SessionLifetimeMaxMinutes *int `json:"session_lifetime_max_minutes"` // Longest session lifetime across active sign-on rules
-	IdleTimeoutMinMinutes     *int `json:"idle_timeout_min_minutes"`     // Shortest idle timeout across active sign-on rules
-	IdleTimeoutMaxMinutes     *int `json:"idle_timeout_max_minutes"`     // Longest idle timeout across active sign-on rules
+	PolicyCount               *int  `json:"policy_count"`                 // Number of active sign-on policies
+	MFARequiredAll            *bool `json:"mfa_required_all"`             // MFA is required for all non-deprovisioned users
+	MFARequiredAny            *bool `json:"mfa_required_any"`             // MFA is required for at least one non-deprovisioned user
+	MFARequiredCoveragePct    *int  `json:"mfa_required_coverage_pct"`    // % of non-deprovisioned users covered by an MFA requirement
+	SessionLifetimeMinMinutes *int  `json:"session_lifetime_min_minutes"` // Shortest session lifetime across active sign-on rules
+	SessionLifetimeMaxMinutes *int  `json:"session_lifetime_max_minutes"` // Longest session lifetime across active sign-on rules
+	IdleTimeoutMinMinutes     *int  `json:"idle_timeout_min_minutes"`     // Shortest idle timeout across active sign-on rules
+	IdleTimeoutMaxMinutes     *int  `json:"idle_timeout_max_minutes"`     // Longest idle timeout across active sign-on rules
 
 	// Audit-level field.
 	Policies []PolicySummary `json:"policies,omitempty"`
