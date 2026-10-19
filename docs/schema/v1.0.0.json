@@ -227,7 +227,7 @@
         "custom_roles": {
           "type": "array",
           "x-epack-level": "audit",
-          "description": "Custom admin roles (Okta Identity Governance feature). Absent, with a not_licensed gap, when Identity Governance is not licensed.",
+          "description": "Custom admin roles (Okta Identity Governance feature). Absent, with a not_licensed gap, when Identity Governance is not licensed. Okta's built-in Workflows Administrator role (WORKFLOWS_ADMIN), which Okta lists with the custom roles, is left out.",
           "items": {
             "type": "object",
             "properties": {
@@ -492,7 +492,7 @@
       "properties": {
         "subdomain": {"type": "string"},
         "status": {"type": "string"},
-        "self_service_recovery_enabled": {"type": "boolean"},
+        "self_service_recovery_enabled": {"type": "boolean", "description": "True when an active password policy rule allows self-service password reset or account unlock."},
         "notification_contact_logins": {"type": "array", "x-epack-level": "internal", "items": {"type": "string"}}
       }
     },

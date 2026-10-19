@@ -209,6 +209,11 @@ func roleAssignmentSource(roles []okta.RoleAssignment) string {
 	}
 }
 
+// workflowsAdminRole is Okta's built-in Workflows Administrator role. Okta
+// lists it with the custom roles because it is scoped to the built-in
+// Workflows resource set.
+const workflowsAdminRole = "WORKFLOWS_ADMIN"
+
 // collectCustomRoles fetches the custom-admin-role inventory (Identity Governance
 // feature). A 404 means the feature is not licensed; any other failure leaves
 // the inventory out with a gap. Standard built-in roles are surfaced via the
@@ -235,11 +240,14 @@ func (c *Collector) collectCustomRoles(ctx context.Context, level componentsdk.L
 	}
 
 	result := make([]CustomRole, 0, len(roles))
-	for i, r := range roles {
+	for _, r := range roles {
+		if r.ID == workflowsAdminRole {
+			continue
+		}
 		row := CustomRole{Name: r.ID, Label: r.Label, Description: r.Description}
 		if permissions, err := c.client.ListRolePermissions(ctx, r.ID); err != nil {
 			c.warn("custom admin role %s: failed to fetch permissions: %s", r.Label, err)
-			c.gaps.notCollected(err, rowPointer("/privileged_access/custom_roles", i, "permission_count"))
+			c.gaps.notCollected(err, rowPointer("/privileged_access/custom_roles", len(result), "permission_count"))
 		} else {
 			row.PermissionCount = intPtr(len(permissions))
 		}

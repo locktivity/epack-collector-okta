@@ -269,6 +269,10 @@ type AssuranceCondition struct {
 type PolicyRuleActions struct {
 	Signon *SignonActions `json:"signon,omitempty"`
 	Enroll *EnrollActions `json:"enroll,omitempty"`
+
+	// Password policy rules.
+	SelfServicePasswordReset *RuleAccess `json:"selfServicePasswordReset,omitempty"`
+	SelfServiceUnlock        *RuleAccess `json:"selfServiceUnlock,omitempty"`
 }
 
 // SignonActions for sign-on policy rules.
@@ -288,6 +292,11 @@ type SignonActions struct {
 // EnrollActions for MFA enrollment policy rules.
 type EnrollActions struct {
 	Self string `json:"self"` // CHALLENGE, LOGIN, NEVER
+}
+
+// RuleAccess is whether a password policy rule allows one self-service action.
+type RuleAccess struct {
+	Access string `json:"access"` // ALLOW, DENY
 }
 
 // Authenticator represents an org-level authenticator from the authenticator

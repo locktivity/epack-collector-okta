@@ -128,11 +128,6 @@ type LogEvent struct {
 	} `json:"target"`
 }
 
-// OrgPreferences represents org-level preferences (GET /api/v1/org/preferences).
-type OrgPreferences struct {
-	SelfServiceUnlock bool `json:"selfServiceUnlock"`
-}
-
 // OrgContact is an org contact (GET /api/v1/org/contacts/{type}): the
 // contact type and the ID of the user who holds it.
 type OrgContact struct {

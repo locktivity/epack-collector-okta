@@ -167,19 +167,6 @@ func TestFeatureNotEnabledIsNotLicensed(t *testing.T) {
 	}
 }
 
-func TestOrgPreferencesWithoutSelfServiceUnlockIsInvalid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"showEndUserFooter":true}`))
-	}))
-	defer server.Close()
-
-	client := NewClientWithHTTP(server.Client(), server.URL)
-	_, err := client.FetchOrgPreferences(context.Background())
-	if code := componentsdk.Classify(err); code != componentsdk.CodeInvalidResponse {
-		t.Errorf("Classify = %s, want invalid_response (%v)", code, err)
-	}
-}
-
 func TestOrgContactsReturnUserIDs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"userId":"00u-` + strings.TrimPrefix(r.URL.Path, "/api/v1/org/contacts/") + `"}`))

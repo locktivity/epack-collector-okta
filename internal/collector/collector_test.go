@@ -58,8 +58,6 @@ type mockOktaClient struct {
 	systemLogErr               error
 	orgSettings                *okta.OrgSettings
 	orgErr                     error
-	orgPreferences             *okta.OrgPreferences
-	orgPreferencesErr          error
 	orgContacts                []okta.OrgContact
 	orgContactsErr             error
 }
@@ -210,13 +208,6 @@ func (m *mockOktaClient) ListSystemLog(ctx context.Context, filter string, since
 		events = events[:max]
 	}
 	return events, nil
-}
-
-func (m *mockOktaClient) FetchOrgPreferences(ctx context.Context) (*okta.OrgPreferences, error) {
-	if m.orgPreferencesErr == nil && m.orgPreferences == nil {
-		return nil, &okta.APIStatusError{StatusCode: 404, Path: "/api/v1/org/preferences"}
-	}
-	return m.orgPreferences, m.orgPreferencesErr
 }
 
 func (m *mockOktaClient) FetchOrgContactUsers(ctx context.Context) ([]okta.OrgContact, error) {
@@ -735,6 +726,31 @@ func TestCollect_AuditPrivilegedAndPolicy(t *testing.T) {
 	ps := posture.Policy.Policies[0]
 	if ps.Name != "Default Sign-on" || ps.RuleCount != 1 || ps.ScopeSummary != "everyone" {
 		t.Errorf("policy summary wrong: %+v", ps)
+	}
+}
+
+func TestPrivileged_LeavesOutWorkflowsAdmin(t *testing.T) {
+	roles := []okta.IAMRole{
+		{ID: "WORKFLOWS_ADMIN", Label: "Workflows Administrator", Description: "An admin role for managing workflows"},
+		{ID: "cr1", Label: "Billing Admin"},
+	}
+
+	client := &mockOktaClient{iamRoles: roles, rolePermissions: map[string][]string{"cr1": {"okta.users.read"}}}
+	posture, err := NewWithClient(Config{OrgDomain: "test.okta.com"}, client).Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := posture.PrivilegedAccess.CustomRoles; len(got) != 1 || got[0].Name != "cr1" {
+		t.Fatalf("custom roles = %+v, want only cr1", got)
+	}
+
+	client = &mockOktaClient{iamRoles: roles, rolePermissionsErr: &okta.APIStatusError{StatusCode: 500, Path: "/api/v1/iam/roles/cr1/permissions"}}
+	rec := &componentsdk.Recorder{}
+	if _, err := NewWithClient(Config{OrgDomain: "test.okta.com", Recorder: rec}, client).Collect(context.Background(), componentsdk.LevelAudit); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := gapAt(rec, "/privileged_access/custom_roles/0/permission_count"); !ok {
+		t.Errorf("expected the permission_count gap on row 0, got %+v", rec.Gaps())
 	}
 }
 

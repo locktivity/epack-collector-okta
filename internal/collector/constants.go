@@ -13,7 +13,11 @@ const (
 const (
 	PolicyTypeSignOn    = "OKTA_SIGN_ON"
 	PolicyTypeMFAEnroll = "MFA_ENROLL"
+	PolicyTypePassword  = "PASSWORD"
 )
+
+// Password policy rule access values.
+const AccessAllow = "ALLOW"
 
 // Sign-on modes (SSO protocols).
 const (

@@ -150,9 +150,8 @@ func kitTenant() *mockOktaClient {
 // kitEmptyTenant has no users, apps, groups, or policies.
 func kitEmptyTenant() *mockOktaClient {
 	return &mockOktaClient{
-		orgSettings:    &okta.OrgSettings{ID: "00o-empty", Subdomain: "empty", Status: "ACTIVE"},
-		orgPreferences: &okta.OrgPreferences{SelfServiceUnlock: false},
-		orgContacts:    []okta.OrgContact{{Type: "BILLING", UserID: "00u-departed"}, {Type: "TECHNICAL", UserID: "00u-departed"}},
+		orgSettings: &okta.OrgSettings{ID: "00o-empty", Subdomain: "empty", Status: "ACTIVE"},
+		orgContacts: []okta.OrgContact{{Type: "BILLING", UserID: "00u-departed"}, {Type: "TECHNICAL", UserID: "00u-departed"}},
 	}
 }
 
@@ -198,7 +197,7 @@ func kitSurfaceResponses(t *mockOktaClient) []collectortest.Response {
 	}
 
 	responses = append(responses, collectortest.Response{URL: listed("/api/v1/apps"), Body: kitList(t.apps)})
-	for _, policyType := range []string{PolicyTypeSignOn, PolicyTypeMFAEnroll} {
+	for _, policyType := range []string{PolicyTypeSignOn, PolicyTypeMFAEnroll, PolicyTypePassword} {
 		responses = append(responses, collectortest.Response{URL: kitBase + "/api/v1/policies?type=" + policyType, Body: kitList(t.policies[policyType])})
 		for _, p := range t.policies[policyType] {
 			responses = append(responses, collectortest.Response{URL: kitBase + "/api/v1/policies/" + p.ID + "/rules", Body: kitList(t.policyRules[p.ID])})
@@ -225,7 +224,6 @@ func kitSurfaceResponses(t *mockOktaClient) []collectortest.Response {
 		collectortest.Response{URL: kitBase + "/api/v1/inlineHooks", Body: kitList(t.inlineHooks)},
 		collectortest.Response{URL: kitBase + "/api/v1/logs?" + logQuery.Encode(), Body: kitList(t.systemLog)},
 		collectortest.Response{URL: kitBase + "/api/v1/org", Body: kitJSON(t.orgSettings)},
-		collectortest.Response{URL: kitBase + "/api/v1/org/preferences", Body: kitJSON(map[string]any{"showEndUserFooter": true, "selfServiceUnlock": t.orgPreferences.SelfServiceUnlock})},
 	)
 	for _, contact := range t.orgContacts {
 		responses = append(responses, collectortest.Response{URL: kitBase + "/api/v1/org/contacts/" + contact.Type, Body: kitJSON(map[string]any{"userId": contact.UserID})})
