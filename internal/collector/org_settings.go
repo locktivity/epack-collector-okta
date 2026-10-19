@@ -28,7 +28,7 @@ type OrgSettings struct {
 	NotificationContactLogins []string `json:"notification_contact_logins,omitempty"`
 }
 
-func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.Level) *OrgSettings {
+func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.Level, users *userMetricsCollector) *OrgSettings {
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
@@ -37,20 +37,15 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 	org, err := c.client.FetchOrgSettings(ctx)
 	if err != nil {
 		c.warnSurface("org settings", "okta.orgs.read", err)
-		return nil
-	}
-	if org == nil {
+		c.gaps.notCollected(err, "/org_settings")
 		return nil
 	}
 
 	out := &OrgSettings{Subdomain: org.Subdomain, Status: org.Status}
 
-	if !level.AtLeast(componentsdk.LevelAudit) {
-		return out
-	}
-
 	if prefs, err := c.client.FetchOrgPreferences(ctx); err != nil {
 		c.warn("org preferences: %s", err)
+		c.gaps.notCollected(err, "/org_settings/self_service_recovery_enabled")
 	} else {
 		recovery := prefs.SelfServiceUnlock
 		out.SelfServiceRecoveryEnabled = &recovery
@@ -60,16 +55,25 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 		return out
 	}
 
-	if contacts, err := c.client.FetchOrgContactUsers(ctx); err != nil {
+	contacts, err := c.client.FetchOrgContactUsers(ctx)
+	if err != nil {
 		c.warn("org contacts: %s", err)
-		out.NotificationContactLogins = []string{}
-	} else {
-		logins := make([]string, 0, len(contacts))
-		for _, contact := range contacts {
-			logins = append(logins, contact.Login)
-		}
-		out.NotificationContactLogins = logins
+		c.gaps.notCollected(err, "/org_settings/notification_contact_logins")
+		return out
 	}
+	if users.err != nil {
+		c.gaps.notCollected(users.err, "/org_settings/notification_contact_logins")
+		return out
+	}
+	// Okta names each contact by user ID; a contact missing from the user
+	// list, such as a deprovisioned user, has no login to show.
+	logins := make([]string, 0, len(contacts))
+	for _, contact := range contacts {
+		if user, ok := users.userByID[contact.UserID]; ok {
+			logins = append(logins, user.Profile.Login)
+		}
+	}
+	out.NotificationContactLogins = logins
 
 	return out
 }

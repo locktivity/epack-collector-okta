@@ -25,6 +25,7 @@ the level a given artifact was produced at.
   },
 
   "users": {
+    "total_count": 412,
     "password_expired": 2,
     "locked_out": 0,
     "inactive": 15,
@@ -32,6 +33,7 @@ the level a given artifact was produced at.
   },
 
   "apps": {
+    "total_count": 37,
     "provisioning_enabled": 40,
     "deprovisioning_enabled": 30
   },
@@ -66,6 +68,11 @@ the level a given artifact was produced at.
 
 ## Metrics Reference
 
+A metric is `null` when the collector could not read what it needs, or when it
+is a percentage of an empty population, such as MFA coverage in an org with no
+users. The collector result artifact, `artifacts/okta.collector-result.json`,
+records a gap for each value left out, with the reason.
+
 ### posture
 
 High-level security scores for quick assessment.
@@ -82,6 +89,7 @@ User account health indicators.
 
 | Metric | Why It Matters |
 |--------|----------------|
+| `total_count` | **Population.** Users other than deprovisioned ones. Every user percentage, including the MFA and policy coverage figures, is a share of this count. |
 | `password_expired` | **Compliance and access issues.** Users with expired passwords may be locked out or using workarounds that bypass security controls. |
 | `locked_out` | **Potential attack indicator.** Spikes in lockout rates may indicate brute force or credential stuffing attacks. |
 | `inactive` | **Orphan account risk.** Inactive accounts (90+ days no login) are prime targets for attackers. They may belong to departed employees or unused service accounts. |
@@ -93,6 +101,7 @@ Application lifecycle management health.
 
 | Metric | Why It Matters |
 |--------|----------------|
+| `total_count` | **Population.** The apps that `sso_coverage` and the provisioning percentages are shares of. |
 | `provisioning_enabled` | **Onboarding automation.** Manual provisioning delays access and increases admin burden. Automated provisioning ensures consistent access based on role. |
 | `deprovisioning_enabled` | **Offboarding security.** Without automated deprovisioning, departing employees retain app access. This is a major source of data breaches. |
 
@@ -152,8 +161,9 @@ User profile attributes beyond login, passwords, session tokens, signing keys,
 client secrets, and hook auth headers are never emitted at any level.
 
 When a surface can't be collected (a missing scope, an unlicensed feature, or an
-insufficient admin role), the run still succeeds and records why under a
-top-level `diagnostics.warnings` array.
+insufficient admin role), the run still succeeds. The values are left out rather
+than reported as zero, the collector result artifact records a gap for each, and
+a top-level `diagnostics.warnings` array says what to grant.
 
 ## Use Cases
 

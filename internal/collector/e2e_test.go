@@ -6,7 +6,9 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 //
 //	OAuth 2.0 (recommended):
 //	  OKTA_CLIENT_ID     - OAuth 2.0 client ID
+//	  OKTA_KEY_ID        - Key ID of the app's public key
 //	  OKTA_PRIVATE_KEY   - PEM-encoded RSA private key
 //
 //	API Token (legacy):
@@ -46,6 +49,7 @@ func getE2EConfig(t *testing.T) Config {
 		KeyID:      os.Getenv("OKTA_KEY_ID"),
 		PrivateKey: os.Getenv("OKTA_PRIVATE_KEY"),
 		APIToken:   os.Getenv("OKTA_API_TOKEN"),
+		HTTPClient: http.DefaultClient,
 	}
 
 	hasOAuth := config.ClientID != "" && config.PrivateKey != ""
@@ -104,9 +108,9 @@ func TestE2E_RealOktaCollection(t *testing.T) {
 	// Log the results for inspection
 	t.Logf("Collection successful!")
 	t.Logf("  Org Domain: %s", posture.OrgDomain)
-	t.Logf("  MFA Coverage: %d%%", posture.Posture.MFACoverage)
-	t.Logf("  MFA Phishing Resistant: %d%%", posture.Posture.MFAPhishingResistant)
-	t.Logf("  SSO Coverage: %d%%", posture.Posture.SSOCoverage)
+	t.Logf("  MFA Coverage: %s%%", showInt(posture.Posture.MFACoverage))
+	t.Logf("  MFA Phishing Resistant: %s%%", showInt(posture.Posture.MFAPhishingResistant))
+	t.Logf("  SSO Coverage: %s%%", showInt(posture.Posture.SSOCoverage))
 
 	// Output full JSON for debugging
 	data, _ := json.MarshalIndent(posture, "", "  ")
@@ -129,10 +133,10 @@ func TestE2E_ValidatePostureMetrics(t *testing.T) {
 		t.Fatalf("failed to collect: %v", err)
 	}
 
-	// All percentage fields should be 0-100
+	// All percentage fields should be 0-100 when collected
 	percentFields := []struct {
 		name  string
-		value int
+		value *int
 	}{
 		{"posture.mfa_coverage", posture.Posture.MFACoverage},
 		{"posture.mfa_phishing_resistant", posture.Posture.MFAPhishingResistant},
@@ -149,8 +153,8 @@ func TestE2E_ValidatePostureMetrics(t *testing.T) {
 	}
 
 	for _, pf := range percentFields {
-		if pf.value < 0 || pf.value > 100 {
-			t.Errorf("%s should be 0-100, got %d", pf.name, pf.value)
+		if pf.value != nil && (*pf.value < 0 || *pf.value > 100) {
+			t.Errorf("%s should be 0-100, got %d", pf.name, *pf.value)
 		}
 	}
 
@@ -174,10 +178,10 @@ func TestE2E_ValidatePolicySettings(t *testing.T) {
 	}
 
 	// Log policy settings
-	t.Logf("Policy Count: %d", posture.Policy.PolicyCount)
-	t.Logf("MFA Required (all users): %v", posture.Policy.MFARequiredAll)
-	t.Logf("MFA Required (any users): %v", posture.Policy.MFARequiredAny)
-	t.Logf("MFA Required Coverage: %d%%", posture.Policy.MFARequiredCoveragePct)
+	t.Logf("Policy Count: %s", showInt(posture.Policy.PolicyCount))
+	t.Logf("MFA Required (all users): %s", showBool(posture.Policy.MFARequiredAll))
+	t.Logf("MFA Required (any users): %s", showBool(posture.Policy.MFARequiredAny))
+	t.Logf("MFA Required Coverage: %s%%", showInt(posture.Policy.MFARequiredCoveragePct))
 
 	if posture.Policy.SessionLifetimeMinMinutes != nil {
 		t.Logf("Session Lifetime Min: %d minutes", *posture.Policy.SessionLifetimeMinMinutes)
@@ -250,4 +254,11 @@ func TestE2E_OutputValidJSON(t *testing.T) {
 	}
 
 	t.Log("Output JSON structure validated")
+}
+
+func showBool(b *bool) string {
+	if b == nil {
+		return "null"
+	}
+	return strconv.FormatBool(*b)
 }

@@ -91,9 +91,9 @@ collectors:
 
 The collector requests the scopes for the level it runs at; each level includes
 the scopes of the levels below it. A scope the service app has not been granted
-is dropped from the issued token, and the surfaces that need it are then skipped
-with a `diagnostics.warnings` entry. Grant the scopes for your level **before**
-running to collect every surface.
+is dropped from the issued token, and the values that need it are then left out,
+with a gap in the collector result and a `diagnostics.warnings` entry. Grant the
+scopes for your level **before** running to collect every surface.
 
 | Scope | Levels | Surface |
 |---|---|---|
@@ -113,8 +113,8 @@ running to collect every surface.
 | `okta.apiTokens.read` | audit+ | API tokens (also requires a Super Administrator-level role) |
 
 When a scope is missing or a feature is not licensed (for example custom admin
-roles without Okta Identity Governance), the affected surface is skipped and a
-warning is recorded under `diagnostics.warnings` rather than failing the run.
+roles without Okta Identity Governance), the affected values are left out rather
+than failing the run (see [Partial collection and exit codes](#partial-collection-and-exit-codes)).
 
 #### API Token (Legacy)
 
@@ -132,6 +132,32 @@ service app to use the scope-based model above.
 
 See [docs/schema/v1.0.0.json](docs/schema/v1.0.0.json) for the full JSON schema.
 
+### Partial collection and exit codes
+
+The run fails only when the configuration is invalid or the sign-in fails. The
+sign-in proves the credential before any surface is read: an API token reads the
+user it belongs to (`GET /api/v1/users/me`), and a service app exchanges its
+signed assertion at the org's token endpoint.
+
+| Exit | Code | When |
+|---|---|---|
+| 0 | | The run collected, even if some values were left out |
+| 1 | `invalid_response` | The sign-in response was not what the collector expects |
+| 2 | `config_invalid` | `org_domain` or the credentials are missing, `OKTA_PRIVATE_KEY` is not a PEM-encoded RSA key, or the token endpoint answered `invalid_request` or `unsupported_grant_type` |
+| 3 | `auth_failed` | Okta rejected the API token or the service app's assertion |
+| 3 | `permission_denied` | Okta refused a requested OAuth scope at the token exchange |
+| 4 | `rate_limited`, `vendor_error`, `timeout` | The sign-in could not reach Okta |
+
+After the sign-in, a value the collector cannot read is left out rather than
+written as 0, false, or an empty list: a top-level metric is `null`, and an
+inventory or a whole surface is absent. The artifact
+`artifacts/okta.collector-result.json` lists a gap for each value left out, with
+a code such as `permission_denied`, `rate_limited`, or `not_licensed`, along with
+the API operations the collector called and the identity it signed in as. The
+`diagnostics.warnings` entries remain. A percentage is also `null` when its
+population is empty, such as `mfa_coverage` in an org with no users;
+`users.total_count` and `apps.total_count` give those populations.
+
 ### Example Output
 
 ```json
@@ -146,12 +172,14 @@ See [docs/schema/v1.0.0.json](docs/schema/v1.0.0.json) for the full JSON schema.
     "sso_coverage": 90
   },
   "users": {
+    "total_count": 412,
     "password_expired": 2,
     "locked_out": 0,
     "inactive": 15,
     "suspended": 3
   },
   "apps": {
+    "total_count": 37,
     "provisioning_enabled": 40,
     "deprovisioning_enabled": 30
   },

@@ -13,6 +13,7 @@ import (
 type Collector struct {
 	client   okta.OktaClient
 	config   Config
+	gaps     *gapLog
 	warnings []string // Surface-level warnings accumulated during collection
 }
 
@@ -65,7 +66,7 @@ var baseOAuthScopes = []string{
 // identity providers, API tokens, hooks, system log, org settings) requests its
 // scope here, so a trust run stays least privilege. A scope the service app has
 // not been granted is dropped from the issued token; the surfaces that need it
-// are then skipped with a diagnostic rather than failing the run.
+// are then left out with a gap rather than failing the run.
 var auditOAuthScopes = []string{
 	"okta.authenticators.read",
 	"okta.networkZones.read",
@@ -93,38 +94,27 @@ func scopesForLevel(level componentsdk.Level) []string {
 // exchange (trust requests today's scopes; audit / internal additionally request
 // the new read scopes).
 // It supports two authentication methods:
-//   - OAuth 2.0 (recommended): Set ClientID and PrivateKey
+//   - OAuth 2.0 (recommended): Set ClientID, KeyID, and PrivateKey
 //   - API Token (legacy): Set APIToken
 func New(config Config, level componentsdk.Level) (*Collector, error) {
 	var client okta.OktaClient
-	var err error
-
-	if config.ClientID != "" && config.PrivateKey != "" {
-		// OAuth 2.0 auth (recommended)
+	switch {
+	case config.usesOAuth():
 		if config.KeyID == "" {
-			return nil, fmt.Errorf("key_id is required for OAuth 2.0 authentication")
+			return nil, componentsdk.NewConfigError("key_id is required for OAuth 2.0 authentication")
 		}
-		client, err = okta.NewClientWithOAuth(
-			config.OrgDomain,
-			config.ClientID,
-			config.KeyID,
-			[]byte(config.PrivateKey),
-			scopesForLevel(level),
-		)
+		oauthClient, err := okta.NewClientWithOAuth(config.HTTPClient, config.OrgDomain, config.ClientID, config.KeyID, []byte(config.PrivateKey), scopesForLevel(level), config.now)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create OAuth client: %w", err)
+			return nil, err
 		}
-	} else if config.APIToken != "" {
-		// API token auth (legacy)
-		client = okta.NewClient(config.OrgDomain, config.APIToken)
-	} else {
-		return nil, fmt.Errorf("authentication required: provide client_id + private_key (recommended) or api_token")
+		client = oauthClient
+	case config.APIToken != "":
+		client = okta.NewClient(config.HTTPClient, config.OrgDomain, config.APIToken)
+	default:
+		return nil, componentsdk.NewConfigError("authentication required: provide client_id + private_key (recommended) or api_token")
 	}
 
-	return &Collector{
-		client: client,
-		config: config,
-	}, nil
+	return NewWithClient(config, client), nil
 }
 
 // NewWithClient creates a Collector with a custom client (for testing).
@@ -132,6 +122,7 @@ func NewWithClient(config Config, client okta.OktaClient) *Collector {
 	return &Collector{
 		client: client,
 		config: config,
+		gaps:   newGapLog(config.Recorder),
 	}
 }
 
@@ -139,90 +130,56 @@ func NewWithClient(config Config, client okta.OktaClient) *Collector {
 // level controls the depth of collection (trust / audit / internal). Unknown or
 // empty levels are treated as LevelTrust by the SDK reader; callers should not
 // pre-validate. See the README for per-surface field availability per level.
+//
+// Collect returns an error only when the sign-in fails. Any value it cannot
+// read after that is left out of the artifact and recorded as a gap.
 func (c *Collector) Collect(ctx context.Context, level componentsdk.Level) (*OrgPosture, error) {
 	if c.config.OrgDomain == "" {
 		return nil, fmt.Errorf("org_domain is required")
 	}
 
-	// Reset surface-level warnings from any previous run.
+	// Reset surface-level warnings and gaps from any previous run.
 	c.warnings = nil
+	c.gaps = newGapLog(c.config.Recorder)
 
 	c.status(fmt.Sprintf("Connecting to Okta org %s...", c.config.OrgDomain))
+	if err := c.signIn(ctx); err != nil {
+		return nil, err
+	}
 
-	posture := NewOrgPosture(c.config.OrgDomain)
+	posture := NewOrgPosture(c.config.OrgDomain, c.config.now())
 	posture.CollectedAtLevel = string(level)
 
 	c.status("Collecting user metrics...")
-	userMetrics, err := c.collectUserMetrics(ctx, level)
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect user metrics: %w", err)
-	}
+	userMetrics := c.collectUserMetrics(ctx, level)
 
 	c.status("Collecting application metrics...")
-	appMetrics, err := c.collectAppMetrics(ctx, level)
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect app metrics: %w", err)
-	}
+	appMetrics := c.collectAppMetrics(ctx, level)
 
 	c.status("Collecting privileged access metrics...")
-	privilegedMetrics, err := c.collectPrivilegedMetrics(ctx, userMetrics, level)
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect privileged access metrics: %w", err)
-	}
+	privilegedMetrics := c.collectPrivilegedMetrics(ctx, userMetrics, level)
+	posture.PrivilegedAccess.CustomRoles = c.collectCustomRoles(ctx, level)
 
 	c.status("Collecting policy metrics...")
-	policyMetrics, err := c.collectPolicyMetrics(ctx, userMetrics, level)
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect policy metrics: %w", err)
-	}
+	policyMetrics := c.collectPolicyMetrics(ctx, userMetrics, level)
 
 	c.status("Collecting device access metrics...")
-	deviceAccessMetrics, err := c.collectDeviceAccessMetrics(
-		ctx,
-		userMetrics,
-		privilegedMetrics.privilegedUserIDs,
-		policyMetrics.signOnPolicies,
-		policyMetrics.groupMembers,
-		level,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect device access metrics: %w", err)
-	}
+	deviceAccessMetrics := c.collectDeviceAccessMetrics(ctx, userMetrics, privilegedMetrics, policyMetrics)
 
-	posture.Posture = Posture{
-		MFACoverage:          userMetrics.mfaEnrolled,
-		MFAPhishingResistant: userMetrics.mfaPhishingResistant,
-		SSOCoverage:          appMetrics.ssoCoverage,
-		PerFactorType:        c.collectAuthenticatorMetrics(ctx, userMetrics, level),
-	}
-	if level.AtLeast(componentsdk.LevelAudit) {
-		mfaDisabled := userMetrics.totalUsers - userMetrics.mfaEnrolledCount
-		posture.Posture.MFADisabledUsersCount = &mfaDisabled
-	}
-
-	posture.Users = userMetrics.toUserMetrics()
-	posture.Apps = appMetrics.toAppMetrics()
-	posture.PrivilegedAccess = privilegedMetrics.toPrivilegedAccess()
-	posture.Policy = policyMetrics.toPolicyConfig()
-	posture.DeviceAccess = deviceAccessMetrics.toDeviceAccess()
+	c.fillUsers(posture, userMetrics, level)
+	c.fillApps(posture, appMetrics, level)
+	c.fillPrivileged(posture, privilegedMetrics, level)
+	c.fillPolicy(posture, userMetrics, policyMetrics, level)
+	c.fillDeviceAccess(posture, userMetrics, privilegedMetrics, policyMetrics, deviceAccessMetrics, level)
+	posture.Posture.PerFactorType = c.collectAuthenticatorMetrics(ctx, userMetrics, level)
 
 	posture.Groups = c.collectGroups(ctx, level)
 	posture.NetworkZones = c.collectNetworkZones(ctx, level)
 	posture.IdentityProviders = c.collectIdentityProviders(ctx, level)
-
-	loginByID := make(map[string]string, len(userMetrics.userByID))
-	for id, u := range userMetrics.userByID {
-		loginByID[id] = u.Profile.Login
-	}
-	posture.APITokens = c.collectAPITokens(ctx, level, loginByID)
+	posture.APITokens = c.collectAPITokens(ctx, level, userMetrics)
 	posture.Hooks = c.collectHooks(ctx, level)
 	posture.SystemLog = c.collectSystemLog(ctx, level)
-	posture.OrgSettings = c.collectOrgSettings(ctx, level)
-
-	// Strict-superset normalization: at audit+, every level-gated array is
-	// non-nil so consumers can rely on [] vs null to distinguish "none found"
-	// from "not collected at this level" without reading collected_at_level.
-	normalizeForLevel(posture, level)
+	posture.OrgSettings = c.collectOrgSettings(ctx, level, userMetrics)
 
 	if len(c.warnings) > 0 {
 		posture.Diagnostics = &Diagnostics{Warnings: c.warnings}
@@ -231,6 +188,39 @@ func (c *Collector) Collect(ctx context.Context, level componentsdk.Level) (*Org
 	c.status("Collection complete")
 
 	return posture, nil
+}
+
+// signIn proves the credential works before any surface is read. It is the
+// only call whose failure fails the run.
+func (c *Collector) signIn(ctx context.Context) error {
+	identity, err := c.client.SignIn(ctx)
+	if err != nil {
+		return fmt.Errorf("signing in to Okta: %w", err)
+	}
+	c.gaps.rec.SignedInAs(componentsdk.Principal{
+		Provider: "okta",
+		Kind:     identity.Kind,
+		TenantID: okta.Host(c.config.OrgDomain),
+		Scopes:   identity.Scopes,
+		ID:       identity.ID,
+	})
+	return nil
+}
+
+// Artifacts returns the detailed artifact and, when it holds any evidence,
+// the normalized identity-provider posture, whose values carry the gaps of
+// the detailed values they copy.
+func (c *Collector) Artifacts(posture *OrgPosture) []componentsdk.CollectedArtifact {
+	artifacts := []componentsdk.CollectedArtifact{
+		componentsdk.JSONArtifact(detailedPath, posture, componentsdk.ArtifactMeta{}),
+	}
+	normalized := posture.ToIDPPosture()
+	if normalized == nil {
+		return artifacts
+	}
+	c.mirrorIDPPostureGaps()
+	return append(artifacts, componentsdk.JSONArtifact(idpPosturePath, normalized,
+		componentsdk.ArtifactMeta{Schema: "evidencepack/idp-posture@v1"}))
 }
 
 // formatTime renders t as an RFC3339 UTC string, or "" if t is the zero value.
@@ -243,10 +233,16 @@ func formatTime(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
 
-// percent calculates the percentage of count over total, returning 0 if total is 0.
-func percent(count, total int) int {
+// percent returns count as a whole percentage of total, or nil when total is
+// 0, since a percentage of nothing has no value.
+func percent(count, total int) *int {
 	if total == 0 {
-		return 0
+		return nil
 	}
-	return (count * MaxPercentage) / total
+	p := (count * MaxPercentage) / total
+	return &p
 }
+
+func intPtr(i int) *int { return &i }
+
+func boolPtr(b bool) *bool { return &b }

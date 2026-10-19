@@ -42,7 +42,7 @@ type APITokenSummary struct {
 	NetworkZoneScoped *bool  `json:"network_zone_scoped,omitempty"`
 }
 
-func (c *Collector) collectAPITokens(ctx context.Context, level componentsdk.Level, loginByID map[string]string) *APITokens {
+func (c *Collector) collectAPITokens(ctx context.Context, level componentsdk.Level, users *userMetricsCollector) *APITokens {
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
@@ -55,10 +55,11 @@ func (c *Collector) collectAPITokens(ctx context.Context, level componentsdk.Lev
 		} else {
 			c.warn("api tokens: %s", err)
 		}
+		c.gaps.notCollected(err, "/api_tokens")
 		return nil
 	}
 
-	recentThreshold := time.Now().Add(-recentlyUsedWindow)
+	recentThreshold := c.config.now().Add(-recentlyUsedWindow)
 	out := &APITokens{}
 	for _, t := range tokens {
 		if t.Status == StatusActive {
@@ -73,10 +74,14 @@ func (c *Collector) collectAPITokens(ctx context.Context, level componentsdk.Lev
 		return out
 	}
 
+	loginByID := users.loginByID()
 	out.Inventory = make([]APITokenSummary, 0, len(tokens))
-	for _, t := range tokens {
+	for i, t := range tokens {
 		row := APITokenSummary{ID: t.ID, Name: t.Name, Status: t.Status, CreatedAt: formatTime(t.Created)}
 		if level.AtLeast(componentsdk.LevelInternal) {
+			if users.err != nil && t.UserID != "" {
+				c.gaps.notCollected(users.err, rowPointer("/api_tokens/inventory", i, "created_by_login"))
+			}
 			row.CreatedByLogin = loginByID[t.UserID]
 			row.LastUsedAt = formatTime(t.LastUpdated)
 			scoped := len(t.Network.Include) > 0

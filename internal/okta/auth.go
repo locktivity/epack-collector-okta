@@ -1,54 +1,58 @@
 package okta
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/locktivity/epack/componentsdk"
 )
+
+// oauthCredentials sign the client assertion a service app exchanges for an
+// access token.
+type oauthCredentials struct {
+	clientID string
+	keyID    string
+	key      *rsa.PrivateKey
+	scopes   []string
+	now      func() time.Time
+}
 
 // NewClientWithOAuth creates a client using OAuth 2.0 private key JWT.
 // This is the recommended authentication method.
 // keyID is the key identifier from Okta (found in the public keys section of your app).
 // scopes is the set of OAuth scopes to request; scopes the service app has not
-// been granted are dropped from the issued token.
-func NewClientWithOAuth(orgDomain, clientID, keyID string, privateKey []byte, scopes []string) (*Client, error) {
-	baseURL := buildBaseURL(orgDomain)
-
-	// Parse the private key
+// been granted are dropped from the issued token. The key is parsed now; the
+// token exchange happens at SignIn, with assertion times read from now.
+func NewClientWithOAuth(httpClient *http.Client, orgDomain, clientID, keyID string, privateKey []byte, scopes []string, now func() time.Time) (*Client, error) {
 	key, err := parsePrivateKey(privateKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
-	}
-
-	// Generate JWT for client credentials grant
-	token, err := generateClientAssertionJWT(clientID, baseURL, keyID, key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate JWT: %w", err)
-	}
-
-	// Exchange JWT for access token
-	accessToken, err := exchangeJWTForToken(baseURL, clientID, token, scopes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to exchange JWT for token: %w", err)
+		return nil, componentsdk.CodeError(componentsdk.CodeConfigInvalid,
+			fmt.Errorf("OKTA_PRIVATE_KEY is not a PEM-encoded RSA private key: %w", err))
 	}
 
 	return &Client{
-		httpClient:  &http.Client{Timeout: HTTPTimeout},
-		baseURL:     baseURL,
-		accessToken: accessToken,
-		authType:    "Bearer",
+		httpClient: httpClient,
+		baseURL:    buildBaseURL(orgDomain),
+		authType:   "Bearer",
+		oauth: &oauthCredentials{
+			clientID: clientID,
+			keyID:    keyID,
+			key:      key,
+			scopes:   scopes,
+			now:      now,
+		},
 	}, nil
 }
-
-// NewClientWithHTTP creates a client with a custom HTTP client and base URL (for testing).
 
 // parsePrivateKey parses a PEM-encoded RSA private key.
 func parsePrivateKey(keyData []byte) (*rsa.PrivateKey, error) {
@@ -73,10 +77,9 @@ func parsePrivateKey(keyData []byte) (*rsa.PrivateKey, error) {
 
 // generateClientAssertionJWT creates a JWT for OAuth 2.0 client credentials flow.
 // keyID is the key identifier from Okta that must match the public key registered in your app.
-func generateClientAssertionJWT(clientID, baseURL, keyID string, key *rsa.PrivateKey) (string, error) {
-	now := time.Now()
+func generateClientAssertionJWT(clientID, tokenURL, keyID string, key *rsa.PrivateKey, now time.Time) (string, error) {
 	claims := jwt.MapClaims{
-		"aud": fmt.Sprintf("%s/oauth2/v1/token", baseURL),
+		"aud": tokenURL,
 		"iss": clientID,
 		"sub": clientID,
 		"iat": now.Unix(),
@@ -89,49 +92,100 @@ func generateClientAssertionJWT(clientID, baseURL, keyID string, key *rsa.Privat
 	return token.SignedString(key)
 }
 
-// exchangeJWTForToken exchanges a client assertion JWT for an access token,
-// requesting the given scopes.
-func exchangeJWTForToken(baseURL, clientID, assertion string, scopes []string) (string, error) {
-	tokenURL := fmt.Sprintf("%s/oauth2/v1/token", baseURL)
+// exchangeToken exchanges a client assertion JWT for an access token,
+// requesting the client's scopes.
+func (c *Client) exchangeToken(ctx context.Context) (*Identity, error) {
+	const op = "okta.token.create"
+	tokenURL := c.baseURL + "/oauth2/v1/token"
+
+	assertion, err := generateClientAssertionJWT(c.oauth.clientID, tokenURL, c.oauth.keyID, c.oauth.key, c.oauth.now())
+	if err != nil {
+		return nil, fmt.Errorf("signing the client assertion: %w", err)
+	}
 
 	data := url.Values{}
 	data.Set("grant_type", "client_credentials")
-	data.Set("scope", strings.Join(scopes, " "))
+	data.Set("scope", strings.Join(c.oauth.scopes, " "))
 	data.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
 	data.Set("client_assertion", assertion)
 
-	resp, err := http.PostForm(tokenURL, data)
+	// The exchange only mints a token, so a retry is harmless.
+	ctx = componentsdk.WithOperation(ctx, componentsdk.Operation{Name: op, Safe: true})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("reading the token response: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
-		// Read error response for debugging
-		var errResp struct {
-			Error            string `json:"error"`
-			ErrorDescription string `json:"error_description"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error != "" {
-			return "", fmt.Errorf("token exchange failed: %s - %s", errResp.Error, errResp.ErrorDescription)
-		}
-		return "", fmt.Errorf("token exchange failed with status %d", resp.StatusCode)
+		return nil, newTokenError(resp, body)
 	}
 
 	var result struct {
 		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		ExpiresIn   int    `json:"expires_in"`
 		Scope       string `json:"scope"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("decoding the token response: %w", err)
 	}
-
 	if result.AccessToken == "" {
-		return "", fmt.Errorf("token exchange returned empty access token")
+		return nil, invalidResponse(op, "has no access_token")
 	}
 
-	return result.AccessToken, nil
+	c.accessToken = result.AccessToken
+	return &Identity{Kind: "service_app", ID: c.oauth.clientID, Scopes: strings.Fields(result.Scope)}, nil
+}
+
+// TokenError is an error response from the org's token endpoint.
+type TokenError struct {
+	StatusCode int
+	Header     http.Header
+	// OAuthCode is the OAuth error, such as invalid_client.
+	OAuthCode   string
+	Description string
+}
+
+func newTokenError(resp *http.Response, body []byte) *TokenError {
+	e := &TokenError{StatusCode: resp.StatusCode, Header: resp.Header}
+	var payload struct {
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
+	}
+	if json.Unmarshal(body, &payload) == nil {
+		e.OAuthCode = payload.Error
+		e.Description = payload.ErrorDescription
+	}
+	return e
+}
+
+func (e *TokenError) Error() string {
+	if e.OAuthCode != "" {
+		return fmt.Sprintf("token exchange failed with status %d: %s - %s", e.StatusCode, e.OAuthCode, e.Description)
+	}
+	return fmt.Sprintf("token exchange failed with status %d", e.StatusCode)
+}
+
+func (e *TokenError) HTTPStatus() int         { return e.StatusCode }
+func (e *TokenError) HTTPHeader() http.Header { return e.Header }
+func (e *TokenError) VendorCode() string      { return e.OAuthCode }
+
+// CollectionCode reads the OAuth error of a 400, which Okta sends both for
+// credentials it rejects and for scopes the service app was not granted.
+func (e *TokenError) CollectionCode() componentsdk.Code {
+	if e.StatusCode != http.StatusBadRequest {
+		return ""
+	}
+	code, _ := componentsdk.OAuthErrorCode(e.OAuthCode)
+	return code
 }

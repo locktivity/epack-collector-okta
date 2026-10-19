@@ -65,12 +65,14 @@ epack collect
       "sso_coverage": 90
     },
     "users": {
+      "total_count": 412,
       "password_expired": 2,
       "locked_out": 0,
       "inactive": 15,
       "suspended": 3
     },
     "apps": {
+      "total_count": 37,
       "provisioning_enabled": 40,
       "deprovisioning_enabled": 30
     },

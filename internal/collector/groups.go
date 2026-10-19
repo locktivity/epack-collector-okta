@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"sort"
 
 	"github.com/locktivity/epack-collector-okta/internal/okta"
@@ -26,21 +27,28 @@ type Groups struct {
 }
 
 // GroupSummary is a per-group inventory row (audit+). Internal adds member logins.
+//
+// MemberCount is Okta's group statistics at audit. At internal it counts the
+// members read live, so it matches MemberLogins; only a group past the
+// membership budget, whose members are not read, keeps the statistics.
 type GroupSummary struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Type        string `json:"type"`
 	Source      string `json:"source"`
 	Description string `json:"description,omitempty"`
-	MemberCount int    `json:"member_count"`
+	MemberCount *int   `json:"member_count"`
 	CreatedAt   string `json:"created_at,omitempty"`
 
 	// Internal-level field.
 	MemberLogins []string `json:"member_logins,omitempty"`
+
+	countErr   error
+	membersErr error
 }
 
 // collectGroups collects the groups surface (audit and above). Returns nil at
-// trust, or when the group list cannot be fetched.
+// trust, or, with a gap, when the group list cannot be fetched.
 func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level) *Groups {
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
@@ -54,6 +62,7 @@ func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level)
 		return nil
 	}); err != nil {
 		c.warnSurface("groups", "okta.groups.read", err)
+		c.gaps.notCollected(err, "/groups")
 		return nil
 	}
 
@@ -75,7 +84,9 @@ func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level)
 			Description: g.Profile.Description,
 		}
 		if g.Embedded != nil && g.Embedded.Stats != nil {
-			row.MemberCount = g.Embedded.Stats.UsersCount
+			row.MemberCount = intPtr(g.Embedded.Stats.UsersCount)
+		} else {
+			row.countErr = invalidGroup("has no member statistics")
 		}
 		row.CreatedAt = formatTime(g.Created)
 		out.Inventory = append(out.Inventory, row)
@@ -85,7 +96,7 @@ func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level)
 	// member-count-desc order so the total-row cap drops the smallest groups
 	// first.
 	sort.SliceStable(out.Inventory, func(i, j int) bool {
-		return out.Inventory[i].MemberCount > out.Inventory[j].MemberCount
+		return statsCount(out.Inventory[i]) > statsCount(out.Inventory[j])
 	})
 
 	if len(out.Inventory) > GroupsCap {
@@ -98,38 +109,71 @@ func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level)
 		c.fillGroupMemberLoginsWithBudget(ctx, out, GroupMembershipsCap)
 	}
 
+	for i, row := range out.Inventory {
+		if row.countErr != nil {
+			c.gaps.notCollected(row.countErr, rowPointer("/groups/inventory", i, "member_count"))
+		}
+		if row.membersErr != nil {
+			c.gaps.notCollected(row.membersErr, rowPointer("/groups/inventory", i, "member_logins"))
+		}
+	}
+
 	return out
 }
 
+func statsCount(row GroupSummary) int {
+	if row.MemberCount == nil {
+		return -1
+	}
+	return *row.MemberCount
+}
+
 // fillGroupMemberLoginsWithBudget populates per-group member-login lists for the
-// internal level, bounded by maxRows total member-rows across all groups.
+// internal level, bounded by maxRows total member-rows across all groups. A
+// group's logins are emitted whole or not at all, and its member count is
+// the number of members read. Once a group does not fit, it and every smaller
+// group are left without logins.
 func (c *Collector) fillGroupMemberLoginsWithBudget(ctx context.Context, out *Groups, maxRows int) {
 	remaining := maxRows
 
 	for i := range out.Inventory {
+		row := &out.Inventory[i]
 		if remaining <= 0 {
 			out.TruncatedMemberships = true
-			out.TruncatedMembershipsDropped += out.Inventory[i].MemberCount
-			out.Inventory[i].MemberLogins = []string{}
+			if row.MemberCount != nil {
+				out.TruncatedMembershipsDropped += *row.MemberCount
+			}
 			continue
 		}
 
 		logins := []string{}
-		err := c.client.FetchGroupUsers(ctx, out.Inventory[i].ID, func(users []okta.User) error {
+		err := c.client.FetchGroupUsers(ctx, row.ID, func(users []okta.User) error {
 			for _, u := range users {
-				if remaining <= 0 {
-					out.TruncatedMemberships = true
-					out.TruncatedMembershipsDropped++
-					continue
-				}
 				logins = append(logins, u.Profile.Login)
-				remaining--
 			}
 			return nil
 		})
 		if err != nil {
-			c.warn("group %s: failed to fetch members: %v", out.Inventory[i].ID, err)
+			c.warn("group %s: failed to fetch members: %v", row.ID, err)
+			row.MemberCount = nil
+			row.countErr = err
+			row.membersErr = err
+			continue
 		}
-		out.Inventory[i].MemberLogins = logins
+
+		row.MemberCount = intPtr(len(logins))
+		row.countErr = nil
+		if len(logins) > remaining {
+			out.TruncatedMemberships = true
+			out.TruncatedMembershipsDropped += len(logins)
+			remaining = 0
+			continue
+		}
+		row.MemberLogins = logins
+		remaining -= len(logins)
 	}
+}
+
+func invalidGroup(problem string) error {
+	return componentsdk.CodeError(componentsdk.CodeInvalidResponse, errors.New("the group "+problem))
 }

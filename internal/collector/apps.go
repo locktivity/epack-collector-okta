@@ -10,48 +10,32 @@ import (
 
 // appMetricsCollector holds intermediate app collection state.
 type appMetricsCollector struct {
+	err                   error // the app list could not be read
 	totalApps             int
 	ssoApps               int
 	provisioningEnabled   int
 	deprovisioningEnabled int
-	ssoCoverage           int
 	inventory             []App // Audit-level per-app rows
 	inventoryTruncated    bool
 	inventoryDropped      int
 }
 
-// toAppMetrics maps the collected app state onto the output DTO.
-func (m *appMetricsCollector) toAppMetrics() AppMetrics {
-	return AppMetrics{
-		ProvisioningEnabled:   m.provisioningEnabled,
-		DeprovisioningEnabled: m.deprovisioningEnabled,
-		Inventory:             m.inventory,
-		InventoryTruncated:    m.inventoryTruncated,
-		InventoryDropped:      m.inventoryDropped,
-	}
-}
-
-func (c *Collector) collectAppMetrics(ctx context.Context, level componentsdk.Level) (*appMetricsCollector, error) {
-	metrics := &appMetricsCollector{}
-
-	appCount := 0
-	err := c.client.FetchApplications(ctx, func(apps []okta.Application) error {
-		for _, app := range apps {
-			c.processApp(app, metrics, level)
-		}
-		appCount += len(apps)
-		c.status(fmt.Sprintf("Found %d applications...", appCount))
+func (c *Collector) collectAppMetrics(ctx context.Context, level componentsdk.Level) *appMetricsCollector {
+	var apps []okta.Application
+	err := c.client.FetchApplications(ctx, func(page []okta.Application) error {
+		apps = append(apps, page...)
+		c.status(fmt.Sprintf("Found %d applications...", len(apps)))
 		return nil
 	})
-
 	if err != nil {
 		c.warnSurface("applications", "okta.apps.read", err)
-		return metrics, nil
+		return &appMetricsCollector{err: err}
 	}
 
-	metrics.ssoCoverage = percent(metrics.ssoApps, metrics.totalApps)
-	metrics.provisioningEnabled = percent(metrics.provisioningEnabled, metrics.totalApps)
-	metrics.deprovisioningEnabled = percent(metrics.deprovisioningEnabled, metrics.totalApps)
+	metrics := &appMetricsCollector{}
+	for _, app := range apps {
+		c.processApp(app, metrics, level)
+	}
 
 	if level.AtLeast(componentsdk.LevelAudit) {
 		metrics.inventory, metrics.inventoryDropped, metrics.inventoryTruncated = Truncate(metrics.inventory, AppsCap, func(a, b App) bool {
@@ -67,7 +51,29 @@ func (c *Collector) collectAppMetrics(ctx context.Context, level componentsdk.Le
 		}
 	}
 
-	return metrics, nil
+	return metrics
+}
+
+// fillApps writes the app metrics into the posture, or leaves them out with a
+// gap when the app list could not be read.
+func (c *Collector) fillApps(p *OrgPosture, m *appMetricsCollector, level componentsdk.Level) {
+	audit := level.AtLeast(componentsdk.LevelAudit)
+	if m.err != nil {
+		c.gaps.notCollected(m.err, "/apps/total_count", "/apps/provisioning_enabled", "/apps/deprovisioning_enabled", "/posture/sso_coverage")
+		if audit {
+			c.gaps.notCollected(m.err, "/apps/inventory")
+		}
+		return
+	}
+	p.Apps.TotalCount = intPtr(m.totalApps)
+	p.Apps.ProvisioningEnabled = percent(m.provisioningEnabled, m.totalApps)
+	p.Apps.DeprovisioningEnabled = percent(m.deprovisioningEnabled, m.totalApps)
+	p.Posture.SSOCoverage = percent(m.ssoApps, m.totalApps)
+	if audit {
+		p.Apps.Inventory = m.inventory
+		p.Apps.InventoryTruncated = m.inventoryTruncated
+		p.Apps.InventoryDropped = m.inventoryDropped
+	}
 }
 
 // processApp processes a single application and updates metrics.
@@ -137,12 +143,14 @@ func checkProvisioningFeatures(features []string) (provisioning, deprovisioning 
 	return
 }
 
-// AppMetrics contains application lifecycle percentages (all 0-100).
+// AppMetrics contains application lifecycle percentages (all 0-100). Each is
+// null when the app list could not be read or the org has no apps.
 //
 // Audit adds the per-app inventory.
 type AppMetrics struct {
-	ProvisioningEnabled   int `json:"provisioning_enabled"`   // % apps with auto-provisioning
-	DeprovisioningEnabled int `json:"deprovisioning_enabled"` // % apps with auto-deprovisioning
+	TotalCount            *int `json:"total_count"`            // Apps; the population of the app percentages
+	ProvisioningEnabled   *int `json:"provisioning_enabled"`   // % apps with auto-provisioning
+	DeprovisioningEnabled *int `json:"deprovisioning_enabled"` // % apps with auto-deprovisioning
 
 	// Audit-level field.
 	Inventory          []App `json:"inventory,omitempty"`

@@ -59,7 +59,7 @@ type IAMRole struct {
 
 // IAMRolesResponse is the paginated response for custom admin roles.
 type IAMRolesResponse struct {
-	Roles []IAMRole `json:"roles"`
+	Roles *[]IAMRole `json:"roles"`
 	Links struct {
 		Next *struct {
 			Href string `json:"href"`
@@ -69,14 +69,14 @@ type IAMRolesResponse struct {
 
 // RolePermissionsResponse is the response for a custom role's permissions.
 type RolePermissionsResponse struct {
-	Permissions []struct {
+	Permissions *[]struct {
 		Label string `json:"label"`
 	} `json:"permissions"`
 }
 
 // RoleAssignedUsersResponse is the paginated response for users with roles.
 type RoleAssignedUsersResponse struct {
-	Value []RoleAssignedUser `json:"value"`
+	Value *[]RoleAssignedUser `json:"value"`
 	Links struct {
 		Next *struct {
 			Href string `json:"href"`

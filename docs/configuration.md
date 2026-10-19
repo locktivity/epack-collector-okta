@@ -35,8 +35,8 @@ OAuth 2.0 with private key JWT is the recommended authentication method. It prov
 
 1. Go to the **Okta API Scopes** tab
 The scopes you need depend on the collection [level](levels.md). A scope you
-don't grant isn't fatal: the surfaces that need it are skipped with a
-`diagnostics.warnings` entry rather than failing the run.
+don't grant isn't fatal: the values that need it are left out, with a gap in the
+collector result and a `diagnostics.warnings` entry, rather than failing the run.
 
 2. Click **Grant** next to each scope you need:
 
@@ -65,9 +65,10 @@ OAuth scopes alone aren't enough - the service app needs an admin role to access
 
 **Privileged-access note:** listing *who holds admin roles* is gated behind a
 Super Administrator-level role; Read-Only Administrator cannot. With Read-Only
-Admin, the `privileged_access` surface is skipped with a diagnostic. Grant the
-app **Super Administrator** if you need privileged-user counts; otherwise
-Read-Only Admin is sufficient for every other surface.
+Admin, the `privileged_access` counts are left out with a `permission_denied`
+gap and a diagnostic. Grant the app **Super Administrator** if you need
+privileged-user counts; otherwise Read-Only Admin is sufficient for every other
+surface.
 
 #### Step 5: Configure epack
 
@@ -148,7 +149,8 @@ Ensure either:
 
 ### "Token exchange failed" or "invalid_client - JWT kid is invalid" error
 
-For OAuth 2.0:
+The collector signs in before reading anything, so a rejected credential fails
+the run with exit code 3 and the code `auth_failed`. For OAuth 2.0:
 - Verify the `client_id` is correct
 - Verify the `key_id` matches the Key ID shown in Okta (General → Client Credentials → Public Keys)
 - Ensure the private key matches the public key configured in Okta (they're a matched pair)
@@ -160,23 +162,29 @@ data" below.)
 
 ### "Rate limited" errors
 
-The collector handles rate limits automatically with exponential backoff. If you see persistent rate limit errors:
+When Okta throttles a read, the collector waits until the rate limit resets, as
+the `X-Rate-Limit-Reset` header says, for at most a minute, and tries again.
+Other failing reads are retried with exponential backoff. A read still throttled
+after its retries is left out with a `rate_limited` gap. If you see persistent
+rate limit gaps:
 - Reduce collection frequency
 - Contact Okta support to increase rate limits
 
-### Missing data / a surface is zeroed
+### Missing data
 
-When a surface can't be collected, the run still succeeds and records why under
+When a surface can't be collected, the run still succeeds. Its values are left
+out (`null` or absent, never zero), and the reason is recorded twice: as a gap
+with a code in `artifacts/okta.collector-result.json`, and under
 `diagnostics.warnings` in the output. Common causes:
 
 - **Missing scope.** Each surface needs its scope granted for the level you're
   running (see [Step 3](#step-3-grant-api-scopes) and [levels.md](levels.md)).
-- **`privileged_access` is zero.** Listing admin-role assignments needs a Super
-  Administrator-level role; Read-Only Admin can't (see the privileged-access note
-  in [Step 4](#step-4-assign-admin-role)).
-- **`device_access` is empty.** Needs `okta.deviceAssurance.read` and the Device
-  Assurance feature.
+- **`privileged_access` counts are null.** Listing admin-role assignments needs a
+  Super Administrator-level role; Read-Only Admin can't (see the privileged-access
+  note in [Step 4](#step-4-assign-admin-role)).
+- **Device assurance values are null.** Needs `okta.deviceAssurance.read` and the
+  Device Assurance feature.
 - **A feature isn't licensed.** Custom admin roles need Okta Identity Governance;
-  the custom-role inventory is skipped otherwise.
+  the custom-role inventory is left out with a `not_licensed` gap otherwise.
 - **API token auth.** Access is governed by the token owner's admin role rather
   than scopes; ensure that role covers the surfaces you need.
