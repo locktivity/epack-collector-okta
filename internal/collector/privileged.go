@@ -294,7 +294,6 @@ type PrivilegedUser struct {
 	// Internal-level fields.
 	RoleAssignmentSource string `json:"role_assignment_source,omitempty"` // direct / group / mixed
 	LastLoginAt          string `json:"last_login_at,omitempty"`
-	LastAdminActionAt    string `json:"last_admin_action_at,omitempty"` // From system log, if that surface ran
 }
 
 // CustomRole is a custom administrator role (audit+, Identity Governance feature).
