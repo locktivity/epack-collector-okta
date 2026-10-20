@@ -67,22 +67,6 @@ func (c *Client) ListSystemLog(ctx context.Context, filter string, since time.Ti
 	return events, nil
 }
 
-// FetchOrgPreferences fetches org-level preferences. A response without
-// selfServiceUnlock is an error rather than a false.
-func (c *Client) FetchOrgPreferences(ctx context.Context) (*OrgPreferences, error) {
-	const op = "okta.org.preferences.get"
-	var prefs struct {
-		SelfServiceUnlock *bool `json:"selfServiceUnlock"`
-	}
-	if _, err := c.get(ctx, op, "/api/v1/org/preferences", &prefs); err != nil {
-		return nil, err
-	}
-	if prefs.SelfServiceUnlock == nil {
-		return nil, invalidResponse(op, "has no selfServiceUnlock")
-	}
-	return &OrgPreferences{SelfServiceUnlock: *prefs.SelfServiceUnlock}, nil
-}
-
 // FetchOrgContactUsers fetches the user IDs of the org's billing and technical
 // contacts. Okta answers each contact type with the contact's user ID.
 func (c *Client) FetchOrgContactUsers(ctx context.Context) ([]OrgContact, error) {

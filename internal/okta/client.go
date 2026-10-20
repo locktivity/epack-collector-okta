@@ -58,7 +58,6 @@ type OktaClient interface {
 
 	// Org settings
 	FetchOrgSettings(ctx context.Context) (*OrgSettings, error)
-	FetchOrgPreferences(ctx context.Context) (*OrgPreferences, error)
 	FetchOrgContactUsers(ctx context.Context) ([]OrgContact, error)
 }
 

@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 
+	"github.com/locktivity/epack-collector-okta/internal/okta"
 	"github.com/locktivity/epack/componentsdk"
 )
 
@@ -21,7 +22,8 @@ type OrgSettings struct {
 	Subdomain string `json:"subdomain,omitempty"`
 	Status    string `json:"status,omitempty"`
 
-	// Audit-level field.
+	// Audit-level field: true when an active password policy rule lets users
+	// reset their password or unlock their account themselves.
 	SelfServiceRecoveryEnabled *bool `json:"self_service_recovery_enabled,omitempty"`
 
 	// Internal-level field.
@@ -43,11 +45,11 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 
 	out := &OrgSettings{Subdomain: org.Subdomain, Status: org.Status}
 
-	if prefs, err := c.client.FetchOrgPreferences(ctx); err != nil {
-		c.warn("org preferences: %s", err)
+	if policies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypePassword); err != nil {
+		c.warnSurface("password policies", "okta.policies.read", err)
 		c.gaps.notCollected(err, "/org_settings/self_service_recovery_enabled")
 	} else {
-		recovery := prefs.SelfServiceUnlock
+		recovery := allowsSelfServiceRecovery(policies)
 		out.SelfServiceRecoveryEnabled = &recovery
 	}
 
@@ -76,4 +78,22 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 	out.NotificationContactLogins = logins
 
 	return out
+}
+
+func allowsSelfServiceRecovery(policies []scopedPolicy) bool {
+	for _, sp := range policies {
+		for _, rule := range sp.rules {
+			if rule.Status != StatusActive {
+				continue
+			}
+			if allows(rule.Actions.SelfServicePasswordReset) || allows(rule.Actions.SelfServiceUnlock) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func allows(action *okta.RuleAccess) bool {
+	return action != nil && action.Access == AccessAllow
 }

@@ -100,7 +100,7 @@ scopes for your level **before** running to collect every surface.
 | `okta.users.read` | trust+ | Users, posture, privileged access, policy coverage |
 | `okta.groups.read` | trust+ | Group resolution, groups surface |
 | `okta.apps.read` | trust+ | Apps |
-| `okta.policies.read` | trust+ | Policy |
+| `okta.policies.read` | trust+ | Policy; org settings' `self_service_recovery_enabled` (audit+) |
 | `okta.roles.read` | trust+ | Privileged access (role assignments, custom roles); listing role assignments needs a Super Administrator-level role |
 | `okta.deviceAssurance.read` | trust+ | Device access (requires the Device Assurance feature) |
 | `okta.authenticators.read` | audit+ | Per-factor-type counts; per-user factor list (internal) |

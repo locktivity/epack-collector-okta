@@ -38,7 +38,7 @@ The active level appears in the output artifact as the top-level
 `collected_at_level` field.
 
 `audit` and `internal` require additional OAuth scopes beyond `trust`. See
-[Required OAuth scopes](../README.md#required-oauth-scopes). When a scope is
+[Grant API scopes](configuration.md#step-3-grant-api-scopes). When a scope is
 missing or a feature is not licensed, the affected values are left out rather
 than failing the run: the collector result records a gap for each, and
 `diagnostics.warnings` says what to grant.
@@ -64,7 +64,7 @@ than failing the run: the collector result records a gap for each, and
 ### Privileged access (`privileged_access`)
 
 - **trust**: privileged-user / super-admin / standing-privileged counts, privileged MFA + phishing-resistant coverage.
-- **audit**: `inventory[]` per-privileged-user (login + assigned role names), `custom_roles[]` (custom admin roles; Okta Identity Governance feature, absent when not licensed).
+- **audit**: `inventory[]` per-privileged-user (login + assigned role names), `custom_roles[]` (custom admin roles; Okta Identity Governance feature, absent when not licensed; Okta's built-in Workflows Administrator role is left out).
 - **internal**: each privileged-user row gains role-assignment source (direct / group / mixed) and last-login.
 
 ### Policy (`policy`)
@@ -123,7 +123,7 @@ Reading API tokens requires a SUPER_ADMIN-level scope; on denial the surface is 
 ### Org settings (`org_settings`)
 
 - **trust**: omitted.
-- **audit**: subdomain, status, self-service-account-recovery flag.
+- **audit**: subdomain, status, and `self_service_recovery_enabled`, which is true when an active password policy rule allows self-service password reset or account unlock.
 - **internal**: system-notification contact logins.
 
 ## Artifact contract: what a missing value means

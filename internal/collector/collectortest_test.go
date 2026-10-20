@@ -35,7 +35,6 @@ var kitSurfaceOperations = []string{
 	"okta.inline_hooks.list",
 	"okta.logs.list",
 	"okta.org.get",
-	"okta.org.preferences.get",
 	"okta.org.contacts.get",
 }
 

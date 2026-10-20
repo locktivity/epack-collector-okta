@@ -37,9 +37,11 @@ func richClientAt(now time.Time) *mockOktaClient {
 		},
 		policies: map[string][]okta.Policy{
 			"OKTA_SIGN_ON": {{ID: "p1", Name: "Default", Type: "OKTA_SIGN_ON", Status: "ACTIVE", Priority: 1}},
+			"PASSWORD":     {{ID: "pw1", Name: "Default", Type: "PASSWORD", Status: "ACTIVE", Priority: 1}},
 		},
 		policyRules: map[string][]okta.PolicyRule{
-			"p1": {{ID: "r1", Name: "MFA", Status: "ACTIVE", Actions: okta.PolicyRuleActions{Signon: &okta.SignonActions{RequireFactor: true}}}},
+			"p1":  {{ID: "r1", Name: "MFA", Status: "ACTIVE", Actions: okta.PolicyRuleActions{Signon: &okta.SignonActions{RequireFactor: true}}}},
+			"pw1": {{ID: "r2", Name: "Default Rule", Status: "ACTIVE", Actions: okta.PolicyRuleActions{SelfServicePasswordReset: &okta.RuleAccess{Access: "ALLOW"}}}},
 		},
 		authenticators:          []okta.Authenticator{{Key: "webauthn", Status: "ACTIVE"}},
 		deviceAssurancePolicies: []okta.DeviceAssurancePolicy{{ID: "d1", Name: "iOS", Platform: "IOS"}},
@@ -83,9 +85,8 @@ func richClientAt(now time.Time) *mockOktaClient {
 				Type        string `json:"type"`
 			}{AlternateID: "alice@acme.com", Type: "User"}},
 		},
-		orgSettings:    &okta.OrgSettings{Subdomain: "acme", Status: "ACTIVE"},
-		orgPreferences: &okta.OrgPreferences{SelfServiceUnlock: true},
-		orgContacts:    []okta.OrgContact{{Type: "TECHNICAL", UserID: "u1"}},
+		orgSettings: &okta.OrgSettings{Subdomain: "acme", Status: "ACTIVE"},
+		orgContacts: []okta.OrgContact{{Type: "TECHNICAL", UserID: "u1"}},
 	}
 }
 
