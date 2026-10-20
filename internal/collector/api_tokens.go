@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/locktivity/epack-collector-okta/internal/okta"
 	"github.com/locktivity/epack/componentsdk"
 )
 
@@ -46,15 +45,9 @@ func (c *Collector) collectAPITokens(ctx context.Context, level componentsdk.Lev
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
-	c.status("Collecting API tokens...")
-
 	tokens, err := c.client.ListAPITokens(ctx)
 	if err != nil {
-		if okta.StatusCodeOf(err) == 403 {
-			c.warn("api tokens: access denied (requires SUPER_ADMIN-level scope okta.apiTokens.read)")
-		} else {
-			c.warn("api tokens: %s", err)
-		}
+		err = c.warnSurfaceRole("api tokens", "okta.apiTokens.read", "the SUPER_ADMIN role", err)
 		c.gaps.notCollected(err, "/api_tokens")
 		return nil
 	}

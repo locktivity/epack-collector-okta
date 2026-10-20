@@ -28,8 +28,7 @@ func (c *Collector) collectAppMetrics(ctx context.Context, level componentsdk.Le
 		return nil
 	})
 	if err != nil {
-		c.warnSurface("applications", "okta.apps.read", err)
-		return &appMetricsCollector{err: err}
+		return &appMetricsCollector{err: c.warnSurface("applications", "okta.apps.read", err)}
 	}
 
 	metrics := &appMetricsCollector{}
@@ -59,7 +58,8 @@ func (c *Collector) collectAppMetrics(ctx context.Context, level componentsdk.Le
 func (c *Collector) fillApps(p *OrgPosture, m *appMetricsCollector, level componentsdk.Level) {
 	audit := level.AtLeast(componentsdk.LevelAudit)
 	if m.err != nil {
-		c.gaps.notCollected(m.err, "/apps/total_count", "/apps/provisioning_enabled", "/apps/deprovisioning_enabled", "/posture/sso_coverage")
+		c.gaps.notCollected(m.err, "/apps/total_count", "/apps/sso_count", "/apps/provisioning_enabled", "/apps/provisioning_enabled_count",
+			"/apps/deprovisioning_enabled", "/apps/deprovisioning_enabled_count", "/posture/sso_coverage")
 		if audit {
 			c.gaps.notCollected(m.err, "/apps/inventory")
 		}
@@ -67,8 +67,11 @@ func (c *Collector) fillApps(p *OrgPosture, m *appMetricsCollector, level compon
 	}
 	p.Apps.TotalCount = intPtr(m.totalApps)
 	p.Apps.ProvisioningEnabled = percent(m.provisioningEnabled, m.totalApps)
+	p.Apps.ProvisioningEnabledCount = intPtr(m.provisioningEnabled)
 	p.Apps.DeprovisioningEnabled = percent(m.deprovisioningEnabled, m.totalApps)
+	p.Apps.DeprovisioningEnabledCount = intPtr(m.deprovisioningEnabled)
 	p.Posture.SSOCoverage = percent(m.ssoApps, m.totalApps)
+	p.Apps.SSOCount = intPtr(m.ssoApps)
 	if audit {
 		p.Apps.Inventory = m.inventory
 		p.Apps.InventoryTruncated = m.inventoryTruncated
@@ -148,9 +151,12 @@ func checkProvisioningFeatures(features []string) (provisioning, deprovisioning 
 //
 // Audit adds the per-app inventory.
 type AppMetrics struct {
-	TotalCount            *int `json:"total_count"`            // Apps; the population of the app percentages
-	ProvisioningEnabled   *int `json:"provisioning_enabled"`   // % apps with auto-provisioning
-	DeprovisioningEnabled *int `json:"deprovisioning_enabled"` // % apps with auto-deprovisioning
+	TotalCount                 *int `json:"total_count"`                  // Apps; the population of the app percentages
+	SSOCount                   *int `json:"sso_count"`                    // Apps using SSO (SAML/OIDC/WS-Fed)
+	ProvisioningEnabled        *int `json:"provisioning_enabled"`         // % apps with auto-provisioning
+	ProvisioningEnabledCount   *int `json:"provisioning_enabled_count"`   // Apps with auto-provisioning
+	DeprovisioningEnabled      *int `json:"deprovisioning_enabled"`       // % apps with auto-deprovisioning
+	DeprovisioningEnabledCount *int `json:"deprovisioning_enabled_count"` // Apps with auto-deprovisioning
 
 	// Audit-level field.
 	Inventory          []App `json:"inventory,omitempty"`

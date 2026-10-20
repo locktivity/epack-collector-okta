@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/locktivity/epack-collector-okta/internal/okta"
@@ -54,14 +55,12 @@ func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level)
 		return nil
 	}
 
-	c.status("Collecting groups...")
-
 	var groups []okta.Group
 	if err := c.client.ListGroups(ctx, func(batch []okta.Group) error {
 		groups = append(groups, batch...)
 		return nil
 	}); err != nil {
-		c.warnSurface("groups", "okta.groups.read", err)
+		err = c.warnSurface("groups", "okta.groups.read", err)
 		c.gaps.notCollected(err, "/groups")
 		return nil
 	}
@@ -154,7 +153,7 @@ func (c *Collector) fillGroupMemberLoginsWithBudget(ctx context.Context, out *Gr
 			return nil
 		})
 		if err != nil {
-			c.warn("group %s: failed to fetch members: %v", row.ID, err)
+			err = c.warnSurface(fmt.Sprintf("group %s: failed to fetch members", row.ID), "okta.groups.read", err)
 			row.MemberCount = nil
 			row.countErr = err
 			row.membersErr = err

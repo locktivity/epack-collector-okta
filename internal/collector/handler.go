@@ -17,8 +17,9 @@ func Spec(version, commit string) componentsdk.CollectorSpec {
 		Description: "Collects Okta organization security posture metrics",
 		// Large orgs at internal take minutes; a runner's EPACK_DEADLINE
 		// shortens this.
-		Timeout: 30 * time.Minute,
-		Schemas: schema.Schemas(),
+		Timeout:  30 * time.Minute,
+		Schemas:  schema.Schemas(),
+		TraceMap: schema.TraceMap,
 	}
 }
 
@@ -43,6 +44,7 @@ func Run(ctx componentsdk.CollectorContext) error {
 	}
 	config.HTTPClient = componentsdk.NewHTTPClient(ctx, componentsdk.HTTPOptions{
 		CredentialHosts: []string{okta.Host(config.OrgDomain)},
+		VendorCode:      okta.VendorCode,
 	})
 
 	// The level selects both the OAuth scope set requested at token exchange

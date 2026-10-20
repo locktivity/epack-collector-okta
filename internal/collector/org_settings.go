@@ -34,11 +34,9 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
-	c.status("Collecting org settings...")
-
 	org, err := c.client.FetchOrgSettings(ctx)
 	if err != nil {
-		c.warnSurface("org settings", "okta.orgs.read", err)
+		err = c.warnSurface("org settings", "okta.orgs.read", err)
 		c.gaps.notCollected(err, "/org_settings")
 		return nil
 	}
@@ -46,7 +44,7 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 	out := &OrgSettings{Subdomain: org.Subdomain, Status: org.Status}
 
 	if policies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypePassword); err != nil {
-		c.warnSurface("password policies", "okta.policies.read", err)
+		err = c.warnSurface("password policies", "okta.policies.read", err)
 		c.gaps.notCollected(err, "/org_settings/self_service_recovery_enabled")
 	} else {
 		recovery := allowsSelfServiceRecovery(policies)
@@ -59,7 +57,7 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 
 	contacts, err := c.client.FetchOrgContactUsers(ctx)
 	if err != nil {
-		c.warn("org contacts: %s", err)
+		err = c.warnSurface("org contacts", "okta.orgs.read", err)
 		c.gaps.notCollected(err, "/org_settings/notification_contact_logins")
 		return out
 	}

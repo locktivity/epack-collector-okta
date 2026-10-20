@@ -36,8 +36,7 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 	c.status("Checking sign-on policies...")
 	signOnPolicies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypeSignOn)
 	if err != nil {
-		c.warnSurface("sign-on policies", "okta.policies.read", err)
-		metrics.signOnErr = err
+		metrics.signOnErr = c.warnSurface("sign-on policies", "okta.policies.read", err)
 	}
 	metrics.policyCount = len(signOnPolicies)
 	metrics.signOnPolicies = signOnPolicies
@@ -46,8 +45,7 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 	c.status("Checking MFA enrollment policies...")
 	mfaEnrollPolicies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypeMFAEnroll)
 	if err != nil {
-		c.warnSurface("MFA-enrollment policies", "okta.policies.read", err)
-		metrics.enrollErr = err
+		metrics.enrollErr = c.warnSurface("MFA-enrollment policies", "okta.policies.read", err)
 	}
 
 	allPolicies := make([]scopedPolicy, 0, len(signOnPolicies)+len(mfaEnrollPolicies))
@@ -69,8 +67,7 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 	c.status("Resolving policy group memberships...")
 	groupMembers, err := c.fetchGroupMembersForPolicies(ctx, allPolicies)
 	if err != nil {
-		c.warnSurface("policy group memberships", "okta.groups.read", err)
-		metrics.groupsErr = err
+		metrics.groupsErr = c.warnSurface("policy group memberships", "okta.groups.read", err)
 	}
 	metrics.groupMembers = groupMembers
 
@@ -109,10 +106,11 @@ func (c *Collector) fillPolicy(p *OrgPosture, users *userMetricsCollector, m *po
 	}
 
 	if err := firstError(users.err, m.signOnErr, m.enrollErr, m.groupsErr); err != nil {
-		c.gaps.notCollected(err, "/policy/mfa_required_all", "/policy/mfa_required_any", "/policy/mfa_required_coverage_pct")
+		c.gaps.notCollected(err, "/policy/mfa_required_all", "/policy/mfa_required_any", "/policy/mfa_required_coverage_pct", "/policy/mfa_required_users_count")
 	} else {
 		total := users.totalUsers
 		p.Policy.MFARequiredCoveragePct = percent(m.mfaRequiredUsers, total)
+		p.Policy.MFARequiredUsersCount = intPtr(m.mfaRequiredUsers)
 		p.Policy.MFARequiredAny = boolPtr(m.mfaRequiredUsers > 0)
 		if total > 0 {
 			p.Policy.MFARequiredAll = boolPtr(m.mfaRequiredUsers == total)
@@ -316,6 +314,7 @@ type PolicyConfig struct {
 	MFARequiredAll            *bool `json:"mfa_required_all"`             // MFA is required for all non-deprovisioned users
 	MFARequiredAny            *bool `json:"mfa_required_any"`             // MFA is required for at least one non-deprovisioned user
 	MFARequiredCoveragePct    *int  `json:"mfa_required_coverage_pct"`    // % of non-deprovisioned users covered by an MFA requirement
+	MFARequiredUsersCount     *int  `json:"mfa_required_users_count"`     // Non-deprovisioned users covered by an MFA requirement
 	SessionLifetimeMinMinutes *int  `json:"session_lifetime_min_minutes"` // Shortest session lifetime across active sign-on rules
 	SessionLifetimeMaxMinutes *int  `json:"session_lifetime_max_minutes"` // Longest session lifetime across active sign-on rules
 	IdleTimeoutMinMinutes     *int  `json:"idle_timeout_min_minutes"`     // Shortest idle timeout across active sign-on rules

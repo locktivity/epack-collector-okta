@@ -67,8 +67,7 @@ func (c *Collector) collectUserMetrics(ctx context.Context, level componentsdk.L
 		return nil
 	})
 	if err != nil {
-		c.warnSurface("users", "okta.users.read", err)
-		metrics.err = err
+		metrics.err = c.warnSurface("users", "okta.users.read", err)
 		return metrics
 	}
 	metrics.users = users
@@ -108,8 +107,9 @@ func (c *Collector) fillUsers(p *OrgPosture, m *userMetricsCollector, level comp
 	audit := level.AtLeast(componentsdk.LevelAudit)
 	if m.err != nil {
 		c.gaps.notCollected(m.err,
-			"/users/total_count", "/users/password_expired", "/users/locked_out", "/users/inactive", "/users/suspended",
-			"/posture/mfa_coverage", "/posture/mfa_phishing_resistant")
+			"/users/total_count", "/users/password_expired", "/users/password_expired_count", "/users/locked_out", "/users/locked_out_count",
+			"/users/inactive", "/users/inactive_count", "/users/suspended", "/users/suspended_count",
+			"/posture/mfa_coverage", "/posture/mfa_enrolled_users_count", "/posture/mfa_phishing_resistant", "/posture/mfa_phishing_resistant_users_count")
 		if audit {
 			c.gaps.notCollected(m.err, "/users/inventory", "/posture/mfa_disabled_users_count")
 		}
@@ -119,18 +119,25 @@ func (c *Collector) fillUsers(p *OrgPosture, m *userMetricsCollector, level comp
 	total := m.totalUsers
 	p.Users.TotalCount = intPtr(total)
 	p.Users.PasswordExpired = percent(m.passwordExpired, total)
+	p.Users.PasswordExpiredCount = intPtr(m.passwordExpired)
 	p.Users.LockedOut = percent(m.lockedOut, total)
+	p.Users.LockedOutCount = intPtr(m.lockedOut)
 	p.Users.Inactive = percent(m.inactive, total)
+	p.Users.InactiveCount = intPtr(m.inactive)
 	p.Users.Suspended = percent(m.suspended, total)
+	p.Users.SuspendedCount = intPtr(m.suspended)
 
 	if failed := m.factorFailures(); failed > 0 {
-		c.gaps.partial(failed, m.firstFactorErr, "/posture/mfa_coverage", "/posture/mfa_phishing_resistant")
+		c.gaps.partial(failed, m.firstFactorErr,
+			"/posture/mfa_coverage", "/posture/mfa_enrolled_users_count", "/posture/mfa_phishing_resistant", "/posture/mfa_phishing_resistant_users_count")
 		if audit {
 			c.gaps.partial(failed, m.firstFactorErr, "/posture/mfa_disabled_users_count")
 		}
 	} else {
 		p.Posture.MFACoverage = percent(m.mfaEnrolledCount, total)
+		p.Posture.MFAEnrolledUsersCount = intPtr(m.mfaEnrolledCount)
 		p.Posture.MFAPhishingResistant = percent(m.mfaPhishingResistant, total)
+		p.Posture.MFAPhishingResistantUsersCount = intPtr(m.mfaPhishingResistant)
 		if audit {
 			p.Posture.MFADisabledUsersCount = intPtr(total - m.mfaEnrolledCount)
 		}
@@ -144,7 +151,8 @@ func (c *Collector) fillUsers(p *OrgPosture, m *userMetricsCollector, level comp
 	p.Users.InventoryDropped = m.inventoryDropped
 	for i, row := range m.inventory {
 		if row.factorsErr != nil {
-			c.gaps.notCollected(row.factorsErr, rowPointer("/users/inventory", i, "factors"))
+			c.gaps.notCollected(row.factorsErr, rowPointer("/users/inventory", i, "factors"),
+				rowPointer("/users/inventory", i, "has_active_mfa"), rowPointer("/users/inventory", i, "has_phishing_resistant_mfa"))
 		}
 		if row.groupsErr != nil {
 			c.gaps.notCollected(row.groupsErr, rowPointer("/users/inventory", i, "group_ids"))
@@ -179,6 +187,10 @@ func (c *Collector) processUser(ctx context.Context, user okta.User, inactiveThr
 		row := userInventoryRow(user)
 		if level.AtLeast(componentsdk.LevelInternal) {
 			c.enrichUserRowInternal(ctx, &row, user, factors, factorsErr)
+			if factorsErr == nil {
+				row.HasActiveMFA = boolPtr(metrics.hasMFAByUser[user.ID])
+				row.HasPhishingResistantMFA = boolPtr(metrics.hasPhishingByUser[user.ID])
+			}
 		}
 		metrics.inventory = append(metrics.inventory, row)
 	}
@@ -204,8 +216,7 @@ func (c *Collector) enrichUserRowInternal(ctx context.Context, row *User, user o
 
 	groupIDs, err := c.client.FetchUserGroupIDs(ctx, user.ID)
 	if err != nil {
-		c.warn("user %s: failed to fetch group memberships: %v", user.ID, err)
-		row.groupsErr = err
+		row.groupsErr = c.warnSurface(fmt.Sprintf("user %s: failed to fetch group memberships", user.ID), "okta.users.read", err)
 		return
 	}
 	row.GroupIDs = groupIDs
@@ -243,7 +254,7 @@ func classifyUserType(user okta.User) string {
 func (c *Collector) processUserFactors(ctx context.Context, userID string, metrics *userMetricsCollector, level componentsdk.Level) ([]UserFactor, error) {
 	factors, err := c.client.FetchUserFactors(ctx, userID)
 	if err != nil {
-		c.warn("user %s: failed to fetch MFA factors: %v", userID, err)
+		err = c.warnSurface(fmt.Sprintf("user %s: failed to fetch MFA factors", userID), "okta.users.read", err)
 		metrics.factorErrs[userID] = err
 		if metrics.firstFactorErr == nil {
 			metrics.firstFactorErr = err
@@ -332,7 +343,7 @@ func (c *Collector) collectAuthenticatorMetrics(ctx context.Context, userMetrics
 
 	authenticators, err := c.client.ListAuthenticators(ctx)
 	if err != nil {
-		c.warnSurface("authenticators", "okta.authenticators.read", err)
+		err = c.warnSurface("authenticators", "okta.authenticators.read", err)
 		c.gaps.notCollected(err, "/posture/per_factor_type")
 		return nil
 	}
@@ -371,11 +382,15 @@ func (c *Collector) collectAuthenticatorMetrics(ctx context.Context, userMetrics
 // Audit adds the per-user inventory (login + status + type + created-at). Internal
 // adds per-user activity timestamps, factor lists, and group membership.
 type UserMetrics struct {
-	TotalCount      *int `json:"total_count"`      // Users other than deprovisioned ones; the population of the user percentages
-	PasswordExpired *int `json:"password_expired"` // % users with expired passwords
-	LockedOut       *int `json:"locked_out"`       // % users currently locked out
-	Inactive        *int `json:"inactive"`         // % users inactive for 90+ days
-	Suspended       *int `json:"suspended"`        // % users currently suspended
+	TotalCount           *int `json:"total_count"`            // Users other than deprovisioned ones; the population of the user percentages
+	PasswordExpired      *int `json:"password_expired"`       // % users with expired passwords
+	PasswordExpiredCount *int `json:"password_expired_count"` // Users with expired passwords
+	LockedOut            *int `json:"locked_out"`             // % users currently locked out
+	LockedOutCount       *int `json:"locked_out_count"`       // Users currently locked out
+	Inactive             *int `json:"inactive"`               // % users inactive for 90+ days
+	InactiveCount        *int `json:"inactive_count"`         // Users inactive for 90+ days
+	Suspended            *int `json:"suspended"`              // % users currently suspended
+	SuspendedCount       *int `json:"suspended_count"`        // Users currently suspended
 
 	// Audit-level field.
 	Inventory          []User `json:"inventory,omitempty"`
@@ -394,13 +409,16 @@ type User struct {
 	UserType  string `json:"user_type"` // Coarse "Human" / "Service" classification
 	CreatedAt string `json:"created_at,omitempty"`
 
-	// Internal-level fields.
-	LastLoginAt       string       `json:"last_login_at,omitempty"`
-	LastUpdatedAt     string       `json:"last_updated_at,omitempty"`
-	StatusChangedAt   string       `json:"status_changed_at,omitempty"`
-	PasswordChangedAt string       `json:"password_changed_at,omitempty"`
-	Factors           []UserFactor `json:"factors,omitempty"`
-	GroupIDs          []string     `json:"group_ids,omitempty"`
+	// Internal-level fields. The MFA flags restate the factor list, and are
+	// left out with it when the user's factors could not be read.
+	LastLoginAt             string       `json:"last_login_at,omitempty"`
+	LastUpdatedAt           string       `json:"last_updated_at,omitempty"`
+	StatusChangedAt         string       `json:"status_changed_at,omitempty"`
+	PasswordChangedAt       string       `json:"password_changed_at,omitempty"`
+	HasActiveMFA            *bool        `json:"has_active_mfa,omitempty"`
+	HasPhishingResistantMFA *bool        `json:"has_phishing_resistant_mfa,omitempty"`
+	Factors                 []UserFactor `json:"factors,omitempty"`
+	GroupIDs                []string     `json:"group_ids,omitempty"`
 
 	factorsErr error
 	groupsErr  error

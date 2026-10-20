@@ -50,15 +50,15 @@ func (c *Client) ListSystemLog(ctx context.Context, filter string, since time.Ti
 	events := []LogEvent{}
 	for path != "" && len(events) < max {
 		var page *[]LogEvent
-		header, err := c.get(ctx, op, path, &page)
+		resp, err := c.get(ctx, op, path, &page)
 		if err != nil {
 			return nil, err
 		}
 		if page == nil {
-			return nil, invalidResponse(op, "has no list")
+			return nil, invalidResponse(resp, op, "has no list")
 		}
 		events = append(events, *page...)
-		path = getNextLink(header.Get("Link"))
+		path = getNextLink(resp.Header.Get("Link"))
 	}
 
 	if len(events) > max {
@@ -76,11 +76,12 @@ func (c *Client) FetchOrgContactUsers(ctx context.Context) ([]OrgContact, error)
 		var contact struct {
 			UserID string `json:"userId"`
 		}
-		if _, err := c.get(ctx, op, "/api/v1/org/contacts/"+contactType, &contact); err != nil {
+		resp, err := c.get(ctx, op, "/api/v1/org/contacts/"+contactType, &contact)
+		if err != nil {
 			return nil, err
 		}
 		if contact.UserID == "" {
-			return nil, invalidResponse(op, "has no userId")
+			return nil, invalidResponse(resp, op, "has no userId")
 		}
 		contacts = append(contacts, OrgContact{Type: contactType, UserID: contact.UserID})
 	}

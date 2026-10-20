@@ -65,8 +65,13 @@ type OktaClient interface {
 type Identity struct {
 	// Kind is "api_token" or "service_app".
 	Kind string
+	// AuthMethod is how the client proved its identity:
+	// componentsdk.AuthAPIToken or componentsdk.AuthPrivateKeyJWT.
+	AuthMethod string
 	// ID is the API token owner's user ID, or the service app's client ID.
 	ID string
+	// RequestedScopes lists the OAuth scopes the service app asked for.
+	RequestedScopes []string
 	// Scopes lists the OAuth scopes the access token carries.
 	Scopes []string
 }
@@ -138,19 +143,21 @@ func (c *Client) SignIn(ctx context.Context) (*Identity, error) {
 	var me struct {
 		ID string `json:"id"`
 	}
-	if _, err := c.get(ctx, op, "/api/v1/users/me", &me); err != nil {
+	resp, err := c.get(ctx, op, "/api/v1/users/me", &me)
+	if err != nil {
 		return nil, err
 	}
 	if me.ID == "" {
-		return nil, invalidResponse(op, "has no user id")
+		return nil, invalidResponse(resp, op, "has no user id")
 	}
-	return &Identity{Kind: "api_token", ID: me.ID}, nil
+	return &Identity{Kind: "api_token", AuthMethod: componentsdk.AuthAPIToken, ID: me.ID}, nil
 }
 
 // get sends one named GET and decodes a 200 response into dest. Any other
-// status returns an *APIStatusError. The SDK's transport retries the call
-// when that is safe.
-func (c *Client) get(ctx context.Context, op, path string, dest any) (http.Header, error) {
+// status returns an *APIStatusError. Each error built from the response
+// names the call it answered. The SDK's transport retries the call when that
+// is safe.
+func (c *Client) get(ctx context.Context, op, path string, dest any) (*http.Response, error) {
 	ctx = componentsdk.WithOperation(ctx, componentsdk.Operation{Name: op})
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
@@ -168,15 +175,15 @@ func (c *Client) get(ctx context.Context, op, path string, dest any) (http.Heade
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
-		return nil, fmt.Errorf("reading the response to %s: %w", op, err)
+		return nil, componentsdk.ResponseError(resp, fmt.Errorf("reading the response to %s: %w", op, err))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, newAPIStatusError(resp, path, body)
+		return nil, componentsdk.ResponseError(resp, newAPIStatusError(resp, path, body))
 	}
 	if err := json.Unmarshal(body, dest); err != nil {
-		return nil, fmt.Errorf("decoding the response to %s: %w", op, err)
+		return nil, componentsdk.ResponseError(resp, fmt.Errorf("decoding the response to %s: %w", op, err))
 	}
-	return resp.Header, nil
+	return resp, nil
 }
 
 // listPages reads every page of a list endpoint, following the Link header,
@@ -185,17 +192,17 @@ func (c *Client) get(ctx context.Context, op, path string, dest any) (http.Heade
 func listPages[T any](ctx context.Context, c *Client, op, path string, each func([]T) error) error {
 	for path != "" {
 		var page *[]T
-		header, err := c.get(ctx, op, path, &page)
+		resp, err := c.get(ctx, op, path, &page)
 		if err != nil {
 			return err
 		}
 		if page == nil {
-			return invalidResponse(op, "has no list")
+			return invalidResponse(resp, op, "has no list")
 		}
 		if err := each(*page); err != nil {
 			return err
 		}
-		path = getNextLink(header.Get("Link"))
+		path = getNextLink(resp.Header.Get("Link"))
 	}
 	return nil
 }
@@ -214,9 +221,9 @@ func listAll[T any](ctx context.Context, c *Client, op, path string) ([]T, error
 }
 
 // invalidResponse reports a 200 response that lacks what the collector
-// reads from it.
-func invalidResponse(op, problem string) error {
-	return componentsdk.CodeError(componentsdk.CodeInvalidResponse, fmt.Errorf("the response to %s %s", op, problem))
+// reads from it, as an error about the call resp answered.
+func invalidResponse(resp *http.Response, op, problem string) error {
+	return componentsdk.ResponseError(resp, componentsdk.CodeError(componentsdk.CodeInvalidResponse, fmt.Errorf("the response to %s %s", op, problem)))
 }
 
 // FetchUsers fetches all users with pagination.
@@ -243,11 +250,12 @@ func (c *Client) FetchUsersWithRoleAssignments(ctx context.Context, callback fun
 
 	for path != "" {
 		var page RoleAssignedUsersResponse
-		if _, err := c.get(ctx, op, path, &page); err != nil {
+		resp, err := c.get(ctx, op, path, &page)
+		if err != nil {
 			return err
 		}
 		if page.Value == nil {
-			return invalidResponse(op, "has no value list")
+			return invalidResponse(resp, op, "has no value list")
 		}
 		if err := callback(*page.Value); err != nil {
 			return err
@@ -293,6 +301,24 @@ func (c *Client) FetchPolicies(ctx context.Context, policyType string) ([]Policy
 // FetchPolicyRules fetches all rules for a policy.
 func (c *Client) FetchPolicyRules(ctx context.Context, policyID string) ([]PolicyRule, error) {
 	return listAll[PolicyRule](ctx, c, "okta.policies.rules.list", "/api/v1/policies/"+url.PathEscape(policyID)+"/rules")
+}
+
+// VendorCode reads Okta's code for a failed response, for
+// componentsdk.HTTPOptions.VendorCode: a management API error's errorCode,
+// such as E0000047 for a rate limit, or the OAuth error the token endpoint
+// answers with, such as invalid_client.
+func VendorCode(_ *http.Response, body []byte) string {
+	var payload struct {
+		ErrorCode string `json:"errorCode"`
+		Error     string `json:"error"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return ""
+	}
+	if payload.ErrorCode != "" {
+		return payload.ErrorCode
+	}
+	return payload.Error
 }
 
 // APIStatusError carries the HTTP status, headers, and Okta error code of a
@@ -374,11 +400,12 @@ func (c *Client) ListIAMRoles(ctx context.Context) ([]IAMRole, error) {
 
 	for path != "" {
 		var page IAMRolesResponse
-		if _, err := c.get(ctx, op, path, &page); err != nil {
+		resp, err := c.get(ctx, op, path, &page)
+		if err != nil {
 			return nil, err
 		}
 		if page.Roles == nil {
-			return nil, invalidResponse(op, "has no roles list")
+			return nil, invalidResponse(resp, op, "has no roles list")
 		}
 		roles = append(roles, *page.Roles...)
 
@@ -394,15 +421,16 @@ func (c *Client) ListIAMRoles(ctx context.Context) ([]IAMRole, error) {
 // ListRolePermissions fetches the permission labels granted to a custom role.
 func (c *Client) ListRolePermissions(ctx context.Context, roleID string) ([]string, error) {
 	const op = "okta.iam.roles.permissions.list"
-	var resp RolePermissionsResponse
-	if _, err := c.get(ctx, op, "/api/v1/iam/roles/"+url.PathEscape(roleID)+"/permissions", &resp); err != nil {
+	var page RolePermissionsResponse
+	resp, err := c.get(ctx, op, "/api/v1/iam/roles/"+url.PathEscape(roleID)+"/permissions", &page)
+	if err != nil {
 		return nil, err
 	}
-	if resp.Permissions == nil {
-		return nil, invalidResponse(op, "has no permissions list")
+	if page.Permissions == nil {
+		return nil, invalidResponse(resp, op, "has no permissions list")
 	}
-	permissions := make([]string, 0, len(*resp.Permissions))
-	for _, p := range *resp.Permissions {
+	permissions := make([]string, 0, len(*page.Permissions))
+	for _, p := range *page.Permissions {
 		permissions = append(permissions, p.Label)
 	}
 	return permissions, nil
@@ -417,11 +445,12 @@ func (c *Client) FetchDeviceAssurancePolicies(ctx context.Context) ([]DeviceAssu
 func (c *Client) FetchOrgSettings(ctx context.Context) (*OrgSettings, error) {
 	const op = "okta.org.get"
 	var settings OrgSettings
-	if _, err := c.get(ctx, op, "/api/v1/org", &settings); err != nil {
+	resp, err := c.get(ctx, op, "/api/v1/org", &settings)
+	if err != nil {
 		return nil, err
 	}
 	if settings.ID == "" {
-		return nil, invalidResponse(op, "has no org id")
+		return nil, invalidResponse(resp, op, "has no org id")
 	}
 	return &settings, nil
 }

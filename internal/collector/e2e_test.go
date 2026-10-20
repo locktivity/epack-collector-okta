@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -254,11 +253,4 @@ func TestE2E_OutputValidJSON(t *testing.T) {
 	}
 
 	t.Log("Output JSON structure validated")
-}
-
-func showBool(b *bool) string {
-	if b == nil {
-		return "null"
-	}
-	return strconv.FormatBool(*b)
 }

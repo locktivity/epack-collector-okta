@@ -126,10 +126,10 @@ func (c *Client) exchangeToken(ctx context.Context) (*Identity, error) {
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("reading the token response: %w", err)
+		return nil, componentsdk.ResponseError(resp, fmt.Errorf("reading the token response: %w", err))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, newTokenError(resp, body)
+		return nil, componentsdk.ResponseError(resp, newTokenError(resp, body))
 	}
 
 	var result struct {
@@ -137,14 +137,20 @@ func (c *Client) exchangeToken(ctx context.Context) (*Identity, error) {
 		Scope       string `json:"scope"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("decoding the token response: %w", err)
+		return nil, componentsdk.ResponseError(resp, fmt.Errorf("decoding the token response: %w", err))
 	}
 	if result.AccessToken == "" {
-		return nil, invalidResponse(op, "has no access_token")
+		return nil, invalidResponse(resp, op, "has no access_token")
 	}
 
 	c.accessToken = result.AccessToken
-	return &Identity{Kind: "service_app", ID: c.oauth.clientID, Scopes: strings.Fields(result.Scope)}, nil
+	return &Identity{
+		Kind:            "service_app",
+		AuthMethod:      componentsdk.AuthPrivateKeyJWT,
+		ID:              c.oauth.clientID,
+		RequestedScopes: append([]string(nil), c.oauth.scopes...),
+		Scopes:          strings.Fields(result.Scope),
+	}, nil
 }
 
 // TokenError is an error response from the org's token endpoint.

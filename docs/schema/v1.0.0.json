@@ -36,20 +36,41 @@
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "/users/total_count",
+          "x-epack-numerator": "mfa_enrolled_users_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_active_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "pct"},
           "description": "Percentage of users with any MFA factor enrolled"
+        },
+        "mfa_enrolled_users_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_active_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "count"},
+          "description": "People other than deprovisioned ones with at least one active factor"
         },
         "mfa_phishing_resistant": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "/users/total_count",
+          "x-epack-numerator": "mfa_phishing_resistant_users_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "pct"},
           "description": "Percentage of users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)"
+        },
+        "mfa_phishing_resistant_users_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "count"},
+          "description": "People with an active WebAuthn, U2F or FastPass factor"
         },
         "sso_coverage": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "/apps/total_count",
+          "x-epack-numerator": "/apps/sso_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "/apps/inventory", "where": "/sso_configured", "equals": true, "truncated": "/apps/inventory_truncated", "as": "pct"},
           "description": "Percentage of apps using SSO (SAML/OIDC/WS-Fed)"
         },
         "per_factor_type": {
@@ -87,6 +108,7 @@
         "total_count": {
           "type": ["integer", "null"],
           "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "truncated": "inventory_truncated", "as": "count"},
           "description": "Users other than deprovisioned ones: the population of every user percentage"
         },
         "password_expired": {
@@ -94,28 +116,62 @@
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "total_count",
+          "x-epack-numerator": "password_expired_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "PASSWORD_EXPIRED", "truncated": "inventory_truncated", "as": "pct"},
           "description": "Percentage of users with expired passwords"
+        },
+        "password_expired_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "PASSWORD_EXPIRED", "truncated": "inventory_truncated", "as": "count"},
+          "description": "People whose password has expired"
         },
         "locked_out": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "total_count",
+          "x-epack-numerator": "locked_out_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "LOCKED_OUT", "truncated": "inventory_truncated", "as": "pct"},
           "description": "Percentage of users currently locked out"
+        },
+        "locked_out_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "LOCKED_OUT", "truncated": "inventory_truncated", "as": "count"},
+          "description": "People who are locked out"
         },
         "inactive": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "total_count",
+          "x-epack-numerator": "inactive_count",
+          "x-epack-rounding": "floor",
           "description": "Percentage of users inactive for 90+ days"
+        },
+        "inactive_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "People who haven't signed in for 90 days, or ever"
         },
         "suspended": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "total_count",
+          "x-epack-numerator": "suspended_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "SUSPENDED", "truncated": "inventory_truncated", "as": "pct"},
           "description": "Percentage of users currently suspended"
+        },
+        "suspended_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "SUSPENDED", "truncated": "inventory_truncated", "as": "count"},
+          "description": "People who are suspended"
         },
         "inventory": {
           "type": "array",
@@ -162,6 +218,16 @@
                 "x-epack-level": "internal",
                 "description": "When the user's password last changed, in RFC 3339 UTC. Absent when Okta reports no password change."
               },
+              "has_active_mfa": {
+                "type": "boolean",
+                "x-epack-level": "internal",
+                "description": "True when the user has at least one factor with status ACTIVE. Absent, with a gap, when the user's factors could not be read."
+              },
+              "has_phishing_resistant_mfa": {
+                "type": "boolean",
+                "x-epack-level": "internal",
+                "description": "True when one of the user's active factors is WebAuthn, U2F, or FastPass. Absent, with a gap, when the user's factors could not be read."
+              },
               "factors": {
                 "type": "array",
                 "x-epack-level": "internal",
@@ -206,21 +272,44 @@
         "total_count": {
           "type": ["integer", "null"],
           "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "truncated": "inventory_truncated", "as": "count"},
           "description": "Apps: the population of every app percentage"
+        },
+        "sso_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "/apps/inventory", "where": "/sso_configured", "equals": true, "truncated": "/apps/inventory_truncated", "as": "count"},
+          "description": "Apps that sign people in with SAML, OIDC or WS-Federation"
         },
         "provisioning_enabled": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "total_count",
+          "x-epack-numerator": "provisioning_enabled_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "inventory", "where": "/provisioning_configured", "equals": true, "truncated": "inventory_truncated", "as": "pct"},
           "description": "Percentage of apps with automatic user provisioning"
+        },
+        "provisioning_enabled_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "where": "/provisioning_configured", "equals": true, "truncated": "inventory_truncated", "as": "count"},
+          "description": "Apps that provision people"
         },
         "deprovisioning_enabled": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "total_count",
+          "x-epack-numerator": "deprovisioning_enabled_count",
+          "x-epack-rounding": "floor",
           "description": "Percentage of apps with automatic user deprovisioning"
+        },
+        "deprovisioning_enabled_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Apps that deprovision people"
         },
         "inventory": {
           "type": "array",
@@ -306,14 +395,32 @@
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "privileged_users_count",
+          "x-epack-numerator": "privileged_mfa_enrolled_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "inventory", "where": "/has_active_mfa", "equals": true, "as": "pct"},
           "description": "Percentage of privileged users with any MFA factor enrolled"
+        },
+        "privileged_mfa_enrolled_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "where": "/has_active_mfa", "equals": true, "as": "count"},
+          "description": "Admins with at least one active factor"
         },
         "privileged_phishing_resistant_pct": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "privileged_users_count",
+          "x-epack-numerator": "privileged_phishing_resistant_count",
+          "x-epack-rounding": "floor",
+          "x-epack-rollup": {"rows": "inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "as": "pct"},
           "description": "Percentage of privileged users with phishing-resistant MFA"
+        },
+        "privileged_phishing_resistant_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "as": "count"},
+          "description": "Admins with an active WebAuthn, U2F or FastPass factor"
         },
         "inventory": {
           "type": "array",
@@ -342,6 +449,16 @@
                 "format": "date-time",
                 "x-epack-level": "internal",
                 "description": "When the user last signed in, in RFC 3339 UTC. Absent when the user has never signed in."
+              },
+              "has_active_mfa": {
+                "type": "boolean",
+                "x-epack-level": "internal",
+                "description": "True when the admin has at least one factor with status ACTIVE. Absent, with a gap, when the admin's factors could not be read."
+              },
+              "has_phishing_resistant_mfa": {
+                "type": "boolean",
+                "x-epack-level": "internal",
+                "description": "True when one of the admin's active factors is WebAuthn, U2F, or FastPass. Absent, with a gap, when the admin's factors could not be read."
               }
             }
           }
@@ -389,6 +506,7 @@
         "mfa_required_all": {
           "type": ["boolean", "null"],
           "x-epack-denominator": "/users/total_count",
+          "x-epack-numerator": "mfa_required_users_count",
           "description": "Whether MFA is required for all non-deprovisioned users after evaluating active policies and rules"
         },
         "mfa_required_any": {
@@ -400,7 +518,14 @@
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "/users/total_count",
+          "x-epack-numerator": "mfa_required_users_count",
+          "x-epack-rounding": "floor",
           "description": "Percentage of non-deprovisioned users covered by an MFA requirement"
+        },
+        "mfa_required_users_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "People covered by an MFA requirement"
         },
         "session_lifetime_min_minutes": {
           "type": ["integer", "null"],
@@ -558,12 +683,25 @@
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "/users/total_count",
+          "x-epack-numerator": "managed_device_required_users_count",
+          "x-epack-rounding": "floor",
           "description": "Percentage of users covered by a managed device requirement"
+        },
+        "managed_device_required_users_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "People covered by a managed device requirement"
         },
         "managed_device_required_for_admins": {
           "type": ["boolean", "null"],
           "x-epack-denominator": "/privileged_access/privileged_users_count",
+          "x-epack-numerator": "managed_device_required_admins_count",
           "description": "Whether all privileged users are covered by a managed device requirement"
+        },
+        "managed_device_required_admins_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Admins covered by a managed device requirement"
         },
         "device_assurance_policies_count": {
           "type": ["integer", "null"],

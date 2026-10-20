@@ -3,9 +3,11 @@ package collector
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/locktivity/epack-collector-okta/internal/okta"
 	"github.com/locktivity/epack/componentsdk"
 	"github.com/locktivity/epack/componentsdk/collectortest"
 )
@@ -42,14 +44,38 @@ func TestRunRecordsTheSignedInPrincipal(t *testing.T) {
 		{
 			name: "api token", config: kitTokenConfig(), secrets: map[string]string{"OKTA_API_TOKEN": kitAPIToken},
 			responses: kitResponses(kitTenant()),
-			want:      componentsdk.Principal{Provider: "okta", Kind: "api_token", TenantID: kitOrgDomain, ID: "u1"},
+			want:      componentsdk.Principal{Provider: "okta", Kind: "api_token", TenantID: kitOrgDomain, AuthMethod: componentsdk.AuthAPIToken, ID: "u1"},
 		},
 		{
 			name: "service app", config: kitOAuthConfig(), secrets: map[string]string{"OKTA_PRIVATE_KEY": kitPrivateKey()},
 			responses: kitOAuthResponses(kitTenant()),
-			want: componentsdk.Principal{Provider: "okta", Kind: "service_app", TenantID: kitOrgDomain, ID: kitClientID, Scopes: []string{
-				"okta.apps.read", "okta.deviceAssurance.read", "okta.groups.read", "okta.policies.read", "okta.roles.read", "okta.users.read",
-			}},
+			want: componentsdk.Principal{
+				Provider: "okta", Kind: "service_app", TenantID: kitOrgDomain, AuthMethod: componentsdk.AuthPrivateKeyJWT,
+				RequestedScopes: []string{
+					"okta.apiTokens.read", "okta.apps.read", "okta.authenticators.read", "okta.deviceAssurance.read",
+					"okta.eventHooks.read", "okta.groups.read", "okta.idps.read", "okta.inlineHooks.read", "okta.logs.read",
+					"okta.networkZones.read", "okta.orgs.read", "okta.policies.read", "okta.roles.read", "okta.users.read",
+				},
+				Scopes: []string{
+					"okta.apps.read", "okta.deviceAssurance.read", "okta.groups.read", "okta.policies.read", "okta.roles.read", "okta.users.read",
+				},
+				ReadOnly: true,
+				ID:       kitClientID,
+			},
+		},
+		{
+			name: "service app at trust", config: map[string]any{"org_domain": kitOrgDomain, "client_id": kitClientID, "key_id": kitKeyID, "level": "trust"},
+			secrets: map[string]string{"OKTA_PRIVATE_KEY": kitPrivateKey()}, responses: kitOAuthResponses(kitTenant()),
+			want: componentsdk.Principal{
+				Provider: "okta", Kind: "service_app", TenantID: kitOrgDomain, AuthMethod: componentsdk.AuthPrivateKeyJWT,
+				RequestedScopes: []string{
+					"okta.apps.read", "okta.deviceAssurance.read", "okta.groups.read", "okta.policies.read", "okta.roles.read", "okta.users.read",
+				},
+				Scopes: []string{
+					"okta.apps.read", "okta.deviceAssurance.read", "okta.groups.read", "okta.policies.read", "okta.roles.read", "okta.users.read",
+				},
+				ReadOnly: true,
+			},
 		},
 	}
 	for _, tc := range cases {
@@ -62,6 +88,46 @@ func TestRunRecordsTheSignedInPrincipal(t *testing.T) {
 				t.Errorf("signed_in_as = %+v, want %+v", res.Result.SignedInAs, tc.want)
 			}
 		})
+	}
+}
+
+func TestRunStepsByLevel(t *testing.T) {
+	var all []string
+	for _, s := range kitSteps {
+		all = append(all, s[0])
+	}
+	// The last eight steps read surfaces only audit and internal collect.
+	for level, want := range map[string][]string{"trust": all[:6], "audit": all, "internal": all} {
+		res := runInProcess(t, map[string]any{"org_domain": kitOrgDomain, "level": level}, map[string]string{"OKTA_API_TOKEN": kitAPIToken}, kitResponses(kitTenant()))
+		if res.ExitCode != 0 || res.Result == nil {
+			t.Fatalf("%s: run failed with exit %d: %s", level, res.ExitCode, res.Stderr)
+		}
+		var got []string
+		for _, s := range res.Result.Steps {
+			got = append(got, s.Name)
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("%s: steps = %v, want %v", level, got, want)
+		}
+	}
+}
+
+func TestReadOnlyNeedsAServiceAppGrantedOnlyTheReadScopesItAskedFor(t *testing.T) {
+	asked := []string{"okta.logs.read", "okta.users.read"}
+	cases := []struct {
+		name string
+		id   okta.Identity
+		want bool
+	}{
+		{"api token", okta.Identity{AuthMethod: componentsdk.AuthAPIToken}, false},
+		{"granted part of what it asked for", okta.Identity{AuthMethod: componentsdk.AuthPrivateKeyJWT, RequestedScopes: asked, Scopes: []string{"okta.users.read"}}, true},
+		{"granted a scope it did not ask for", okta.Identity{AuthMethod: componentsdk.AuthPrivateKeyJWT, RequestedScopes: asked, Scopes: []string{"okta.users.read", "okta.users.manage"}}, false},
+		{"asked for a write scope", okta.Identity{AuthMethod: componentsdk.AuthPrivateKeyJWT, RequestedScopes: []string{"okta.users.manage"}}, false},
+	}
+	for _, tc := range cases {
+		if got := readOnly(&tc.id); got != tc.want {
+			t.Errorf("%s: readOnly = %t, want %t", tc.name, got, tc.want)
+		}
 	}
 }
 

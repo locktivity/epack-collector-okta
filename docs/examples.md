@@ -61,33 +61,45 @@ epack collect
     "org_domain": "company.okta.com",
     "posture": {
       "mfa_coverage": 85,
+      "mfa_enrolled_users_count": 351,
       "mfa_phishing_resistant": 20,
-      "sso_coverage": 90
+      "mfa_phishing_resistant_users_count": 83,
+      "sso_coverage": 89
     },
     "users": {
       "total_count": 412,
       "password_expired": 2,
+      "password_expired_count": 9,
       "locked_out": 0,
+      "locked_out_count": 1,
       "inactive": 15,
-      "suspended": 3
+      "inactive_count": 62,
+      "suspended": 3,
+      "suspended_count": 13
     },
     "apps": {
       "total_count": 37,
+      "sso_count": 33,
       "provisioning_enabled": 40,
-      "deprovisioning_enabled": 30
+      "provisioning_enabled_count": 15,
+      "deprovisioning_enabled": 29,
+      "deprovisioning_enabled_count": 11
     },
     "privileged_access": {
       "privileged_users_count": 6,
       "super_admin_count": 2,
       "standing_privileged_users_count": 6,
       "privileged_mfa_coverage_pct": 100,
-      "privileged_phishing_resistant_pct": 50
+      "privileged_mfa_enrolled_count": 6,
+      "privileged_phishing_resistant_pct": 50,
+      "privileged_phishing_resistant_count": 3
     },
     "policy": {
       "policy_count": 2,
       "mfa_required_all": false,
       "mfa_required_any": true,
       "mfa_required_coverage_pct": 33,
+      "mfa_required_users_count": 136,
       "session_lifetime_min_minutes": 15,
       "session_lifetime_max_minutes": 1440,
       "idle_timeout_min_minutes": 5,

@@ -97,13 +97,13 @@ scopes for your level **before** running to collect every surface.
 
 | Scope | Levels | Surface |
 |---|---|---|
-| `okta.users.read` | trust+ | Users, posture, privileged access, policy coverage |
+| `okta.users.read` | trust+ | Users, their factors and groups, posture, privileged access, policy coverage |
 | `okta.groups.read` | trust+ | Group resolution, groups surface |
 | `okta.apps.read` | trust+ | Apps |
 | `okta.policies.read` | trust+ | Policy; org settings' `self_service_recovery_enabled` (audit+) |
 | `okta.roles.read` | trust+ | Privileged access (role assignments, custom roles); listing role assignments needs a Super Administrator-level role |
 | `okta.deviceAssurance.read` | trust+ | Device access (requires the Device Assurance feature) |
-| `okta.authenticators.read` | audit+ | Per-factor-type counts; per-user factor list (internal) |
+| `okta.authenticators.read` | audit+ | Per-factor-type counts |
 | `okta.networkZones.read` | audit+ | Network zones |
 | `okta.idps.read` | audit+ | Identity providers |
 | `okta.eventHooks.read` | audit+ | Event hooks |
@@ -132,6 +132,13 @@ service app to use the scope-based model above.
 
 See [docs/schema/v1.0.0.json](docs/schema/v1.0.0.json) for the full JSON schema.
 
+Each percentage sits beside the count it is computed from, such as
+`posture.mfa_enrolled_users_count` for `posture.mfa_coverage`, and is rounded
+down: 85 is `floor(100 × 351 ÷ 412)`. The schema names each percentage's count
+and population, and the SDK checks the arithmetic every time the collector
+emits. `mfa_required_all` and `managed_device_required_for_admins` name their
+counts too, and are true when the count is the whole population.
+
 ### Partial collection and exit codes
 
 The run fails only when the configuration is invalid or the sign-in fails. The
@@ -156,7 +163,27 @@ a code such as `permission_denied`, `rate_limited`, or `not_licensed`, along wit
 the API operations the collector called and the identity it signed in as. The
 `diagnostics.warnings` entries remain. A percentage is also `null` when its
 population is empty, such as `mfa_coverage` in an org with no users;
-`users.total_count` and `apps.total_count` give those populations.
+`users.total_count` and `apps.total_count` give those populations, and the
+percentage's count is 0.
+
+Each gap names the call that failed, by operation and call number, and the line
+of the collector that recorded it. A `permission_denied` gap names the scope to
+grant, as `missing_permission`, when the service app asked for it and Okta did
+not grant it. When Okta granted the scope and still refused the read, the
+service app's admin role cannot read the surface, so the gap names no scope and
+its warning says the app needs an admin role that can read it. A gap under an
+API token names no scope either, since the token acts with its owner's admin
+roles. At the audit and internal levels, each gap also carries the warning the
+collector wrote for it.
+
+The collector result also lists the run's steps, from `sign_in` to
+`org_settings`, with the calls each one made; a trust run has the first six. It
+records how the collector signed in: `private_key_jwt` with the scopes it
+requested and the scopes Okta granted, or `api_token`. A service app's sign-in
+also records `read_only`, since its token carries only the read scopes the
+collector asks for. At the audit and internal levels, the result's request rows
+carry Okta's error code for each failed response, such as `E0000047` for a rate
+limit or `E0000006` for a refused read.
 
 ### Example Output
 
@@ -168,33 +195,45 @@ population is empty, such as `mfa_coverage` in an org with no users;
   "org_domain": "company.okta.com",
   "posture": {
     "mfa_coverage": 85,
+    "mfa_enrolled_users_count": 351,
     "mfa_phishing_resistant": 20,
-    "sso_coverage": 90
+    "mfa_phishing_resistant_users_count": 83,
+    "sso_coverage": 89
   },
   "users": {
     "total_count": 412,
     "password_expired": 2,
+    "password_expired_count": 9,
     "locked_out": 0,
+    "locked_out_count": 1,
     "inactive": 15,
-    "suspended": 3
+    "inactive_count": 62,
+    "suspended": 3,
+    "suspended_count": 13
   },
   "apps": {
     "total_count": 37,
+    "sso_count": 33,
     "provisioning_enabled": 40,
-    "deprovisioning_enabled": 30
+    "provisioning_enabled_count": 15,
+    "deprovisioning_enabled": 29,
+    "deprovisioning_enabled_count": 11
   },
   "privileged_access": {
     "privileged_users_count": 6,
     "super_admin_count": 2,
     "standing_privileged_users_count": 6,
     "privileged_mfa_coverage_pct": 100,
-    "privileged_phishing_resistant_pct": 50
+    "privileged_mfa_enrolled_count": 6,
+    "privileged_phishing_resistant_pct": 50,
+    "privileged_phishing_resistant_count": 3
   },
   "policy": {
     "policy_count": 2,
     "mfa_required_all": false,
     "mfa_required_any": true,
     "mfa_required_coverage_pct": 33,
+    "mfa_required_users_count": 136,
     "session_lifetime_min_minutes": 15,
     "session_lifetime_max_minutes": 1440,
     "idle_timeout_min_minutes": 5,
@@ -222,6 +261,20 @@ make test
 ```bash
 make sdk-test
 ```
+
+### Trace map
+
+`docs/schema/trace-map.json` links each field of the artifacts to the calls
+whose failure leaves it out or changes it, the source lines behind it, and the
+lines that record its gaps. The collector embeds it, and every pack carries it
+in the collector's build file. After a change to the code, rewrite it and commit
+the result:
+
+```bash
+make trace-map
+```
+
+CI fails when the committed map is stale.
 
 ### End-to-End Tests
 

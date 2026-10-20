@@ -61,11 +61,9 @@ func (c *Collector) collectNetworkZones(ctx context.Context, level componentsdk.
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
-	c.status("Collecting network zones...")
-
 	zones, err := c.client.ListNetworkZones(ctx)
 	if err != nil {
-		c.warnSurface("network zones", "okta.networkZones.read", err)
+		err = c.warnSurface("network zones", "okta.networkZones.read", err)
 		c.gaps.notCollected(err, "/network_zones")
 		return nil
 	}
@@ -136,8 +134,8 @@ func emptyZoneField(raw json.RawMessage) bool {
 // decoded, and returns the error its gap carries, so silent data loss is
 // visible rather than masquerading as "empty".
 func (c *Collector) unexpectedZoneShape(zone, field string) error {
-	c.warn("network zones: zone %q %s: unexpected shape, skipped", zone, field)
-	return componentsdk.CodeError(componentsdk.CodeInvalidResponse, fmt.Errorf("network zone %q has %s in an unexpected shape", zone, field))
+	warning := c.warn("network zones: zone %q %s: unexpected shape, skipped", zone, field)
+	return failed(componentsdk.CodeError(componentsdk.CodeInvalidResponse, fmt.Errorf("network zone %q has %s in an unexpected shape", zone, field)), warning, "")
 }
 
 // zoneAddresses decodes a zone's gateways/proxies raw JSON (an array of

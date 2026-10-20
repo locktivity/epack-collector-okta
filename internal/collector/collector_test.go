@@ -15,11 +15,13 @@ import (
 
 // mockOktaClient implements okta.OktaClient for testing.
 type mockOktaClient struct {
+	identity                   *okta.Identity // who SignIn says the client is; an API token's owner when nil
 	signInErr                  error
 	users                      []okta.User
 	usersErr                   error
 	factors                    map[string][]okta.Factor // userID -> factors
 	factorsErr                 error
+	factorsErrFor              map[string]error       // userID -> the error reading their factors
 	groupUsers                 map[string][]okta.User // groupID -> users
 	groupUsersErr              error
 	roleAssignees              []okta.RoleAssignedUser
@@ -66,7 +68,10 @@ func (m *mockOktaClient) SignIn(ctx context.Context) (*okta.Identity, error) {
 	if m.signInErr != nil {
 		return nil, m.signInErr
 	}
-	return &okta.Identity{Kind: "api_token", ID: "00u-token-owner"}, nil
+	if m.identity != nil {
+		return m.identity, nil
+	}
+	return &okta.Identity{Kind: "api_token", AuthMethod: componentsdk.AuthAPIToken, ID: "00u-token-owner"}, nil
 }
 
 func (m *mockOktaClient) FetchUsers(ctx context.Context, callback func([]okta.User) error) error {
@@ -79,6 +84,9 @@ func (m *mockOktaClient) FetchUsers(ctx context.Context, callback func([]okta.Us
 func (m *mockOktaClient) FetchUserFactors(ctx context.Context, userID string) ([]okta.Factor, error) {
 	if m.factorsErr != nil {
 		return nil, m.factorsErr
+	}
+	if err := m.factorsErrFor[userID]; err != nil {
+		return nil, err
 	}
 	return m.factors[userID], nil
 }
@@ -240,6 +248,26 @@ func TestCollect_EmptyOrganization(t *testing.T) {
 	}
 	assertInt(t, "Users.TotalCount", posture.Users.TotalCount, 0)
 	assertInt(t, "Apps.TotalCount", posture.Apps.TotalCount, 0)
+
+	// Each numerator over a population of 0 is 0.
+	for name, count := range map[string]*int{
+		"Posture.MFAEnrolledUsersCount":                     posture.Posture.MFAEnrolledUsersCount,
+		"Posture.MFAPhishingResistantUsersCount":            posture.Posture.MFAPhishingResistantUsersCount,
+		"Users.PasswordExpiredCount":                        posture.Users.PasswordExpiredCount,
+		"Users.LockedOutCount":                              posture.Users.LockedOutCount,
+		"Users.InactiveCount":                               posture.Users.InactiveCount,
+		"Users.SuspendedCount":                              posture.Users.SuspendedCount,
+		"Apps.SSOCount":                                     posture.Apps.SSOCount,
+		"Apps.ProvisioningEnabledCount":                     posture.Apps.ProvisioningEnabledCount,
+		"Apps.DeprovisioningEnabledCount":                   posture.Apps.DeprovisioningEnabledCount,
+		"PrivilegedAccess.PrivilegedMFAEnrolledCount":       posture.PrivilegedAccess.PrivilegedMFAEnrolledCount,
+		"PrivilegedAccess.PrivilegedPhishingResistantCount": posture.PrivilegedAccess.PrivilegedPhishingResistantCount,
+		"Policy.MFARequiredUsersCount":                      posture.Policy.MFARequiredUsersCount,
+		"DeviceAccess.ManagedDeviceRequiredUsersCount":      posture.DeviceAccess.ManagedDeviceRequiredUsersCount,
+		"DeviceAccess.ManagedDeviceRequiredAdminsCount":     posture.DeviceAccess.ManagedDeviceRequiredAdminsCount,
+	} {
+		assertInt(t, name, count, 0)
+	}
 }
 
 func TestCollect_WithUsers(t *testing.T) {
@@ -288,6 +316,14 @@ func TestCollect_WithUsers(t *testing.T) {
 
 	// 1 user suspended (user6) = 20%
 	assertInt(t, "Users.Suspended", posture.Users.Suspended, 20)
+
+	// Each percentage's numerator.
+	assertInt(t, "Posture.MFAEnrolledUsersCount", posture.Posture.MFAEnrolledUsersCount, 3)
+	assertInt(t, "Posture.MFAPhishingResistantUsersCount", posture.Posture.MFAPhishingResistantUsersCount, 1)
+	assertInt(t, "Users.PasswordExpiredCount", posture.Users.PasswordExpiredCount, 0)
+	assertInt(t, "Users.LockedOutCount", posture.Users.LockedOutCount, 1)
+	assertInt(t, "Users.InactiveCount", posture.Users.InactiveCount, 1)
+	assertInt(t, "Users.SuspendedCount", posture.Users.SuspendedCount, 1)
 }
 
 func TestCollect_WithPrivilegedAccess(t *testing.T) {
@@ -847,6 +883,74 @@ func TestPrivileged_DegradesOnAssigneesForbidden(t *testing.T) {
 	}
 }
 
+func TestRefusedReads_NameTheScopeOnlyWhenOktaDidNotGrantIt(t *testing.T) {
+	asked := scopesForLevel(componentsdk.LevelAudit)
+	serviceApp := func(granted []string) okta.Identity {
+		return okta.Identity{Kind: "service_app", AuthMethod: componentsdk.AuthPrivateKeyJWT, ID: "0oa-app", RequestedScopes: asked, Scopes: granted}
+	}
+	type want struct{ missing, warning string }
+	cases := []struct {
+		name     string
+		identity okta.Identity
+		logs     want
+		tokens   want
+	}{
+		{
+			name: "service app without the scopes", identity: serviceApp(baseOAuthScopes),
+			logs:   want{"okta.logs.read", "system log: access denied (403; grant okta.logs.read and an admin role that can read it)"},
+			tokens: want{"okta.apiTokens.read", "api tokens: access denied (403; grant okta.apiTokens.read and the SUPER_ADMIN role)"},
+		},
+		{
+			name: "service app with the scopes", identity: serviceApp(asked),
+			logs:   want{"", "system log: access denied (403; okta.logs.read is granted, so the service app needs an admin role that can read it)"},
+			tokens: want{"", "api tokens: access denied (403; okta.apiTokens.read is granted, so the service app needs the SUPER_ADMIN role)"},
+		},
+		{
+			name: "api token", identity: okta.Identity{Kind: "api_token", AuthMethod: componentsdk.AuthAPIToken, ID: "00u1"},
+			logs:   want{"", "system log: access denied (403; the API token's owner needs an admin role that can read it)"},
+			tokens: want{"", "api tokens: access denied (403; the API token's owner needs the SUPER_ADMIN role)"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := richClient()
+			client.identity = &tc.identity
+			client.systemLogErr = &okta.APIStatusError{StatusCode: 403, Path: "/api/v1/logs", Code: "E0000006"}
+			client.apiTokensErr = &okta.APIStatusError{StatusCode: 403, Path: "/api/v1/api-tokens", Code: "E0000006"}
+			rec := &componentsdk.Recorder{}
+			c := NewWithClient(Config{OrgDomain: "acme.okta.com", Recorder: rec}, client)
+			if _, err := c.Collect(context.Background(), componentsdk.LevelAudit); err != nil {
+				t.Fatal(err)
+			}
+			for pointer, w := range map[string]want{"/system_log": tc.logs, "/api_tokens": tc.tokens} {
+				g, ok := gapAt(rec, pointer)
+				if !ok || g.Code != componentsdk.CodePermissionDenied || g.MissingPermission != w.missing || g.Warning != w.warning {
+					t.Errorf("gap at %s = %+v, want permission_denied naming %q with warning %q", pointer, g, w.missing, w.warning)
+				}
+			}
+		})
+	}
+}
+
+func TestFailedReads_CarryTheirWarning(t *testing.T) {
+	client := richClient()
+	client.systemLogErr = &okta.APIStatusError{StatusCode: 500, Path: "/api/v1/logs"}
+	rec := &componentsdk.Recorder{}
+	c := NewWithClient(Config{OrgDomain: "acme.okta.com", Recorder: rec}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const warning = "system log: okta API /api/v1/logs returned status 500"
+	g, ok := gapAt(rec, "/system_log")
+	if !ok || g.Code != componentsdk.CodeVendorError || g.MissingPermission != "" || g.Warning != warning {
+		t.Errorf("gap = %+v, want vendor_error with the warning %q and no permission", g, warning)
+	}
+	if posture.Diagnostics == nil || !strings.Contains(strings.Join(posture.Diagnostics.Warnings, "\n"), warning) {
+		t.Errorf("diagnostics = %+v, want the same warning", posture.Diagnostics)
+	}
+}
+
 func TestCoreSurfaces_DegradeOnForbidden(t *testing.T) {
 	// Every core surface returns 403 (a maximally locked-down service app). The
 	// run must still succeed, leaving the core metrics out with a gap each and
@@ -988,6 +1092,10 @@ func TestCollect_InternalDetails(t *testing.T) {
 	if pu.RoleAssignmentSource != "group" || pu.LastLoginAt == "" {
 		t.Errorf("expected group source + last login, got %+v", pu)
 	}
+	assertBool(t, "user has_active_mfa", u.HasActiveMFA, true)
+	assertBool(t, "user has_phishing_resistant_mfa", u.HasPhishingResistantMFA, true)
+	assertBool(t, "admin has_active_mfa", pu.HasActiveMFA, true)
+	assertBool(t, "admin has_phishing_resistant_mfa", pu.HasPhishingResistantMFA, true)
 
 	if len(posture.Policy.Policies) != 1 || len(posture.Policy.Policies[0].Rules) != 1 {
 		t.Fatalf("expected 1 policy with 1 rule detail, got %+v", posture.Policy.Policies)
@@ -995,6 +1103,64 @@ func TestCollect_InternalDetails(t *testing.T) {
 	rule := posture.Policy.Policies[0].Rules[0]
 	if rule.Name != "Require MFA" || rule.Access != "ALLOW" || rule.RequireFactor == nil || !*rule.RequireFactor {
 		t.Errorf("rule detail wrong: %+v", rule)
+	}
+}
+
+func TestMFAFlags_LeftOutWhenFactorsCannotBeRead(t *testing.T) {
+	now := time.Now()
+	client := &mockOktaClient{
+		users: []okta.User{
+			{ID: "admin1", Status: "ACTIVE", LastLogin: now, Profile: okta.UserProfile{Login: "admin1@acme.com"}},
+			{ID: "user2", Status: "ACTIVE", LastLogin: now, Profile: okta.UserProfile{Login: "user2@acme.com"}},
+		},
+		factors:       map[string][]okta.Factor{"user2": {{ID: "f2", FactorType: "push", Status: "ACTIVE"}}},
+		apps:          []okta.Application{},
+		roleAssignees: []okta.RoleAssignedUser{{ID: "admin1"}},
+		userRoles:     map[string][]okta.RoleAssignment{"admin1": {{ID: "r1", Type: "SUPER_ADMIN"}}},
+		policies:      make(map[string][]okta.Policy),
+	}
+	client.factorsErrFor = map[string]error{"admin1": &okta.APIStatusError{StatusCode: 500, Path: "/api/v1/users/admin1/factors"}}
+
+	rec := &componentsdk.Recorder{}
+	c := NewWithClient(Config{OrgDomain: "test.okta.com", Recorder: rec}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelInternal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The admin's row leaves both flags out with a gap, in both lists; the
+	// other user's row says what their factors show.
+	admin, other := posture.Users.Inventory[0], posture.Users.Inventory[1]
+	if admin.HasActiveMFA != nil || admin.HasPhishingResistantMFA != nil {
+		t.Errorf("admin1's flags = %s, %s; want them left out", showBool(admin.HasActiveMFA), showBool(admin.HasPhishingResistantMFA))
+	}
+	assertBool(t, "user2 has_active_mfa", other.HasActiveMFA, true)
+	assertBool(t, "user2 has_phishing_resistant_mfa", other.HasPhishingResistantMFA, false)
+	if pu := posture.PrivilegedAccess.Inventory[0]; pu.HasActiveMFA != nil || pu.HasPhishingResistantMFA != nil {
+		t.Errorf("admin row flags = %s, %s; want them left out", showBool(pu.HasActiveMFA), showBool(pu.HasPhishingResistantMFA))
+	}
+	for _, pointer := range []string{
+		"/users/inventory/0/has_active_mfa", "/users/inventory/0/has_phishing_resistant_mfa",
+		"/privileged_access/inventory/0/has_active_mfa", "/privileged_access/inventory/0/has_phishing_resistant_mfa",
+	} {
+		if g, ok := gapAt(rec, pointer); !ok || g.Code != componentsdk.CodeVendorError {
+			t.Errorf("expected a vendor_error gap at %s, got %+v", pointer, g)
+		}
+	}
+
+	// The counts the flags roll up to are left out with their percentages.
+	for pointer, count := range map[string]*int{
+		"/posture/mfa_enrolled_users_count":                      posture.Posture.MFAEnrolledUsersCount,
+		"/posture/mfa_phishing_resistant_users_count":            posture.Posture.MFAPhishingResistantUsersCount,
+		"/privileged_access/privileged_mfa_enrolled_count":       posture.PrivilegedAccess.PrivilegedMFAEnrolledCount,
+		"/privileged_access/privileged_phishing_resistant_count": posture.PrivilegedAccess.PrivilegedPhishingResistantCount,
+	} {
+		if count != nil {
+			t.Errorf("%s = %d, want it left out", pointer, *count)
+		}
+		if g, ok := gapAt(rec, pointer); !ok || g.Status != componentsdk.GapPartial || g.Unmeasured != 1 {
+			t.Errorf("expected a partial gap with 1 unmeasured at %s, got %+v", pointer, g)
+		}
 	}
 }
 
@@ -1186,6 +1352,13 @@ func showInt(p *int) string {
 		return "null"
 	}
 	return strconv.Itoa(*p)
+}
+
+func showBool(b *bool) string {
+	if b == nil {
+		return "null"
+	}
+	return strconv.FormatBool(*b)
 }
 
 // gapAt returns the gap recorded at pointer in the detailed artifact.

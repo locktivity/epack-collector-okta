@@ -43,11 +43,9 @@ func (c *Collector) collectDeviceAccessMetrics(
 	// The managed-device values derive from sign-on rules, so a failed
 	// device-assurance read (a missing okta.deviceAssurance.read scope or the
 	// feature not enabled) leaves out only the assurance values.
-	c.status("Checking device assurance policies...")
 	deviceAssurancePolicies, err := c.client.FetchDeviceAssurancePolicies(ctx)
 	if err != nil {
-		c.warnSurface("device assurance policies", "okta.deviceAssurance.read", err)
-		metrics.assuranceErr = err
+		metrics.assuranceErr = c.warnSurface("device assurance policies", "okta.deviceAssurance.read", err)
 	}
 	metrics.policies = deviceAssurancePolicies
 
@@ -100,21 +98,25 @@ func (c *Collector) fillDeviceAccess(p *OrgPosture, users *userMetricsCollector,
 
 	coverageErr := firstError(users.err, policy.signOnErr, policy.groupsErr)
 	if coverageErr != nil {
-		c.gaps.notCollected(coverageErr, "/device_access/managed_device_required_coverage_pct")
+		c.gaps.notCollected(coverageErr, "/device_access/managed_device_required_coverage_pct", "/device_access/managed_device_required_users_count")
 	} else {
 		p.DeviceAccess.ManagedDeviceRequiredCoveragePct = percent(m.managedDeviceRequiredUsers, users.totalUsers)
+		p.DeviceAccess.ManagedDeviceRequiredUsersCount = intPtr(m.managedDeviceRequiredUsers)
 	}
 
-	const forAdmins = "/device_access/managed_device_required_for_admins"
+	forAdmins := []string{"/device_access/managed_device_required_for_admins", "/device_access/managed_device_required_admins_count"}
 	switch {
 	case privileged.err != nil:
-		c.gaps.notCollected(privileged.err, forAdmins)
+		c.gaps.notCollected(privileged.err, forAdmins...)
 	case coverageErr != nil:
-		c.gaps.notCollected(coverageErr, forAdmins)
+		c.gaps.notCollected(coverageErr, forAdmins...)
 	case privileged.rolesFailed > 0:
-		c.gaps.partial(privileged.rolesFailed, privileged.firstRolesErr, forAdmins)
-	case privileged.privilegedUsersCount > 0:
-		p.DeviceAccess.ManagedDeviceRequiredForAdmins = boolPtr(m.managedDeviceRequiredAdmins == privileged.privilegedUsersCount)
+		c.gaps.partial(privileged.rolesFailed, privileged.firstRolesErr, forAdmins...)
+	default:
+		p.DeviceAccess.ManagedDeviceRequiredAdminsCount = intPtr(m.managedDeviceRequiredAdmins)
+		if privileged.privilegedUsersCount > 0 {
+			p.DeviceAccess.ManagedDeviceRequiredForAdmins = boolPtr(m.managedDeviceRequiredAdmins == privileged.privilegedUsersCount)
+		}
 	}
 }
 
@@ -127,7 +129,9 @@ func (c *Collector) fillDeviceAccess(p *OrgPosture, users *userMetricsCollector,
 type DeviceAccessMetrics struct {
 	ManagedDeviceRequired            *bool `json:"managed_device_required"`              // Whether any sign-on policy rule requires managed devices
 	ManagedDeviceRequiredCoveragePct *int  `json:"managed_device_required_coverage_pct"` // % of users covered by a managed device requirement
+	ManagedDeviceRequiredUsersCount  *int  `json:"managed_device_required_users_count"`  // Users covered by a managed device requirement
 	ManagedDeviceRequiredForAdmins   *bool `json:"managed_device_required_for_admins"`   // Whether all privileged users are covered by a managed device requirement
+	ManagedDeviceRequiredAdminsCount *int  `json:"managed_device_required_admins_count"` // Privileged users covered by a managed device requirement
 	DeviceAssurancePoliciesCount     *int  `json:"device_assurance_policies_count"`      // Number of device assurance policies defined
 
 	// Audit-level field.

@@ -129,8 +129,11 @@ func TestLevels_AuditShapes(t *testing.T) {
 	if p.Users.Inventory == nil {
 		t.Fatal("expected non-nil user inventory at audit")
 	}
-	if len(p.Users.Inventory) > 0 && (p.Users.Inventory[0].Factors != nil || p.Users.Inventory[0].LastLoginAt != "") {
+	if len(p.Users.Inventory) > 0 && (p.Users.Inventory[0].Factors != nil || p.Users.Inventory[0].LastLoginAt != "" || p.Users.Inventory[0].HasActiveMFA != nil) {
 		t.Error("audit must not populate internal per-user fields")
+	}
+	if len(p.PrivilegedAccess.Inventory) > 0 && (p.PrivilegedAccess.Inventory[0].HasActiveMFA != nil || p.PrivilegedAccess.Inventory[0].HasPhishingResistantMFA != nil) {
+		t.Error("audit must not carry the admins' MFA flags")
 	}
 	if p.SystemLog == nil || p.SystemLog.CountByCategory == nil {
 		t.Error("system_log audit counts expected")

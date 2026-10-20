@@ -44,15 +44,13 @@ func (c *Collector) collectHooks(ctx context.Context, level componentsdk.Level) 
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
-	c.status("Collecting hooks...")
-
 	eventHooks, eventErr := c.client.ListEventHooks(ctx)
 	if eventErr != nil {
-		c.warnSurface("event hooks", "okta.eventHooks.read", eventErr)
+		eventErr = c.warnSurface("event hooks", "okta.eventHooks.read", eventErr)
 	}
 	inlineHooks, inlineErr := c.client.ListInlineHooks(ctx)
 	if inlineErr != nil {
-		c.warnSurface("inline hooks", "okta.inlineHooks.read", inlineErr)
+		inlineErr = c.warnSurface("inline hooks", "okta.inlineHooks.read", inlineErr)
 	}
 	if eventErr != nil && inlineErr != nil {
 		c.gaps.notCollected(eventErr, "/hooks")

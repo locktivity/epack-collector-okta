@@ -47,35 +47,35 @@ than failing the run: the collector result records a gap for each, and
 
 ### Posture (`posture`)
 
-- **trust**: MFA coverage %, phishing-resistant MFA %, SSO coverage %.
+- **trust**: MFA coverage %, phishing-resistant MFA %, SSO coverage %, and the counts of users behind the two MFA percentages.
 - **audit**: `per_factor_type` (enrolled-user count per active factor type), `mfa_disabled_users_count`.
 
 ### Users (`users`)
 
-- **trust**: password-expired / locked-out / inactive / suspended percentages.
+- **trust**: password-expired / locked-out / inactive / suspended percentages, each with its count of users.
 - **audit**: `inventory[]` per-user rows (login, status, coarse Human/Service type, created-at).
-- **internal**: each row gains last-login / last-updated / status-changed / password-changed timestamps, the enrolled-factor list, and group-membership IDs.
+- **internal**: each row gains last-login / last-updated / status-changed / password-changed timestamps, the enrolled-factor list, `has_active_mfa` and `has_phishing_resistant_mfa`, and group-membership IDs. The two flags restate what the factor list shows, and are left out with it, with a gap, when the user's factors could not be read. Below internal, rows carry no per-user MFA status.
 
 ### Apps (`apps`)
 
-- **trust**: provisioning / deprovisioning automation percentages.
+- **trust**: provisioning / deprovisioning automation percentages, with the counts of apps behind them and behind SSO coverage.
 - **audit**: `inventory[]` per-app rows (label, name, type, sign-on mode, status, SSO-configured, provisioning-configured).
 
 ### Privileged access (`privileged_access`)
 
-- **trust**: privileged-user / super-admin / standing-privileged counts, privileged MFA + phishing-resistant coverage.
+- **trust**: privileged-user / super-admin / standing-privileged counts, privileged MFA + phishing-resistant coverage, each with its count of admins.
 - **audit**: `inventory[]` per-privileged-user (login + assigned role names), `custom_roles[]` (custom admin roles; Okta Identity Governance feature, absent when not licensed; Okta's built-in Workflows Administrator role is left out).
-- **internal**: each privileged-user row gains role-assignment source (direct / group / mixed) and last-login.
+- **internal**: each privileged-user row gains role-assignment source (direct / group / mixed), last-login, `has_active_mfa`, and `has_phishing_resistant_mfa`.
 
 ### Policy (`policy`)
 
-- **trust**: active policy count, MFA-required flags + coverage %, session-lifetime and idle-timeout min/max.
+- **trust**: active policy count, MFA-required flags + coverage % with the count of users an MFA requirement covers, session-lifetime and idle-timeout min/max.
 - **audit**: `policies[]` per-policy summary (name, type, status, priority, rule count, scope summary) for sign-on and MFA-enroll policies.
 - **internal**: each policy gains `rules[]` with conditions (network, groups, device) and actions (access, require-factor, session limits, enroll mode).
 
 ### Device access (`device_access`)
 
-- **trust**: managed-device-required flags + coverage %, device-assurance-policy count.
+- **trust**: managed-device-required flags + coverage % with the counts of users and admins a managed device requirement covers, device-assurance-policy count.
 - **audit**: `policies[]` per-device-assurance-policy summary (name, platform, status, min OS version, disk-encryption / screen-lock / jailbreak requirement flags).
 
 The surfaces below are **not collected at trust** — they first appear at
@@ -106,7 +106,7 @@ a trust run stays minimal.
 - **audit**: active SSWS-token count, recently-used (30d) count, and `inventory[]` per-token rows (id, name, status, created-at).
 - **internal**: each token gains created-by login, last-used, network-zone-scoped flag.
 
-Reading API tokens requires a SUPER_ADMIN-level scope; on denial the surface is omitted with a gap and a diagnostic.
+Reading API tokens needs `okta.apiTokens.read` and the SUPER_ADMIN role; on denial the surface is omitted with a gap and a diagnostic.
 
 ### Hooks (`hooks`)
 
@@ -135,6 +135,15 @@ surface is absent. The collector result artifact,
 `artifacts/okta.collector-result.json`, lists a gap for each value left out, so
 "not collected" never reads as "none found". An inventory with no rows is also
 absent; with no gap for it, none were found.
+
+Every percentage is `floor(100 × count ÷ population)`, with its count beside it,
+so its arithmetic can be redone from the artifact: `mfa_coverage` is
+`mfa_enrolled_users_count` of `users.total_count`. A count left out with a gap
+leaves its percentage out with the same gap. Over a population of 0, the count
+is 0 and the percentage is `null`. At audit and internal, the status-based
+user counts, the SSO and provisioning app counts, and both totals also match the
+rows of their inventories, unless the inventory was cut short (see Truncation);
+the MFA counts match the rows' MFA flags at internal.
 
 ## Truncation
 

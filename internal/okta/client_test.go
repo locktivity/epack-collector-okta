@@ -2,13 +2,18 @@ package okta
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/locktivity/epack/componentsdk"
+	"github.com/locktivity/epack/componentsdk/collectortest"
 )
 
 func TestFetchUsers(t *testing.T) {
@@ -499,5 +504,130 @@ func TestAuthorizationHeader(t *testing.T) {
 
 	if capturedAuth != "SSWS my-test-token" {
 		t.Errorf("expected 'SSWS my-test-token', got %q", capturedAuth)
+	}
+}
+
+// runOkta runs handler in process against responses at the audit level, so
+// the result keeps its request rows, and fails the test on a request no
+// response answers.
+func runOkta(t *testing.T, responses []collectortest.Response, handler componentsdk.CollectorHandler) componentsdk.InProcessResult {
+	t.Helper()
+	replay, err := collectortest.NewReplay(collectortest.Scenario{Responses: responses})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := componentsdk.RunInProcess(componentsdk.CollectorSpec{Name: "okta"}, handler, componentsdk.InProcessOptions{
+		Config:    map[string]any{"level": "audit"},
+		Transport: replay,
+		Seed:      1,
+		Sleep:     func(ctx context.Context, _ time.Duration) error { return ctx.Err() },
+		Clock:     func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) },
+	})
+	for _, request := range replay.Unmatched() {
+		t.Errorf("no canned response for %s", request)
+	}
+	if res.ExitCode != 0 || res.Result == nil {
+		t.Fatalf("run failed with exit %d: %s", res.ExitCode, res.Stderr)
+	}
+	return res
+}
+
+// sdkClient builds the HTTP client Run builds, with Okta's vendor code hook.
+func sdkClient(ctx componentsdk.CollectorContext) *http.Client {
+	return componentsdk.NewHTTPClient(ctx, componentsdk.HTTPOptions{CredentialHosts: []string{"acme.okta.com"}, VendorCode: VendorCode})
+}
+
+func emitNothing(ctx componentsdk.CollectorContext) error {
+	return ctx.Emit([]componentsdk.CollectedArtifact{componentsdk.JSONArtifact("artifacts/okta.json", map[string]any{}, componentsdk.ArtifactMeta{})})
+}
+
+func TestErrorsFromAResponseNameItsCall(t *testing.T) {
+	const base = "https://acme.okta.com"
+	res := runOkta(t, []collectortest.Response{
+		{URL: base + "/api/v1/users/me", Body: `{"id":"00u1"}`},
+		{URL: base + "/api/v1/users?limit=200", Body: `null`},
+		{URL: base + "/api/v1/users/00u1/factors", Status: http.StatusForbidden,
+			Body: `{"errorCode":"E0000006","errorSummary":"You do not have permission to perform the requested action"}`},
+		{URL: base + "/api/v1/org", Body: `{"id":`},
+	}, func(ctx componentsdk.CollectorContext) error {
+		client := NewClient(sdkClient(ctx), "acme.okta.com", "test-token")
+		if _, err := client.SignIn(ctx.Context()); err != nil {
+			return err
+		}
+		rec := componentsdk.Records(ctx)
+		at := func(pointer string) componentsdk.Location {
+			return componentsdk.Location{Path: "artifacts/okta.json", Pointer: pointer}
+		}
+		rec.NotCollected(at("/users"), client.FetchUsers(ctx.Context(), func([]User) error { return nil }))
+		_, err := client.FetchUserFactors(ctx.Context(), "00u1")
+		rec.NotCollected(at("/factors"), err)
+		_, err = client.FetchOrgSettings(ctx.Context())
+		rec.NotCollected(at("/org"), err)
+		return emitNothing(ctx)
+	})
+
+	// A list that is not there, a refusal, and a body cut short.
+	want := map[string]componentsdk.Gap{
+		"/users":   {Operation: "okta.users.list", Call: 2, Code: componentsdk.CodeInvalidResponse},
+		"/factors": {Operation: "okta.users.factors.list", Call: 3, Code: componentsdk.CodePermissionDenied, VendorCode: "E0000006"},
+		"/org":     {Operation: "okta.org.get", Call: 4, Code: componentsdk.CodeInvalidResponse},
+	}
+	if len(res.Result.Gaps) != len(want) {
+		t.Fatalf("gaps = %+v, want %d", res.Result.Gaps, len(want))
+	}
+	for _, g := range res.Result.Gaps {
+		w := want[g.Pointer]
+		if g.Operation != w.Operation || g.Call != w.Call || g.Code != w.Code || g.VendorCode != w.VendorCode {
+			t.Errorf("gap at %s = %+v, want %s call %d with code %s and vendor code %q", g.Pointer, g, w.Operation, w.Call, w.Code, w.VendorCode)
+		}
+	}
+	for _, row := range res.Result.Calls.Requests {
+		if want := map[int]string{3: "E0000006"}[row.Call]; row.VendorCode != want {
+			t.Errorf("call %d (%s) has vendor code %q, want %q", row.Call, row.Operation, row.VendorCode, want)
+		}
+	}
+}
+
+func TestTokenEndpointErrorsNameTheirCall(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	res := runOkta(t, []collectortest.Response{{
+		Method: http.MethodPost, URL: "https://acme.okta.com/oauth2/v1/token", Status: http.StatusUnauthorized,
+		Body: `{"error":"invalid_client","error_description":"The client_assertion signature is invalid."}`,
+	}}, func(ctx componentsdk.CollectorContext) error {
+		client, err := NewClientWithOAuth(sdkClient(ctx), "acme.okta.com", "0oa-app", "key-1", keyPEM, []string{"okta.users.read"}, time.Now)
+		if err != nil {
+			return err
+		}
+		_, err = client.SignIn(ctx.Context())
+		componentsdk.Records(ctx).NotCollected(componentsdk.Location{Path: "artifacts/okta.json", Pointer: "/token"}, err)
+		return emitNothing(ctx)
+	})
+	if g := res.Result.Gaps[0]; g.Operation != "okta.token.create" || g.Call != 1 || g.Code != componentsdk.CodeAuthFailed || g.VendorCode != "invalid_client" {
+		t.Errorf("gap = %+v, want the token call with auth_failed and invalid_client", g)
+	}
+	if rows := res.Result.Calls.Requests; len(rows) != 1 || rows[0].VendorCode != "invalid_client" {
+		t.Errorf("rows = %+v, want the token call's row with invalid_client", rows)
+	}
+}
+
+func TestVendorCode(t *testing.T) {
+	for body, want := range map[string]string{
+		`{"errorCode":"E0000047","errorSummary":"API call exceeded rate limit due to too many requests."}`: "E0000047",
+		`{"error":"invalid_client","error_description":"The client secret supplied is invalid."}`:          "invalid_client",
+		`{"errorCode":"E0000006","error":"access_denied"}`:                                                 "E0000006",
+		`<html>Service Unavailable</html>`:                                                                 "",
+		`{}`:                                                                                               "",
+	} {
+		if got := VendorCode(nil, []byte(body)); got != want {
+			t.Errorf("VendorCode(%s) = %q, want %q", body, got, want)
+		}
 	}
 }

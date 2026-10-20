@@ -179,6 +179,12 @@ with a code in `artifacts/okta.collector-result.json`, and under
 
 - **Missing scope.** Each surface needs its scope granted for the level you're
   running (see [Step 3](#step-3-grant-api-scopes) and [levels.md](levels.md)).
+  The gap names the scope to grant, as `missing_permission`, when the service
+  app asked for it and Okta did not grant it.
+- **Missing admin role.** When the scope is granted and Okta still refuses the
+  read, the service app's admin role cannot read the surface. The gap names no
+  scope, and its warning says the app needs an admin role that can read it (see
+  [Step 4](#step-4-assign-admin-role)).
 - **`privileged_access` counts are null.** Listing admin-role assignments needs a
   Super Administrator-level role; Read-Only Admin can't (see the privileged-access
   note in [Step 4](#step-4-assign-admin-role)).
@@ -187,4 +193,5 @@ with a code in `artifacts/okta.collector-result.json`, and under
 - **A feature isn't licensed.** Custom admin roles need Okta Identity Governance;
   the custom-role inventory is left out with a `not_licensed` gap otherwise.
 - **API token auth.** Access is governed by the token owner's admin role rather
-  than scopes; ensure that role covers the surfaces you need.
+  than scopes; ensure that role covers the surfaces you need. Gaps under an API
+  token name no scope.

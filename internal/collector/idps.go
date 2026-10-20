@@ -44,11 +44,9 @@ func (c *Collector) collectIdentityProviders(ctx context.Context, level componen
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
-	c.status("Collecting identity providers...")
-
 	idps, err := c.client.ListIdentityProviders(ctx)
 	if err != nil {
-		c.warnSurface("identity providers", "okta.idps.read", err)
+		err = c.warnSurface("identity providers", "okta.idps.read", err)
 		c.gaps.notCollected(err, "/identity_providers")
 		return nil
 	}

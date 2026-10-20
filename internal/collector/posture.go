@@ -114,9 +114,11 @@ type Diagnostics struct {
 //
 // Audit adds per-factor-type enrollment counts and the MFA-disabled-user count.
 type Posture struct {
-	MFACoverage          *int `json:"mfa_coverage"`           // % users with any MFA enrolled
-	MFAPhishingResistant *int `json:"mfa_phishing_resistant"` // % users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)
-	SSOCoverage          *int `json:"sso_coverage"`           // % apps using SSO (SAML/OIDC/WS-Fed)
+	MFACoverage                    *int `json:"mfa_coverage"`                       // % users with any MFA enrolled
+	MFAEnrolledUsersCount          *int `json:"mfa_enrolled_users_count"`           // Users with any MFA enrolled
+	MFAPhishingResistant           *int `json:"mfa_phishing_resistant"`             // % users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)
+	MFAPhishingResistantUsersCount *int `json:"mfa_phishing_resistant_users_count"` // Users with phishing-resistant MFA
+	SSOCoverage                    *int `json:"sso_coverage"`                       // % apps using SSO (SAML/OIDC/WS-Fed)
 
 	// Audit-level fields.
 	PerFactorType         []FactorTypeCount `json:"per_factor_type,omitempty"`          // Enrolled-user count per active factor type

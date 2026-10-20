@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -164,13 +165,126 @@ func kitResponses(t *mockOktaClient) []collectortest.Response {
 }
 
 // kitOAuthResponses is kitResponses for a service app, which signs in with
-// the token exchange.
+// the token exchange. Its token carries the scopes trust collection asks for.
 func kitOAuthResponses(t *mockOktaClient) []collectortest.Response {
+	return kitOAuthResponsesGranting(t, []string{
+		"okta.users.read", "okta.groups.read", "okta.apps.read", "okta.policies.read", "okta.roles.read", "okta.deviceAssurance.read",
+	})
+}
+
+// kitOAuthResponsesGranting is kitOAuthResponses with a token that carries
+// scopes.
+func kitOAuthResponsesGranting(t *mockOktaClient, scopes []string) []collectortest.Response {
 	token := collectortest.Response{Method: http.MethodPost, URL: kitBase + "/oauth2/v1/token", Body: kitJSON(map[string]any{
 		"token_type": "Bearer", "expires_in": 3600, "access_token": "kit-access-token-0123456789",
-		"scope": "okta.users.read okta.groups.read okta.apps.read okta.policies.read okta.roles.read okta.deviceAssurance.read",
+		"scope": strings.Join(scopes, " "),
 	})}
 	return append([]collectortest.Response{token}, kitSurfaceResponses(t)...)
+}
+
+// kitAuditScopes are the scopes audit collection asks for.
+var kitAuditScopes = []string{
+	"okta.users.read", "okta.groups.read", "okta.apps.read", "okta.policies.read", "okta.roles.read", "okta.deviceAssurance.read",
+	"okta.authenticators.read", "okta.networkZones.read", "okta.idps.read", "okta.eventHooks.read", "okta.inlineHooks.read",
+	"okta.logs.read", "okta.orgs.read", "okta.apiTokens.read",
+}
+
+// kitWithout returns scopes without scope.
+func kitWithout(scopes []string, scope string) []string {
+	var out []string
+	for _, s := range scopes {
+		if s != scope {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// kitLogsURL is the system log read a run at kitNow sends.
+func kitLogsURL() string {
+	q := url.Values{}
+	q.Set("since", kitNow.Add(-systemLogWindow).Format(time.RFC3339))
+	q.Set("sortOrder", "DESCENDING")
+	q.Set("limit", "200")
+	q.Set("filter", buildSystemLogFilter())
+	return kitBase + "/api/v1/logs?" + q.Encode()
+}
+
+// kitLogsRefused answers the system log read as Okta does when the token or
+// the admin role behind it cannot read the log. Put it before the tenant's
+// responses, so it answers first.
+func kitLogsRefused() collectortest.Response {
+	return collectortest.Response{URL: kitLogsURL(), Status: http.StatusForbidden, Body: kitJSON(map[string]any{
+		"errorCode": "E0000006", "errorSummary": "You do not have permission to perform the requested action",
+		"errorLink": "E0000006", "errorId": "oae-kit-refused", "errorCauses": []any{},
+	})}
+}
+
+// kitThrottled answers one request to url as Okta does past its rate limit,
+// with the limit resetting a second after kitNow. Put it before the tenant's
+// responses, so the retry gets the tenant's answer.
+func kitThrottled(url string) collectortest.Response {
+	return collectortest.Response{URL: url, Status: http.StatusTooManyRequests, Times: 1,
+		Header: http.Header{
+			"X-Rate-Limit-Limit":     []string{"600"},
+			"X-Rate-Limit-Remaining": []string{"0"},
+			"X-Rate-Limit-Reset":     []string{fmt.Sprint(kitNow.Add(time.Second).Unix())},
+		},
+		Body: kitJSON(map[string]any{
+			"errorCode": "E0000047", "errorSummary": "API call exceeded rate limit due to too many requests.",
+			"errorLink": "E0000047", "errorId": "oae-kit-throttled", "errorCauses": []any{},
+		}),
+	}
+}
+
+// kitLargeOrg is the Collection Trace canvas's sample org: 1,192 people, the
+// last 71 of them without an active factor, then three deprovisioned people,
+// listed in six pages, with 23 admins. Its other surfaces are the clean
+// tenant's, with a password policy, so a run at audit makes 1,246 calls, the
+// system log read being the 1,243rd.
+func kitLargeOrg() *mockOktaClient {
+	t := kitTenant()
+	day := 24 * time.Hour
+	status := map[int]string{301: "LOCKED_OUT", 702: "LOCKED_OUT", 455: "SUSPENDED", 904: "SUSPENDED", 1010: "SUSPENDED", 600: "PASSWORD_EXPIRED"}
+	t.users, t.factors = nil, map[string][]okta.Factor{}
+	for i := range 1195 {
+		u := okta.User{
+			ID: fmt.Sprintf("00u%04d", i), Status: "ACTIVE", Created: kitNow.Add(-400 * day),
+			LastLogin: kitNow.Add(-time.Duration(i%120) * day), LastUpdated: kitNow.Add(-2 * day),
+			Profile: okta.UserProfile{Login: fmt.Sprintf("person%04d@acme.com", i), UserType: "Employee"},
+		}
+		if s, ok := status[i]; ok {
+			u.Status = s
+		}
+		if i >= 1192 {
+			u.Status = "DEPROVISIONED"
+		}
+		t.users = append(t.users, u)
+		if i < 1121 {
+			factorType := "push"
+			if i%5 == 0 {
+				factorType = "webauthn"
+			}
+			t.factors[u.ID] = []okta.Factor{{ID: "f" + u.ID, FactorType: factorType, Status: "ACTIVE", Created: kitNow.Add(-100 * day)}}
+		}
+	}
+	t.userGroupIDs = nil
+	t.roleAssignees, t.userRoles = nil, map[string][]okta.RoleAssignment{}
+	for i := range 23 {
+		id := t.users[i].ID
+		t.roleAssignees = append(t.roleAssignees, okta.RoleAssignedUser{ID: id})
+		roleType := "READ_ONLY_ADMIN"
+		if i < 2 {
+			roleType = "SUPER_ADMIN"
+		}
+		t.userRoles[id] = []okta.RoleAssignment{{ID: "ra" + id, Type: roleType, AssignmentType: "USER"}}
+	}
+	t.groups[0].Embedded, t.groups[1].Embedded, t.groups[2].Embedded = stats(23), stats(50), stats(1192)
+	t.groupUsers = map[string][]okta.User{"g1": t.users[:23], "g2": t.users[100:150], "g3": t.users[:1192]}
+	t.policies[PolicyTypePassword] = []okta.Policy{{ID: "pw1", Name: "Default", Type: PolicyTypePassword, Status: "ACTIVE", Priority: 1}}
+	t.policyRules["pw1"] = []okta.PolicyRule{{ID: "pwr1", Name: "Default Rule", Status: "ACTIVE", Priority: 1,
+		Actions: okta.PolicyRuleActions{SelfServicePasswordReset: &okta.RuleAccess{Access: "ALLOW"}}}}
+	return t
 }
 
 func kitSurfaceResponses(t *mockOktaClient) []collectortest.Response {
@@ -208,12 +322,6 @@ func kitSurfaceResponses(t *mockOktaClient) []collectortest.Response {
 		responses = append(responses, collectortest.Response{URL: kitBase + "/api/v1/groups/" + g.ID + "/users?limit=200", Body: kitList(t.groupUsers[g.ID])})
 	}
 
-	logQuery := url.Values{}
-	logQuery.Set("since", kitNow.Add(-systemLogWindow).Format(time.RFC3339))
-	logQuery.Set("sortOrder", "DESCENDING")
-	logQuery.Set("limit", "200")
-	logQuery.Set("filter", buildSystemLogFilter())
-
 	responses = append(responses,
 		collectortest.Response{URL: kitBase + "/api/v1/device-assurances", Body: kitList(t.deviceAssurancePolicies)},
 		collectortest.Response{URL: kitBase + "/api/v1/authenticators", Body: kitList(t.authenticators)},
@@ -222,7 +330,7 @@ func kitSurfaceResponses(t *mockOktaClient) []collectortest.Response {
 		collectortest.Response{URL: kitBase + "/api/v1/api-tokens", Body: kitList(t.apiTokens)},
 		collectortest.Response{URL: kitBase + "/api/v1/eventHooks", Body: kitList(t.eventHooks)},
 		collectortest.Response{URL: kitBase + "/api/v1/inlineHooks", Body: kitList(t.inlineHooks)},
-		collectortest.Response{URL: kitBase + "/api/v1/logs?" + logQuery.Encode(), Body: kitList(t.systemLog)},
+		collectortest.Response{URL: kitLogsURL(), Body: kitList(t.systemLog)},
 		collectortest.Response{URL: kitBase + "/api/v1/org", Body: kitJSON(t.orgSettings)},
 	)
 	for _, contact := range t.orgContacts {
@@ -231,22 +339,27 @@ func kitSurfaceResponses(t *mockOktaClient) []collectortest.Response {
 	return responses
 }
 
-// kitUserPages lists users over two pages joined by a Link header, as Okta
-// pages them.
+// kitUserPages lists users in pages joined by Link headers, as Okta pages
+// them: at most 200 to a page, and at least two pages for two or more users,
+// so the user list has a first and a last call.
 func kitUserPages(users []okta.User) []collectortest.Response {
-	first := kitBase + "/api/v1/users?limit=200"
+	page := kitBase + "/api/v1/users?limit=200"
+	size := min(200, (len(users)+1)/2)
 	if len(users) < 2 {
-		return []collectortest.Response{{URL: first, Body: kitList(users)}}
+		return []collectortest.Response{{URL: page, Body: kitList(users)}}
 	}
-	split := (len(users) + 1) / 2
-	cursor := users[split-1].ID
-	second := kitBase + "/api/v1/users?after=" + cursor + "&limit=200"
-	return []collectortest.Response{
-		{URL: first, Body: kitList(users[:split]), Header: http.Header{"Link": []string{
-			"<" + first + `>; rel="self", <` + second + `>; rel="next"`,
-		}}},
-		{URL: second, Body: kitList(users[split:])},
+	var responses []collectortest.Response
+	for start := 0; start < len(users); start += size {
+		end := min(start+size, len(users))
+		r := collectortest.Response{URL: page, Body: kitList(users[start:end])}
+		if end < len(users) {
+			next := kitBase + "/api/v1/users?after=" + users[end-1].ID + "&limit=200"
+			r.Header = http.Header{"Link": []string{"<" + page + `>; rel="self", <` + next + `>; rel="next"`}}
+			page = next
+		}
+		responses = append(responses, r)
 	}
+	return responses
 }
 
 func kitGroupRefs(ids []string) []okta.Group {
