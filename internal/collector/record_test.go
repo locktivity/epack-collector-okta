@@ -19,7 +19,8 @@ import (
 // OKTA_PRIVATE_KEY, and skips when any is not set. The recording names the
 // org acme, as in acme.okta.com, and the app by the kit's IDs. The value of
 // any other SANDBOX_ variable becomes a stable fake, and Record writes
-// nothing if one remains:
+// nothing if one remains. recordScrubPatterns also remove where each system
+// log event came from and the org's company details:
 //
 //	SANDBOX_OKTA_ORG_DOMAIN=... SANDBOX_OKTA_COLLECTOR_CLIENT_ID=... SANDBOX_OKTA_COLLECTOR_KEY_ID=... \
 //	OKTA_PRIVATE_KEY="$(cat key.pem)" go test -tags record -run 'TestRecord/^okta$' -count=1 ./internal/collector/
@@ -52,7 +53,7 @@ func TestRecord(t *testing.T) {
 			},
 			Secrets: map[string]string{"OKTA_PRIVATE_KEY": privateKey},
 			Out:     "testdata/recordings/okta.json",
-			Scrub:   collectortest.ScrubRules{Identifiers: identifiers},
+			Scrub:   collectortest.ScrubRules{Identifiers: identifiers, Patterns: recordScrubPatterns},
 		})
 		if err != nil {
 			t.Fatal(err)
