@@ -1,7 +1,11 @@
 // Package okta provides Okta API client functionality.
 package okta
 
-import "time"
+import (
+	"encoding/json"
+	"strconv"
+	"time"
+)
 
 // User represents an Okta user.
 type User struct {
@@ -95,6 +99,30 @@ type Application struct {
 	LastUpdated time.Time     `json:"lastUpdated"`
 	Features    []string      `json:"features"` // PUSH_NEW_USERS, PUSH_USER_DEACTIVATION, etc.
 	Visibility  AppVisibility `json:"visibility"`
+	Settings    AppSettings   `json:"settings"`
+	Links       AppLinks      `json:"_links,omitzero"`
+}
+
+// AppLinks contains the app links the collector reads.
+type AppLinks struct {
+	// AccessPolicy links the app sign-in policy assigned to the app, in an
+	// Identity Engine org.
+	AccessPolicy *Link `json:"accessPolicy,omitempty"`
+}
+
+// Link is a HAL link to another Okta resource.
+type Link struct {
+	Href string `json:"href"`
+}
+
+// AppSettings contains the app settings the collector reads.
+type AppSettings struct {
+	OAuthClient AppOAuthClient `json:"oauthClient"`
+}
+
+// AppOAuthClient contains an OpenID Connect app's client settings.
+type AppOAuthClient struct {
+	GrantTypes []string `json:"grant_types"` // authorization_code, client_credentials, etc.
 }
 
 // AppVisibility contains application visibility settings.
@@ -251,6 +279,20 @@ type PolicyRuleConditions struct {
 		Exclude    []string `json:"exclude,omitempty"`
 	} `json:"network,omitempty"`
 	Device *DeviceCondition `json:"device,omitempty"`
+
+	// Conditions a sign-on rule can set on how the person signs in.
+	AuthContext *struct {
+		AuthType string `json:"authType"` // ANY, RADIUS, LDAP_INTERFACE
+	} `json:"authContext,omitempty"`
+	IdentityProvider *struct {
+		Provider string `json:"provider"` // ANY, OKTA, SPECIFIC_IDP
+	} `json:"identityProvider,omitempty"`
+	Risk *struct {
+		Behaviors []string `json:"behaviors,omitempty"`
+	} `json:"risk,omitempty"`
+	RiskScore *struct {
+		Level string `json:"level"` // ANY, LOW, MEDIUM, HIGH
+	} `json:"riskScore,omitempty"`
 }
 
 // DeviceCondition specifies device requirements for a policy rule.
@@ -258,6 +300,46 @@ type DeviceCondition struct {
 	Managed    string              `json:"managed,omitempty"`    // "true", "false"
 	Registered string              `json:"registered,omitempty"` // "true", "false"
 	Assurance  *AssuranceCondition `json:"assurance,omitempty"`
+}
+
+// UnmarshalJSON accepts managed and registered as JSON booleans or as the
+// strings "true" and "false". Okta sends booleans.
+func (d *DeviceCondition) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Managed    json.RawMessage     `json:"managed"`
+		Registered json.RawMessage     `json:"registered"`
+		Assurance  *AssuranceCondition `json:"assurance"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	managed, err := boolText(raw.Managed)
+	if err != nil {
+		return err
+	}
+	registered, err := boolText(raw.Registered)
+	if err != nil {
+		return err
+	}
+	*d = DeviceCondition{Managed: managed, Registered: registered, Assurance: raw.Assurance}
+	return nil
+}
+
+// boolText returns a JSON boolean or string as text. It returns "" for null
+// or an absent value.
+func boolText(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", nil
+	}
+	var b bool
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return strconv.FormatBool(b), nil
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err != nil {
+		return "", err
+	}
+	return text, nil
 }
 
 // AssuranceCondition specifies which device assurance policies must be satisfied.

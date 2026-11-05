@@ -52,6 +52,14 @@ func (c *Collector) collectAPITokens(ctx context.Context, level componentsdk.Lev
 		return nil
 	}
 
+	// Okta's token list holds only active tokens, and its token object has
+	// no status. A listed token without one is active.
+	for i := range tokens {
+		if tokens[i].Status == "" {
+			tokens[i].Status = StatusActive
+		}
+	}
+
 	recentThreshold := c.config.now().Add(-recentlyUsedWindow)
 	out := &APITokens{}
 	for _, t := range tokens {

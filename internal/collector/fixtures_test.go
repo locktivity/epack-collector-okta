@@ -341,7 +341,8 @@ func kitSurfaceResponses(t *mockOktaClient) []collectortest.Response {
 
 // kitUserPages lists users in pages joined by Link headers, as Okta pages
 // them: at most 200 to a page, and at least two pages for two or more users,
-// so the user list has a first and a last call.
+// so the user list has a first and a last call. Okta sends the self and next
+// links as separate Link headers.
 func kitUserPages(users []okta.User) []collectortest.Response {
 	page := kitBase + "/api/v1/users?limit=200"
 	size := min(200, (len(users)+1)/2)
@@ -354,7 +355,7 @@ func kitUserPages(users []okta.User) []collectortest.Response {
 		r := collectortest.Response{URL: page, Body: kitList(users[start:end])}
 		if end < len(users) {
 			next := kitBase + "/api/v1/users?after=" + users[end-1].ID + "&limit=200"
-			r.Header = http.Header{"Link": []string{"<" + page + `>; rel="self", <` + next + `>; rel="next"`}}
+			r.Header = http.Header{"Link": []string{"<" + page + `>; rel="self"`, "<" + next + `>; rel="next"`}}
 			page = next
 		}
 		responses = append(responses, r)

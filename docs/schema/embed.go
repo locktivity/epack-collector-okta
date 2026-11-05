@@ -18,5 +18,5 @@ var TraceMap []byte
 // componentsdk.CollectorSpec.Schemas. The normalized idp-posture artifact is
 // checked against the SDK's own schema for its type.
 func Schemas() map[string][]byte {
-	return map[string][]byte{"artifacts/okta.json": detailed}
+	return map[string][]byte{"artifacts/okta.details.json": detailed}
 }

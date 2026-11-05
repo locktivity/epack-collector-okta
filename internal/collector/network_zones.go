@@ -88,8 +88,8 @@ func (c *Collector) collectNetworkZones(ctx context.Context, level componentsdk.
 		if internal {
 			row.Gateways = gateways
 			row.Proxies = proxies
-			locations, locationsErr := c.zoneLocations(z.Name, z.Locations)
-			asns, asnsErr := c.zoneASNs(z.Name, z.Asns)
+			locations, locationsErr := c.zoneLocations(z.Name, z.Type, z.Locations)
+			asns, asnsErr := c.zoneASNs(z.Name, z.Type, z.Asns)
 			row.Locations = locations
 			row.ASNs = asns
 			for _, field := range []struct {
@@ -157,22 +157,56 @@ func (c *Collector) zoneAddresses(zone, field string, raw json.RawMessage) ([]st
 	return values, nil
 }
 
-// zoneLocations decodes a zone's locations raw JSON (an array of {country, region}).
-func (c *Collector) zoneLocations(zone string, raw json.RawMessage) ([]string, error) {
+// zoneTypeEnhancedDynamic is Okta's enhanced dynamic zone. It holds its
+// locations and ASNs as include and exclude lists. A DYNAMIC zone holds them
+// as arrays.
+const zoneTypeEnhancedDynamic = "DYNAMIC_V2"
+
+// decodeZoneList decodes a zone's locations or asns. It returns the items a
+// DYNAMIC zone's array holds, or a DYNAMIC_V2 zone's include and exclude
+// lists.
+func decodeZoneList[T any](zoneType string, raw json.RawMessage) (include, exclude []T, err error) {
+	if zoneType != zoneTypeEnhancedDynamic {
+		err = json.Unmarshal(raw, &include)
+		return include, nil, err
+	}
+	var lists struct {
+		Include []T `json:"include"`
+		Exclude []T `json:"exclude"`
+	}
+	err = json.Unmarshal(raw, &lists)
+	return lists.Include, lists.Exclude, err
+}
+
+// excludedZoneValues warns about a DYNAMIC_V2 zone that excludes locations or
+// ASNs, and returns the error its gap carries. An inventory row holds only the
+// values a zone matches, and has no field for excluded ones.
+func (c *Collector) excludedZoneValues(zone, field string) error {
+	warning := c.warn("network zones: zone %q %s: has excluded values, skipped", zone, field)
+	return failed(componentsdk.CodeError(componentsdk.CodeInvalidResponse, fmt.Errorf("network zone %q excludes %s, and the inventory row has no field for excluded values", zone, field)), warning, "")
+}
+
+// zoneLocations decodes a zone's locations raw JSON (an array of {country,
+// region}, or for DYNAMIC_V2 the include list of them).
+func (c *Collector) zoneLocations(zone, zoneType string, raw json.RawMessage) ([]string, error) {
 	if emptyZoneField(raw) {
 		return nil, nil
 	}
-	var locs []struct {
+	locs, excluded, err := decodeZoneList[struct {
 		Country string `json:"country"`
 		Region  string `json:"region"`
-	}
-	if err := json.Unmarshal(raw, &locs); err != nil {
+	}](zoneType, raw)
+	if err != nil {
 		return nil, c.unexpectedZoneShape(zone, "locations")
 	}
+	if len(excluded) > 0 {
+		return nil, c.excludedZoneValues(zone, "locations")
+	}
+	// Okta's region value already starts with the country code, as in US-CA.
 	values := make([]string, 0, len(locs))
 	for _, l := range locs {
 		if l.Region != "" {
-			values = append(values, l.Country+"-"+l.Region)
+			values = append(values, l.Region)
 		} else {
 			values = append(values, l.Country)
 		}
@@ -180,14 +214,18 @@ func (c *Collector) zoneLocations(zone string, raw json.RawMessage) ([]string, e
 	return values, nil
 }
 
-// zoneASNs decodes a zone's asns raw JSON (an array of strings).
-func (c *Collector) zoneASNs(zone string, raw json.RawMessage) ([]string, error) {
+// zoneASNs decodes a zone's asns raw JSON (an array of strings, or for
+// DYNAMIC_V2 the include list of them).
+func (c *Collector) zoneASNs(zone, zoneType string, raw json.RawMessage) ([]string, error) {
 	if emptyZoneField(raw) {
 		return nil, nil
 	}
-	var asns []string
-	if err := json.Unmarshal(raw, &asns); err != nil {
+	asns, excluded, err := decodeZoneList[string](zoneType, raw)
+	if err != nil {
 		return nil, c.unexpectedZoneShape(zone, "asns")
+	}
+	if len(excluded) > 0 {
+		return nil, c.excludedZoneValues(zone, "asns")
 	}
 	return asns, nil
 }

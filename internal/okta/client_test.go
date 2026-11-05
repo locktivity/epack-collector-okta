@@ -380,6 +380,47 @@ func TestFetchPolicyRules(t *testing.T) {
 	}
 }
 
+// Okta sends a rule's device managed and registered conditions as JSON
+// booleans. Strings still decode the same way.
+func TestFetchPolicyRules_DeviceConditionBooleansOrStrings(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"id":"rule1","status":"ACTIVE","conditions":{"device":{"managed":true,"registered":true,"assurance":{"include":["dae1"]}}}},
+			{"id":"rule2","status":"ACTIVE","conditions":{"device":{"managed":"true","registered":"false"}}},
+			{"id":"rule3","status":"ACTIVE","conditions":{"device":{"managed":false}}},
+			{"id":"rule4","status":"ACTIVE"}]`))
+	}))
+	defer server.Close()
+
+	client := NewClientWithHTTP(server.Client(), server.URL)
+	client.SetToken("test-token")
+
+	rules, err := client.FetchPolicyRules(context.Background(), "policy123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rules) != 4 {
+		t.Fatalf("expected 4 rules, got %d", len(rules))
+	}
+	want := []struct{ managed, registered string }{{"true", "true"}, {"true", "false"}, {"false", ""}}
+	for i, w := range want {
+		device := rules[i].Conditions.Device
+		if device == nil {
+			t.Fatalf("rule %d has no device condition", i+1)
+		}
+		if device.Managed != w.managed || device.Registered != w.registered {
+			t.Errorf("rule %d device = managed %q, registered %q, want %q, %q", i+1, device.Managed, device.Registered, w.managed, w.registered)
+		}
+	}
+	if a := rules[0].Conditions.Device.Assurance; a == nil || len(a.Include) != 1 || a.Include[0] != "dae1" {
+		t.Errorf("rule 1 assurance = %+v, want include [dae1]", a)
+	}
+	if rules[3].Conditions.Device != nil {
+		t.Errorf("rule 4 device = %+v, want none", rules[3].Conditions.Device)
+	}
+}
+
 func TestFetchOrgSettings(t *testing.T) {
 	settings := OrgSettings{
 		ID:          "org123",
@@ -413,34 +454,47 @@ func TestFetchOrgSettings(t *testing.T) {
 func TestGetNextLink(t *testing.T) {
 	tests := []struct {
 		name     string
-		header   string
+		header   []string
 		expected string
 	}{
 		{
 			name:     "empty header",
-			header:   "",
+			header:   nil,
 			expected: "",
 		},
 		{
 			name:     "no next link",
-			header:   `<https://example.okta.com/api/v1/users>; rel="self"`,
+			header:   []string{`<https://example.okta.com/api/v1/users>; rel="self"`},
 			expected: "",
 		},
 		{
 			name:     "has next link",
-			header:   `<https://example.okta.com/api/v1/users?after=abc123>; rel="next"`,
+			header:   []string{`<https://example.okta.com/api/v1/users?after=abc123>; rel="next"`},
 			expected: "/api/v1/users?after=abc123",
 		},
 		{
 			name:     "multiple links",
-			header:   `<https://example.okta.com/api/v1/users>; rel="self", <https://example.okta.com/api/v1/users?after=xyz>; rel="next"`,
+			header:   []string{`<https://example.okta.com/api/v1/users>; rel="self", <https://example.okta.com/api/v1/users?after=xyz>; rel="next"`},
+			expected: "/api/v1/users?after=xyz",
+		},
+		{
+			// Okta sends self and next as separate headers, self first.
+			name: "next link on its own header line",
+			header: []string{
+				`<https://example.okta.com/api/v1/users>; rel="self"`,
+				`<https://example.okta.com/api/v1/users?after=xyz>; rel="next"`,
+			},
 			expected: "/api/v1/users?after=xyz",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getNextLink(tt.header)
+			resp := &http.Response{Header: http.Header{}}
+			for _, line := range tt.header {
+				resp.Header.Add("Link", line)
+			}
+			result := getNextLink(resp)
 			if result != tt.expected {
 				t.Errorf("getNextLink(%q) = %q, want %q", tt.header, result, tt.expected)
 			}
@@ -538,7 +592,7 @@ func sdkClient(ctx componentsdk.CollectorContext) *http.Client {
 }
 
 func emitNothing(ctx componentsdk.CollectorContext) error {
-	return ctx.Emit([]componentsdk.CollectedArtifact{componentsdk.JSONArtifact("artifacts/okta.json", map[string]any{}, componentsdk.ArtifactMeta{})})
+	return ctx.Emit([]componentsdk.CollectedArtifact{componentsdk.JSONArtifact("artifacts/okta.details.json", map[string]any{}, componentsdk.ArtifactMeta{})})
 }
 
 func TestErrorsFromAResponseNameItsCall(t *testing.T) {
@@ -556,7 +610,7 @@ func TestErrorsFromAResponseNameItsCall(t *testing.T) {
 		}
 		rec := componentsdk.Records(ctx)
 		at := func(pointer string) componentsdk.Location {
-			return componentsdk.Location{Path: "artifacts/okta.json", Pointer: pointer}
+			return componentsdk.Location{Path: "artifacts/okta.details.json", Pointer: pointer}
 		}
 		rec.NotCollected(at("/users"), client.FetchUsers(ctx.Context(), func([]User) error { return nil }))
 		_, err := client.FetchUserFactors(ctx.Context(), "00u1")
@@ -607,7 +661,7 @@ func TestTokenEndpointErrorsNameTheirCall(t *testing.T) {
 			return err
 		}
 		_, err = client.SignIn(ctx.Context())
-		componentsdk.Records(ctx).NotCollected(componentsdk.Location{Path: "artifacts/okta.json", Pointer: "/token"}, err)
+		componentsdk.Records(ctx).NotCollected(componentsdk.Location{Path: "artifacts/okta.details.json", Pointer: "/token"}, err)
 		return emitNothing(ctx)
 	})
 	if g := res.Result.Gaps[0]; g.Operation != "okta.token.create" || g.Call != 1 || g.Code != componentsdk.CodeAuthFailed || g.VendorCode != "invalid_client" {

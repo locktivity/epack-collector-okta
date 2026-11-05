@@ -25,6 +25,8 @@ type Groups struct {
 	// Internal truncation signal for member-login lists.
 	TruncatedMemberships        bool `json:"truncated_memberships,omitempty"`
 	TruncatedMembershipsDropped int  `json:"truncated_memberships_dropped,omitempty"`
+
+	everyoneID string // ID of the built-in Everyone group, or "" when the list has none
 }
 
 // GroupSummary is a per-group inventory row (audit+). Internal adds member logins.
@@ -49,10 +51,11 @@ type GroupSummary struct {
 }
 
 // collectGroups collects the groups surface (audit and above). Returns nil at
-// trust, or, with a gap, when the group list cannot be fetched.
-func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level) *Groups {
+// trust. When the group list cannot be fetched, it returns nil and the error,
+// with a gap.
+func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level) (*Groups, error) {
 	if !level.AtLeast(componentsdk.LevelAudit) {
-		return nil
+		return nil, nil
 	}
 
 	var groups []okta.Group
@@ -62,7 +65,7 @@ func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level)
 	}); err != nil {
 		err = c.warnSurface("groups", "okta.groups.read", err)
 		c.gaps.notCollected(err, "/groups")
-		return nil
+		return nil, err
 	}
 
 	out := &Groups{
@@ -71,6 +74,11 @@ func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level)
 	}
 	for _, g := range groups {
 		out.CountBySource[g.Type]++
+		// Okta Administrators is a built-in group too, so the check also
+		// needs the name.
+		if g.Type == GroupTypeBuiltIn && g.Profile.Name == "Everyone" {
+			out.everyoneID = g.ID
+		}
 	}
 
 	out.Inventory = make([]GroupSummary, 0, len(groups))
@@ -117,7 +125,7 @@ func (c *Collector) collectGroups(ctx context.Context, level componentsdk.Level)
 		}
 	}
 
-	return out
+	return out, nil
 }
 
 func statsCount(row GroupSummary) int {

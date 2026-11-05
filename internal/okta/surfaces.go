@@ -36,17 +36,21 @@ type IdentityProvider struct {
 		} `json:"endpoints"`
 		Credentials struct {
 			Trust struct {
-				Issuer string `json:"issuer"`
+				Issuer string `json:"issuer"` // SAML2
 				Kid    string `json:"kid"`
 			} `json:"trust"`
 		} `json:"credentials"`
+		Issuer struct {
+			URL string `json:"url"` // OIDC
+		} `json:"issuer"`
 	} `json:"protocol"`
 	Policy struct {
 		Provisioning struct {
 			Action string `json:"action"` // AUTO, DISABLED (JIT provisioning)
 			Groups struct {
-				Action      string   `json:"action"`
-				Assignments []string `json:"assignments"`
+				Action      string   `json:"action"`      // NONE, ASSIGN, APPEND, SYNC
+				Assignments []string `json:"assignments"` // Groups for ASSIGN
+				Filter      []string `json:"filter"`      // Allowlist of groups for APPEND and SYNC
 			} `json:"groups"`
 		} `json:"provisioning"`
 		AccountLink struct {
@@ -59,7 +63,7 @@ type IdentityProvider struct {
 type APIToken struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
-	Status      string    `json:"status"` // ACTIVE, REVOKED
+	Status      string    `json:"status"` // Not in Okta's token object. The list holds only active tokens.
 	Created     time.Time `json:"created"`
 	LastUpdated time.Time `json:"lastUpdated"`
 	UserID      string    `json:"userId"`

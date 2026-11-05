@@ -40,7 +40,7 @@ var securityRelevantEventTypes = map[string][]string{
 		"policy.lifecycle.create",
 		"policy.lifecycle.update",
 		"policy.lifecycle.delete",
-		"policy.rule.create",
+		"policy.rule.add",
 		"policy.rule.update",
 		"policy.rule.delete",
 	},
@@ -69,9 +69,9 @@ var securityRelevantEventTypes = map[string][]string{
 		"group.privilege.revoke",
 	},
 	"security": {
-		"security.zone.create",
-		"security.zone.update",
-		"security.zone.delete",
+		"zone.create",
+		"zone.update",
+		"zone.delete",
 		"security.threat.detected",
 	},
 }

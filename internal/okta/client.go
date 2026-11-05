@@ -156,9 +156,9 @@ func (c *Client) SignIn(ctx context.Context) (*Identity, error) {
 // get sends one named GET and decodes a 200 response into dest. Any other
 // status returns an *APIStatusError. Each error built from the response
 // names the call it answered. The SDK's transport retries the call when that
-// is safe.
+// is safe. The call declares the scope it needs.
 func (c *Client) get(ctx context.Context, op, path string, dest any) (*http.Response, error) {
-	ctx = componentsdk.WithOperation(ctx, componentsdk.Operation{Name: op})
+	ctx = componentsdk.WithOperation(ctx, componentsdk.Operation{Name: op, Permission: Scope(op)})
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
 		return nil, err
@@ -202,7 +202,7 @@ func listPages[T any](ctx context.Context, c *Client, op, path string, each func
 		if err := each(*page); err != nil {
 			return err
 		}
-		path = getNextLink(resp.Header.Get("Link"))
+		path = getNextLink(resp)
 	}
 	return nil
 }
@@ -455,35 +455,18 @@ func (c *Client) FetchOrgSettings(ctx context.Context) (*OrgSettings, error) {
 	return &settings, nil
 }
 
-// getNextLink extracts the next page URL from the Link header.
-// Returns empty string if there is no next page.
-func getNextLink(linkHeader string) string {
-	if linkHeader == "" {
+// getNextLink returns the path and query of the next page that resp's Link
+// headers name, or "" when there is no next page. Okta sends the self and
+// next links as separate Link headers, so every header line is read.
+func getNextLink(resp *http.Response) string {
+	next, ok := componentsdk.NextLink(resp)
+	if !ok {
 		return ""
 	}
-
-	// Link header format: <url>; rel="next", <url>; rel="self"
-	parts := strings.Split(linkHeader, ",")
-	for _, part := range parts {
-		if strings.Contains(part, `rel="next"`) {
-			// Extract URL from <url>
-			urlPart := strings.TrimSpace(strings.Split(part, ";")[0])
-			urlPart = strings.TrimPrefix(urlPart, "<")
-			urlPart = strings.TrimSuffix(urlPart, ">")
-
-			// Parse URL and return just the path + query
-			u, err := url.Parse(urlPart)
-			if err != nil {
-				return ""
-			}
-			if u.RawQuery != "" {
-				return u.Path + "?" + u.RawQuery
-			}
-			return u.Path
-		}
+	if next.RawQuery != "" {
+		return next.Path + "?" + next.RawQuery
 	}
-
-	return ""
+	return next.Path
 }
 
 // getPathAndQuery extracts the path and query string from an absolute URL.

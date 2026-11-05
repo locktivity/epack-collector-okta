@@ -97,8 +97,8 @@ scopes for your level **before** running to collect every surface.
 
 | Scope | Levels | Surface |
 |---|---|---|
-| `okta.users.read` | trust+ | Users, their factors and groups, posture, privileged access, policy coverage |
-| `okta.groups.read` | trust+ | Group resolution, groups surface |
+| `okta.users.read` | trust+ | Users, their factors and groups, posture, privileged access, policy coverage, org settings' `self_service_recovery_enabled` (audit+) |
+| `okta.groups.read` | trust+ | Group resolution, groups surface, policy scope summaries (audit+) |
 | `okta.apps.read` | trust+ | Apps |
 | `okta.policies.read` | trust+ | Policy; org settings' `self_service_recovery_enabled` (audit+) |
 | `okta.roles.read` | trust+ | Privileged access (role assignments, custom roles); listing role assignments needs a Super Administrator-level role |
@@ -174,7 +174,19 @@ service app's admin role cannot read the surface, so the gap names no scope and
 its warning says the app needs an admin role that can read it. A gap under an
 API token names no scope either, since the token acts with its owner's admin
 roles. At the audit and internal levels, each gap also carries the warning the
-collector wrote for it.
+collector wrote for it. Each operation in the collector result lists the OAuth
+scope its call needs, as `permission`.
+
+In `artifacts/okta.idp-posture.json`, a value Okta does not report at all, such
+as `weak_password_pct`, is left out with an `unsupported` gap. A value Okta
+reports that is not read yet is left out with a `not_read` gap. These are
+`policy.phishing_resistant_required_for_privileged`, which Okta reports in
+`ACCESS_POLICY` rules, and `app_security.authorized_third_party_apps_count`,
+which Okta reports as each user's app grants. `policy.mfa_required`,
+`mfa_required_coverage_pct` and `mfa_required_user_count` get a `not_read` gap
+too when the sign-on and enrollment policies leave someone out and an active
+app has an app sign-in policy. That policy can require MFA in its
+`ACCESS_POLICY` rules. A `not_read` gap does not make a run partial.
 
 The collector result also lists the run's steps, from `sign_in` to
 `org_settings`, with the calls each one made; a trust run has the first six. It

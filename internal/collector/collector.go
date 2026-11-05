@@ -200,7 +200,9 @@ func (c *Collector) Collect(ctx context.Context, level componentsdk.Level) (*Org
 		return nil, err
 	}
 
-	posture := NewOrgPosture(c.config.OrgDomain, c.config.now())
+	// org_domain is the org's host, such as acme.okta.com. Any scheme, upper
+	// case or trailing slash in the config is removed.
+	posture := NewOrgPosture(okta.Host(c.config.OrgDomain), c.config.now())
 	posture.CollectedAtLevel = string(level)
 
 	userMetrics := c.collectUserMetrics(steps.next("people", "People and sign-in methods"), level)
@@ -215,18 +217,20 @@ func (c *Collector) Collect(ctx context.Context, level componentsdk.Level) (*Org
 	c.fillUsers(posture, userMetrics, level)
 	c.fillApps(posture, appMetrics, level)
 	c.fillPrivileged(posture, privilegedMetrics, level)
-	c.fillPolicy(posture, userMetrics, policyMetrics, level)
+	c.fillPolicy(posture, userMetrics, appMetrics, policyMetrics, level)
 	c.fillDeviceAccess(posture, userMetrics, privilegedMetrics, policyMetrics, deviceAccessMetrics, level)
 
 	if level.AtLeast(componentsdk.LevelAudit) {
 		posture.Posture.PerFactorType = c.collectAuthenticatorMetrics(steps.next("authenticators", "Authenticators"), userMetrics, level)
-		posture.Groups = c.collectGroups(steps.next("groups", "Groups"), level)
+		groups, groupsErr := c.collectGroups(steps.next("groups", "Groups"), level)
+		posture.Groups = groups
+		c.fillPolicyScopes(posture, groups, groupsErr)
 		posture.NetworkZones = c.collectNetworkZones(steps.next("network_zones", "Network zones"), level)
 		posture.IdentityProviders = c.collectIdentityProviders(steps.next("identity_providers", "Identity providers"), level)
 		posture.APITokens = c.collectAPITokens(steps.next("api_tokens", "API tokens"), level, userMetrics)
 		posture.Hooks = c.collectHooks(steps.next("hooks", "Event and inline hooks"), level)
 		posture.SystemLog = c.collectSystemLog(steps.next("system_log", "Activity log"), level)
-		posture.OrgSettings = c.collectOrgSettings(steps.next("org_settings", "Org settings"), level, userMetrics)
+		posture.OrgSettings = c.collectOrgSettings(steps.next("org_settings", "Org settings"), level, userMetrics, policyMetrics)
 		steps.end()
 	}
 
@@ -293,8 +297,10 @@ func (c *Collector) Artifacts(posture *OrgPosture) []componentsdk.CollectedArtif
 		return artifacts
 	}
 	c.mirrorIDPPostureGaps()
+	c.markIDPPostureLeftOut(componentsdk.Level(posture.CollectedAtLevel))
+	c.markMFARequirementUnread(posture.Policy, componentsdk.Level(posture.CollectedAtLevel))
 	return append(artifacts, componentsdk.JSONArtifact(idpPosturePath, normalized,
-		componentsdk.ArtifactMeta{Schema: "evidencepack/idp-posture@v1"}))
+		componentsdk.ArtifactMeta{Schema: idpPostureSchema}))
 }
 
 // formatTime renders t as an RFC3339 UTC string, or "" if t is the zero value.

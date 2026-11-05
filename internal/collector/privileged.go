@@ -231,7 +231,8 @@ const workflowsAdminRole = "WORKFLOWS_ADMIN"
 // collectCustomRoles fetches the custom-admin-role inventory (Identity Governance
 // feature). A 404 means the feature is not licensed; any other failure leaves
 // the inventory out with a gap. Standard built-in roles are surfaced via the
-// per-user inventory. Returns nil below audit level.
+// per-user inventory. Returns nil below audit level, and an empty list for an
+// org with no custom roles.
 func (c *Collector) collectCustomRoles(ctx context.Context, level componentsdk.Level) []CustomRole {
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
@@ -293,7 +294,7 @@ type PrivilegedAccessMetrics struct {
 
 	// Audit-level fields.
 	Inventory   []PrivilegedUser `json:"inventory,omitempty"`
-	CustomRoles []CustomRole     `json:"custom_roles,omitempty"`
+	CustomRoles []CustomRole     `json:"custom_roles,omitzero"` // [] for an org with no custom roles, absent when left out
 }
 
 // PrivilegedUser is a per-privileged-user inventory row (audit+).
