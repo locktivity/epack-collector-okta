@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"strings"
 
 	"github.com/locktivity/epack-collector-okta/internal/okta"
 	"github.com/locktivity/epack/componentsdk"
@@ -22,14 +23,30 @@ func deviceAssurancePolicySummary(dap okta.DeviceAssurancePolicy) DeviceAssuranc
 		Name:                dap.Name,
 		Platform:            dap.Platform,
 		Status:              dap.Status,
-		DiskEncryptionReq:   dap.DiskEncryptionType != nil && len(dap.DiskEncryptionType.Include) > 0,
-		ScreenLockReq:       dap.ScreenLockType != nil && len(dap.ScreenLockType.Include) > 0,
+		DiskEncryptionReq:   dap.DiskEncryptionType != nil && requiresSetting(dap.DiskEncryptionType.Include),
+		ScreenLockReq:       dap.ScreenLockType != nil && requiresSetting(dap.ScreenLockType.Include),
 		JailbreakProtection: dap.Jailbreak != nil,
 	}
 	if dap.OSVersion != nil {
 		summary.MinOSVersion = dap.OSVersion.Minimum
 	}
 	return summary
+}
+
+// requiresSetting reports whether a device assurance setting lists accepted
+// types and none of them is NONE. Okta's NONE type means no screen lock or no
+// encryption is set, so a device without the setting passes when NONE is
+// listed.
+func requiresSetting(accepted []string) bool {
+	if len(accepted) == 0 {
+		return false
+	}
+	for _, t := range accepted {
+		if strings.EqualFold(t, "NONE") {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Collector) collectDeviceAccessMetrics(

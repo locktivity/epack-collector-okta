@@ -20,6 +20,7 @@ func Spec(version, commit string) componentsdk.CollectorSpec {
 		Timeout:  30 * time.Minute,
 		Schemas:  schema.Schemas(),
 		TraceMap: schema.TraceMap,
+		Writes:   []string{idpPostureSchema},
 	}
 }
 
@@ -45,6 +46,7 @@ func Run(ctx componentsdk.CollectorContext) error {
 	config.HTTPClient = componentsdk.NewHTTPClient(ctx, componentsdk.HTTPOptions{
 		CredentialHosts: []string{okta.Host(config.OrgDomain)},
 		VendorCode:      okta.VendorCode,
+		NamesPermission: okta.NamesPermission,
 	})
 
 	// The level selects both the OAuth scope set requested at token exchange

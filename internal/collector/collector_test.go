@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -404,6 +405,111 @@ func TestCollect_WithApps(t *testing.T) {
 	assertInt(t, "Apps.DeprovisioningEnabled", posture.Apps.DeprovisioningEnabled, 25)
 }
 
+// Deactivating an app removes its users' access, so an inactive app is left
+// out of the app counts and percentages. The inventory still lists it.
+func TestCollect_InactiveAppsAreNotCounted(t *testing.T) {
+	client := &mockOktaClient{
+		apps: []okta.Application{
+			{ID: "app1", Label: "Live CRM", Name: "crm", SignOnMode: "SAML_2_0", Status: "ACTIVE", Features: []string{"PUSH_NEW_USERS", "PUSH_USER_DEACTIVATION"}},
+			{ID: "app2", Label: "Retired CRM", Name: "old_crm", SignOnMode: "SAML_2_0", Status: "INACTIVE", Features: []string{"PUSH_NEW_USERS", "PUSH_USER_DEACTIVATION"}},
+			{ID: "app3", Label: "Wiki", Name: "wiki", SignOnMode: "BROWSER_PLUGIN", Status: "ACTIVE"},
+		},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assertInt(t, "Apps.TotalCount", posture.Apps.TotalCount, 2)
+	assertInt(t, "Apps.SSOCount", posture.Apps.SSOCount, 1)
+	assertInt(t, "Apps.ProvisioningEnabledCount", posture.Apps.ProvisioningEnabledCount, 1)
+	assertInt(t, "Apps.DeprovisioningEnabledCount", posture.Apps.DeprovisioningEnabledCount, 1)
+	assertInt(t, "Posture.SSOCoverage", posture.Posture.SSOCoverage, 50)
+	assertInt(t, "Apps.ProvisioningEnabled", posture.Apps.ProvisioningEnabled, 50)
+	assertInt(t, "Apps.DeprovisioningEnabled", posture.Apps.DeprovisioningEnabled, 50)
+	if len(posture.Apps.Inventory) != 3 {
+		t.Errorf("expected 3 app inventory rows, got %d", len(posture.Apps.Inventory))
+	}
+
+	idp := posture.ToIDPPosture()
+	if idp == nil || idp.AppSecurity == nil {
+		t.Fatal("expected an app_security section")
+	}
+	assertInt(t, "AppSecurity.AppCount", idp.AppSecurity.AppCount, 2)
+	assertInt(t, "AppSecurity.SSOAppCount", idp.AppSecurity.SSOAppCount, 1)
+}
+
+// An org whose only app is inactive has no apps to take a share of.
+func TestCollect_OnlyInactiveApps(t *testing.T) {
+	client := &mockOktaClient{
+		apps: []okta.Application{{ID: "app1", SignOnMode: "SAML_2_0", Status: "INACTIVE", Features: []string{"PUSH_NEW_USERS"}}},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelTrust)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assertInt(t, "Apps.TotalCount", posture.Apps.TotalCount, 0)
+	assertInt(t, "Apps.SSOCount", posture.Apps.SSOCount, 0)
+	if posture.Posture.SSOCoverage != nil || posture.Apps.ProvisioningEnabled != nil {
+		t.Errorf("expected null app percentages, got sso_coverage %v, provisioning_enabled %v", posture.Posture.SSOCoverage, posture.Apps.ProvisioningEnabled)
+	}
+}
+
+// Okta's Admin Console, Dashboard and Browser Plugin apps are in every org,
+// and only a Super Admin can see them. An API service app uses only the
+// client credentials grant, so no one signs in to it. These apps are left out
+// of the app counts and percentages, and the inventory still lists them.
+func TestCollect_OktaDefaultAndServiceAppsAreNotCounted(t *testing.T) {
+	grants := func(types ...string) okta.AppSettings {
+		return okta.AppSettings{OAuthClient: okta.AppOAuthClient{GrantTypes: types}}
+	}
+	client := &mockOktaClient{
+		apps: []okta.Application{
+			{ID: "app1", Label: "Okta Admin Console", Name: "saasure", SignOnMode: "OPENID_CONNECT", Status: "ACTIVE"},
+			{ID: "app2", Label: "Okta Dashboard", Name: "okta_enduser", SignOnMode: "OPENID_CONNECT", Status: "ACTIVE"},
+			{ID: "app3", Label: "Okta Browser Plugin", Name: "okta_browser_plugin", SignOnMode: "OPENID_CONNECT", Status: "ACTIVE"},
+			{ID: "app4", Label: "Reporting", Name: "oidc_client", SignOnMode: "OPENID_CONNECT", Status: "ACTIVE", Settings: grants("client_credentials")},
+			{ID: "app5", Label: "Billing portal", Name: "oidc_client", SignOnMode: "OPENID_CONNECT", Status: "ACTIVE", Settings: grants("authorization_code", "client_credentials")},
+			{ID: "app6", Label: "CRM", Name: "acme_crm", SignOnMode: "SAML_2_0", Status: "ACTIVE", Features: []string{"PUSH_NEW_USERS"}},
+			{ID: "app7", Label: "Intranet link", Name: "bookmark", SignOnMode: "BOOKMARK", Status: "ACTIVE"},
+		},
+	}
+
+	c := NewWithClient(Config{OrgDomain: "test.okta.com"}, client)
+	posture, err := c.Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assertInt(t, "Apps.TotalCount", posture.Apps.TotalCount, 3)
+	assertInt(t, "Apps.SSOCount", posture.Apps.SSOCount, 2)
+	assertInt(t, "Posture.SSOCoverage", posture.Posture.SSOCoverage, 66)
+	assertInt(t, "Apps.ProvisioningEnabled", posture.Apps.ProvisioningEnabled, 33)
+	if len(posture.Apps.Inventory) != 7 {
+		t.Fatalf("expected 7 app inventory rows, got %d", len(posture.Apps.Inventory))
+	}
+	for _, row := range posture.Apps.Inventory {
+		if row.Label != "Reporting" {
+			continue
+		}
+		if row.Type != "SERVICE" || row.SSOConfigured {
+			t.Errorf("service app row = type %q, sso_configured %v, want SERVICE and false", row.Type, row.SSOConfigured)
+		}
+	}
+
+	idp := posture.ToIDPPosture()
+	if idp == nil || idp.AppSecurity == nil {
+		t.Fatal("expected an app_security section")
+	}
+	assertInt(t, "AppSecurity.AppCount", idp.AppSecurity.AppCount, 3)
+	assertFloat(t, "AppSecurity.SSOCoveragePct", idp.AppSecurity.SSOCoveragePct.Value, 66)
+}
+
 func TestCollect_WithPolicy(t *testing.T) {
 	client := &mockOktaClient{
 		users: []okta.User{
@@ -765,6 +871,63 @@ func TestCollect_AuditPrivilegedAndPolicy(t *testing.T) {
 	}
 }
 
+// Okta returns each default policy with the built-in Everyone group as its
+// included group, and the policy applies to all users. A policy for a group
+// of the customer's own covers only that group.
+func TestPolicySummary_ScopeOfEveryoneGroup(t *testing.T) {
+	tests := []struct {
+		name         string
+		includeGroup string
+		groupsErr    error
+		want         string
+	}{
+		{"built-in Everyone group", "00gEveryone", nil, "everyone"},
+		{"built-in Okta Administrators group", "00gOktaAdmins", nil, "group-assigned"},
+		{"own group", "00gAdmins", nil, "group-assigned"},
+		{"no people condition", "", nil, "everyone"},
+		{"no people condition and no group list", "", &okta.APIStatusError{StatusCode: 403, Path: "/api/v1/groups"}, "everyone"},
+		{"group list not read", "00gEveryone", &okta.APIStatusError{StatusCode: 403, Path: "/api/v1/groups"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := okta.Policy{ID: "p1", Name: "Default Policy", Type: PolicyTypeSignOn, Status: "ACTIVE", Priority: 1, System: true}
+			if tt.includeGroup != "" {
+				policy.Conditions.People = &okta.PolicyPeopleCondition{Groups: &struct {
+					Include []string `json:"include,omitempty"`
+					Exclude []string `json:"exclude,omitempty"`
+				}{Include: []string{tt.includeGroup}}}
+			}
+			client := &mockOktaClient{
+				users:       []okta.User{{ID: "u1", Status: "ACTIVE", Profile: okta.UserProfile{Login: "u1@acme.com"}}},
+				policies:    map[string][]okta.Policy{PolicyTypeSignOn: {policy}},
+				policyRules: map[string][]okta.PolicyRule{"p1": {{ID: "r1", Status: "ACTIVE", Actions: okta.PolicyRuleActions{Signon: &okta.SignonActions{Access: "ALLOW"}}}}},
+				groups: []okta.Group{
+					{ID: "00gEveryone", Type: "BUILT_IN", Profile: okta.GroupProfile{Name: "Everyone"}},
+					{ID: "00gOktaAdmins", Type: "BUILT_IN", Profile: okta.GroupProfile{Name: "Okta Administrators"}},
+					{ID: "00gAdmins", Type: "OKTA_GROUP", Profile: okta.GroupProfile{Name: "Admins"}},
+				},
+				groupsErr:  tt.groupsErr,
+				groupUsers: map[string][]okta.User{"00gEveryone": {{ID: "u1"}}, "00gOktaAdmins": {{ID: "u1"}}, "00gAdmins": {{ID: "u1"}}},
+			}
+			rec := &componentsdk.Recorder{}
+			posture, err := NewWithClient(Config{OrgDomain: "test.okta.com", Recorder: rec}, client).Collect(context.Background(), componentsdk.LevelAudit)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(posture.Policy.Policies) != 1 {
+				t.Fatalf("expected 1 policy summary, got %d", len(posture.Policy.Policies))
+			}
+			if got := posture.Policy.Policies[0].ScopeSummary; got != tt.want {
+				t.Errorf("scope_summary = %q, want %q", got, tt.want)
+			}
+			_, gap := gapAt(rec, "/policy/policies/0/scope_summary")
+			if gap != (tt.want == "") {
+				t.Errorf("gap at /policy/policies/0/scope_summary = %v, want %v", gap, tt.want == "")
+			}
+		})
+	}
+}
+
 func TestPrivileged_LeavesOutWorkflowsAdmin(t *testing.T) {
 	roles := []okta.IAMRole{
 		{ID: "WORKFLOWS_ADMIN", Label: "Workflows Administrator", Description: "An admin role for managing workflows"},
@@ -787,6 +950,44 @@ func TestPrivileged_LeavesOutWorkflowsAdmin(t *testing.T) {
 	}
 	if _, ok := gapAt(rec, "/privileged_access/custom_roles/0/permission_count"); !ok {
 		t.Errorf("expected the permission_count gap on row 0, got %+v", rec.Gaps())
+	}
+}
+
+// For an org with no custom roles, Okta's role list holds only the built-in
+// Workflows Administrator role. Its custom_roles is an empty list, with no
+// gap.
+func TestPrivileged_NoCustomRolesIsAnEmptyList(t *testing.T) {
+	client := &mockOktaClient{iamRoles: []okta.IAMRole{
+		{ID: "WORKFLOWS_ADMIN", Label: "Workflows Administrator", Description: "An admin role for managing workflows"},
+	}}
+	rec := &componentsdk.Recorder{}
+	posture, err := NewWithClient(Config{OrgDomain: "test.okta.com", Recorder: rec}, client).Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	raw, err := json.Marshal(posture.PrivilegedAccess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var privileged map[string]any
+	if err := json.Unmarshal(raw, &privileged); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := privileged["custom_roles"].([]any); !ok || len(got) != 0 {
+		t.Errorf("custom_roles = %v, want []", privileged["custom_roles"])
+	}
+	if g, ok := gapAt(rec, "/privileged_access/custom_roles"); ok {
+		t.Errorf("unexpected custom_roles gap: %+v", g)
+	}
+
+	// Below audit the field is left out.
+	posture, err = NewWithClient(Config{OrgDomain: "test.okta.com"}, client).Collect(context.Background(), componentsdk.LevelTrust)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if raw, _ := json.Marshal(posture.PrivilegedAccess); strings.Contains(string(raw), "custom_roles") {
+		t.Errorf("custom_roles present at trust: %s", raw)
 	}
 }
 
@@ -1033,6 +1234,31 @@ func TestCollect_AuditDeviceAssurance(t *testing.T) {
 	}
 }
 
+func TestDeviceAssurancePolicySummary_NoneIsNotARequirement(t *testing.T) {
+	// Okta's NONE type means no screen lock or no encryption is set.
+	tests := []struct {
+		name                   string
+		policy                 string
+		screenLock, encryption bool
+	}{
+		{"only NONE", `{"platform":"ANDROID","screenLockType":{"include":["NONE"]},"diskEncryptionType":{"include":["NONE"]}}`, false, false},
+		{"NONE with other types", `{"platform":"ANDROID","screenLockType":{"include":["NONE","PASSCODE"]}}`, false, false},
+		{"set types only", `{"platform":"ANDROID","screenLockType":{"include":["PASSCODE","BIOMETRIC"]},"diskEncryptionType":{"include":["FULL","USER"]}}`, true, true},
+		{"no settings", `{"platform":"ANDROID"}`, false, false},
+	}
+	for _, tt := range tests {
+		var dap okta.DeviceAssurancePolicy
+		if err := json.Unmarshal([]byte(tt.policy), &dap); err != nil {
+			t.Fatalf("%s: decoding policy: %v", tt.name, err)
+		}
+		got := deviceAssurancePolicySummary(dap)
+		if got.ScreenLockReq != tt.screenLock || got.DiskEncryptionReq != tt.encryption {
+			t.Errorf("%s: screen_lock_required = %v and disk_encryption_required = %v, want %v and %v",
+				tt.name, got.ScreenLockReq, got.DiskEncryptionReq, tt.screenLock, tt.encryption)
+		}
+	}
+}
+
 func TestCollect_InternalDetails(t *testing.T) {
 	now := time.Now()
 	client := &mockOktaClient{
@@ -1228,6 +1454,104 @@ func TestNetworkZones_WarnsOnUnexpectedShape(t *testing.T) {
 	}
 }
 
+// A DYNAMIC_V2 zone holds its locations and ASNs as include and exclude lists.
+// The items have the same shape as a DYNAMIC zone's, as Okta's Go SDK defines
+// them in
+// https://github.com/okta/okta-sdk-golang/blob/master/okta/model_enhanced_dynamic_network_zone_all_of_locations.go
+// https://github.com/okta/okta-sdk-golang/blob/master/okta/model_enhanced_dynamic_network_zone_all_of_asns.go
+func TestNetworkZones_EnhancedDynamicZoneLists(t *testing.T) {
+	var zones []okta.NetworkZone
+	if err := json.Unmarshal([]byte(`[
+		{"type":"DYNAMIC","id":"z1","name":"Legacy","status":"ACTIVE","usage":"POLICY",
+		 "locations":[{"country":"US"},{"country":"CA"}],"asns":["64512"]},
+		{"type":"DYNAMIC_V2","id":"z2","name":"DefaultEnhancedDynamicZone","status":"INACTIVE","usage":"BLOCKLIST",
+		 "locations":{"include":[],"exclude":[]},"ipServiceCategories":{"include":["ALL_ANONYMIZERS"],"exclude":[]},
+		 "asns":{"include":[],"exclude":[]}},
+		{"type":"DYNAMIC_V2","id":"z3","name":"US only","status":"ACTIVE","usage":"POLICY",
+		 "locations":{"include":[{"country":"US"}],"exclude":[]},"asns":{"include":["64512"],"exclude":[]}},
+		{"type":"DYNAMIC_V2","id":"z4","name":"Not Canada","status":"ACTIVE","usage":"POLICY",
+		 "locations":{"include":[],"exclude":[{"country":"CA"}]},"asns":{"include":["64513"]}}
+	]`), &zones); err != nil {
+		t.Fatalf("decoding zones: %v", err)
+	}
+
+	rec := &componentsdk.Recorder{}
+	client := &mockOktaClient{networkZones: zones}
+	posture, err := NewWithClient(Config{OrgDomain: "test.okta.com", Recorder: rec}, client).Collect(context.Background(), componentsdk.LevelInternal)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rows := posture.NetworkZones.Inventory
+	if len(rows) != 4 {
+		t.Fatalf("expected 4 zone rows, got %d", len(rows))
+	}
+	want := []struct{ locations, asns string }{
+		{"US,CA", "64512"},
+		{"", ""},
+		{"US", "64512"},
+		{"", "64513"},
+	}
+	for i, w := range want {
+		if got := strings.Join(rows[i].Locations, ","); got != w.locations {
+			t.Errorf("zone %s locations = %q, want %q", rows[i].Name, got, w.locations)
+		}
+		if got := strings.Join(rows[i].ASNs, ","); got != w.asns {
+			t.Errorf("zone %s asns = %q, want %q", rows[i].Name, got, w.asns)
+		}
+	}
+
+	// The row has no field for excluded locations, so that zone's locations
+	// are left out with a gap. Every other zone field is read.
+	var gaps []string
+	for _, g := range rec.Gaps() {
+		if strings.HasPrefix(g.Pointer, "/network_zones") {
+			gaps = append(gaps, g.Pointer)
+		}
+	}
+	if want := []string{"/network_zones/inventory/3/locations"}; !reflect.DeepEqual(gaps, want) {
+		t.Errorf("network zone gaps = %v, want %v", gaps, want)
+	}
+	if posture.Diagnostics == nil {
+		t.Fatal("expected a warning for the excluded locations")
+	}
+	var warnings []string
+	for _, w := range posture.Diagnostics.Warnings {
+		if strings.HasPrefix(w, "network zones") {
+			warnings = append(warnings, w)
+		}
+	}
+	if want := []string{`network zones: zone "Not Canada" locations: has excluded values, skipped`}; !reflect.DeepEqual(warnings, want) {
+		t.Errorf("network zone warnings = %q, want %q", warnings, want)
+	}
+}
+
+// Okta's region value already starts with the country code, as in US-CA.
+func TestNetworkZones_LocationRegionHasCountryOnce(t *testing.T) {
+	var zones []okta.NetworkZone
+	if err := json.Unmarshal([]byte(`[
+		{"type":"DYNAMIC","id":"z1","name":"Dynamic","status":"ACTIVE","usage":"POLICY",
+		 "locations":[{"country":"US","region":"US-CA"},{"country":"DE","region":null}]},
+		{"type":"DYNAMIC_V2","id":"z2","name":"Enhanced","status":"ACTIVE","usage":"POLICY",
+		 "locations":{"include":[{"country":"US","region":"US-CA"},{"country":"FR"}],"exclude":[]}}
+	]`), &zones); err != nil {
+		t.Fatalf("decoding zones: %v", err)
+	}
+	client := &mockOktaClient{networkZones: zones}
+	posture, err := NewWithClient(Config{OrgDomain: "test.okta.com"}, client).Collect(context.Background(), componentsdk.LevelInternal)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := map[string][]string{}
+	for _, row := range posture.NetworkZones.Inventory {
+		got[row.Name] = row.Locations
+	}
+	want := map[string][]string{"Dynamic": {"US-CA", "DE"}, "Enhanced": {"US-CA", "FR"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("locations = %v, want %v", got, want)
+	}
+}
+
 func TestCollect_MissingOrgDomain(t *testing.T) {
 	client := &mockOktaClient{}
 	c := NewWithClient(Config{OrgDomain: ""}, client)
@@ -1235,6 +1559,23 @@ func TestCollect_MissingOrgDomain(t *testing.T) {
 	_, err := c.Collect(context.Background(), componentsdk.LevelTrust)
 	if err == nil {
 		t.Error("expected error for missing org_domain")
+	}
+}
+
+// org_domain is the org's host for each way the config can spell it.
+func TestCollect_OrgDomainIsTheHost(t *testing.T) {
+	for _, configured := range []string{"acme.okta.com", "https://acme.okta.com/", "https://Acme.okta.com", "ACME.okta.com/"} {
+		client := &mockOktaClient{users: []okta.User{{ID: "u1", Status: "ACTIVE", Profile: okta.UserProfile{Login: "u1@acme.com"}}}}
+		posture, err := NewWithClient(Config{OrgDomain: configured}, client).Collect(context.Background(), componentsdk.LevelTrust)
+		if err != nil {
+			t.Fatalf("collect: %v", err)
+		}
+		if posture.OrgDomain != "acme.okta.com" {
+			t.Errorf("org_domain for config %q = %q, want %q", configured, posture.OrgDomain, "acme.okta.com")
+		}
+		if idp := posture.ToIDPPosture(); idp == nil || idp.OrgDomain != "acme.okta.com" {
+			t.Errorf("idp-posture org_domain for config %q = %+v, want %q", configured, idp, "acme.okta.com")
+		}
 	}
 }
 
@@ -1374,38 +1715,50 @@ func gapAt(rec *componentsdk.Recorder, pointer string) (componentsdk.Gap, bool) 
 func TestToIDPPosture(t *testing.T) {
 	// Test transformation from OrgPosture to normalized IDPPosture
 	orgPosture := &OrgPosture{
-		SchemaVersion: "1.0.0",
-		CollectedAt:   "2024-01-15T10:00:00Z",
-		OrgDomain:     "acme.okta.com",
+		SchemaVersion:    "1.0.0",
+		CollectedAt:      "2024-01-15T10:00:00Z",
+		CollectedAtLevel: "audit",
+		OrgDomain:        "acme.okta.com",
 		Posture: Posture{
-			MFACoverage:          intPtr(95),
-			MFAPhishingResistant: intPtr(40),
-			SSOCoverage:          intPtr(85),
+			MFACoverage:                    intPtr(95),
+			MFAEnrolledUsersCount:          intPtr(95),
+			MFAPhishingResistant:           intPtr(40),
+			MFAPhishingResistantUsersCount: intPtr(40),
+			SSOCoverage:                    intPtr(85),
 		},
 		Users: UserMetrics{
 			TotalCount:      intPtr(100),
 			PasswordExpired: intPtr(5),
 			LockedOut:       intPtr(2),
+			LockedOutCount:  intPtr(2),
 			Inactive:        intPtr(8),
+			InactiveCount:   intPtr(8),
 			Suspended:       intPtr(7),
+			SuspendedCount:  intPtr(7),
 		},
 		Apps: AppMetrics{
-			TotalCount:            intPtr(20),
-			ProvisioningEnabled:   intPtr(60),
-			DeprovisioningEnabled: intPtr(45),
+			TotalCount:                 intPtr(20),
+			SSOCount:                   intPtr(17),
+			ProvisioningEnabled:        intPtr(60),
+			ProvisioningEnabledCount:   intPtr(12),
+			DeprovisioningEnabled:      intPtr(45),
+			DeprovisioningEnabledCount: intPtr(9),
 		},
 		PrivilegedAccess: PrivilegedAccessMetrics{
-			PrivilegedUsersCount:           intPtr(3),
-			SuperAdminCount:                intPtr(1),
-			StandingPrivilegedUsersCount:   intPtr(3),
-			PrivilegedMFACoveragePct:       intPtr(67),
-			PrivilegedPhishingResistantPct: intPtr(33),
+			PrivilegedUsersCount:             intPtr(3),
+			SuperAdminCount:                  intPtr(1),
+			StandingPrivilegedUsersCount:     intPtr(3),
+			PrivilegedMFACoveragePct:         intPtr(66),
+			PrivilegedMFAEnrolledCount:       intPtr(2),
+			PrivilegedPhishingResistantPct:   intPtr(33),
+			PrivilegedPhishingResistantCount: intPtr(1),
 		},
 		Policy: PolicyConfig{
 			PolicyCount:               intPtr(3),
 			MFARequiredAll:            boolPtr(false),
 			MFARequiredAny:            boolPtr(true),
 			MFARequiredCoveragePct:    intPtr(66),
+			MFARequiredUsersCount:     intPtr(66),
 			SessionLifetimeMinMinutes: intPtr(15),
 			SessionLifetimeMaxMinutes: intPtr(1440),
 			IdleTimeoutMinMinutes:     intPtr(5),
@@ -1433,73 +1786,278 @@ func TestToIDPPosture(t *testing.T) {
 	if idpPosture.UserSecurity == nil {
 		t.Fatal("UserSecurity = nil, want non-nil")
 	}
-	assertFloat(t, "UserSecurity.MFACoveragePct", idpPosture.UserSecurity.MFACoveragePct, 95)
-	assertFloat(t, "UserSecurity.MFAPhishingResistantPct", idpPosture.UserSecurity.MFAPhishingResistantPct, 40)
-	assertFloat(t, "UserSecurity.InactivePct", idpPosture.UserSecurity.InactivePct, 8)
-	assertFloat(t, "UserSecurity.LockedOutPct", idpPosture.UserSecurity.LockedOutPct, 2)
+	assertFloat(t, "UserSecurity.MFACoveragePct", idpPosture.UserSecurity.MFACoveragePct.Value, 95)
+	assertFloat(t, "UserSecurity.MFAPhishingResistantPct", idpPosture.UserSecurity.MFAPhishingResistantPct.Value, 40)
+	assertFloat(t, "UserSecurity.InactivePct", idpPosture.UserSecurity.InactivePct.Value, 8)
+	assertFloat(t, "UserSecurity.LockedOutPct", idpPosture.UserSecurity.LockedOutPct.Value, 2)
+	assertBool(t, "UserSecurity.UsersPresent", idpPosture.UserSecurity.UsersPresent, true)
+	assertInt(t, "UserSecurity.UserCount", idpPosture.UserSecurity.UserCount, 100)
+	assertInt(t, "UserSecurity.MFAUserCount", idpPosture.UserSecurity.MFAUserCount, 95)
+	assertInt(t, "UserSecurity.PhishingResistantUserCount", idpPosture.UserSecurity.PhishingResistantUserCount, 40)
+	assertInt(t, "UserSecurity.InactiveUserCount", idpPosture.UserSecurity.InactiveUserCount, 8)
+	assertInt(t, "UserSecurity.LockedOutUserCount", idpPosture.UserSecurity.LockedOutUserCount, 2)
 	if idpPosture.Lifecycle == nil {
 		t.Fatal("Lifecycle = nil, want non-nil")
 	}
-	assertFloat(t, "Lifecycle.SuspendedPct", idpPosture.Lifecycle.SuspendedPct, 7)
+	assertFloat(t, "Lifecycle.SuspendedPct", idpPosture.Lifecycle.SuspendedPct.Value, 7)
+	assertBool(t, "Lifecycle.AccountsPresent", idpPosture.Lifecycle.AccountsPresent, true)
+	assertInt(t, "Lifecycle.AccountCount", idpPosture.Lifecycle.AccountCount, 100)
+	assertInt(t, "Lifecycle.SuspendedAccountCount", idpPosture.Lifecycle.SuspendedAccountCount, 7)
 	if idpPosture.PrivilegedAccess == nil {
 		t.Fatal("PrivilegedAccess = nil, want non-nil")
 	}
+	assertBool(t, "PrivilegedUsersPresent", idpPosture.PrivilegedAccess.PrivilegedUsersPresent, true)
 	assertInt(t, "PrivilegedUsersCount", idpPosture.PrivilegedAccess.PrivilegedUsersCount, 3)
 	assertInt(t, "SuperAdminCount", idpPosture.PrivilegedAccess.SuperAdminCount, 1)
+	assertBool(t, "StandingPrivilegedUsersPresent", idpPosture.PrivilegedAccess.StandingPrivilegedUsersPresent, true)
 	assertInt(t, "StandingPrivilegedUsersCount", idpPosture.PrivilegedAccess.StandingPrivilegedUsersCount, 3)
-	assertFloat(t, "PrivilegedMFACoveragePct", idpPosture.PrivilegedAccess.PrivilegedMFACoveragePct, 67)
-	assertFloat(t, "PrivilegedPhishingResistantPct", idpPosture.PrivilegedAccess.PrivilegedPhishingResistantPct, 33)
+	assertFloat(t, "PrivilegedMFACoveragePct", idpPosture.PrivilegedAccess.PrivilegedMFACoveragePct.Value, 66)
+	assertInt(t, "PrivilegedMFAUserCount", idpPosture.PrivilegedAccess.PrivilegedMFAUserCount, 2)
+	assertInt(t, "PrivilegedPhishingResistantUserCount", idpPosture.PrivilegedAccess.PrivilegedPhishingResistantUserCount, 1)
+	assertFloat(t, "PrivilegedPhishingResistantPct", idpPosture.PrivilegedAccess.PrivilegedPhishingResistantPct.Value, 33)
 
 	// Verify app_security mappings
 	if idpPosture.AppSecurity == nil {
 		t.Fatal("AppSecurity = nil, want non-nil")
 	}
-	assertFloat(t, "AppSecurity.SSOCoveragePct", idpPosture.AppSecurity.SSOCoveragePct, 85)
-	assertFloat(t, "AppSecurity.ProvisioningEnabledPct", idpPosture.AppSecurity.ProvisioningEnabledPct, 60)
-	assertFloat(t, "AppSecurity.DeprovisioningEnabledPct", idpPosture.AppSecurity.DeprovisioningEnabledPct, 45)
+	assertFloat(t, "AppSecurity.SSOCoveragePct", idpPosture.AppSecurity.SSOCoveragePct.Value, 85)
+	assertFloat(t, "AppSecurity.ProvisioningEnabledPct", idpPosture.AppSecurity.ProvisioningEnabledPct.Value, 60)
+	assertFloat(t, "AppSecurity.DeprovisioningEnabledPct", idpPosture.AppSecurity.DeprovisioningEnabledPct.Value, 45)
+	assertBool(t, "AppSecurity.AppsPresent", idpPosture.AppSecurity.AppsPresent, true)
+	assertInt(t, "AppSecurity.AppCount", idpPosture.AppSecurity.AppCount, 20)
+	assertInt(t, "AppSecurity.SSOAppCount", idpPosture.AppSecurity.SSOAppCount, 17)
+	assertInt(t, "AppSecurity.ProvisioningAppCount", idpPosture.AppSecurity.ProvisioningAppCount, 12)
+	assertInt(t, "AppSecurity.DeprovisioningAppCount", idpPosture.AppSecurity.DeprovisioningAppCount, 9)
 
 	// Verify policy mappings
 	if idpPosture.Policy == nil {
 		t.Fatal("Policy = nil, want non-nil")
 	}
 	assertBool(t, "Policy.MFARequired", idpPosture.Policy.MFARequired, false)
-	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct, 66)
+	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct.Value, 66)
+	assertInt(t, "Policy.MFARequiredUserCount", idpPosture.Policy.MFARequiredUserCount, 66)
 	assertInt(t, "Policy.SessionLifetimeMaxMin", idpPosture.Policy.SessionLifetimeMaxMin, 1440)
 	assertInt(t, "Policy.IdleTimeoutMaxMin", idpPosture.Policy.IdleTimeoutMaxMin, 120)
+}
+
+func TestToIDPPosturePrivilegedAccessByLevel(t *testing.T) {
+	// The counts are audit-level, and the present flags are written at
+	// every level.
+	orgPosture := &OrgPosture{
+		CollectedAtLevel: "trust",
+		OrgDomain:        "test.okta.com",
+		PrivilegedAccess: PrivilegedAccessMetrics{
+			PrivilegedUsersCount:         intPtr(2),
+			SuperAdminCount:              intPtr(1),
+			StandingPrivilegedUsersCount: intPtr(2),
+			PrivilegedMFACoveragePct:     intPtr(50),
+			PrivilegedMFAEnrolledCount:   intPtr(1),
+		},
+	}
+	privileged := orgPosture.ToIDPPosture().PrivilegedAccess
+	if privileged.PrivilegedUsersCount != nil || privileged.SuperAdminCount != nil || privileged.StandingPrivilegedUsersCount != nil ||
+		privileged.PrivilegedMFAUserCount != nil {
+		t.Errorf("privileged counts at trust = %s, %s, %s, want all left out", showInt(privileged.PrivilegedUsersCount),
+			showInt(privileged.SuperAdminCount), showInt(privileged.StandingPrivilegedUsersCount))
+	}
+	assertBool(t, "PrivilegedUsersPresent", privileged.PrivilegedUsersPresent, true)
+	assertBool(t, "StandingPrivilegedUsersPresent", privileged.StandingPrivilegedUsersPresent, true)
+	assertFloat(t, "PrivilegedMFACoveragePct", privileged.PrivilegedMFACoveragePct.Value, 50)
+}
+
+func TestIDPPostureNoPrivilegedUsers(t *testing.T) {
+	// A tenant with no privileged users has null privileged percentages.
+	orgPosture := &OrgPosture{
+		CollectedAtLevel: "audit",
+		OrgDomain:        "test.okta.com",
+		PrivilegedAccess: PrivilegedAccessMetrics{
+			PrivilegedUsersCount:         intPtr(0),
+			SuperAdminCount:              intPtr(0),
+			StandingPrivilegedUsersCount: intPtr(0),
+		},
+	}
+	raw, err := json.Marshal(orgPosture.ToIDPPosture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data struct {
+		PrivilegedAccess map[string]any `json:"privileged_access"`
+	}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{
+		"privileged_users_present": false, "privileged_users_count": 0.0, "super_admin_count": 0.0,
+		"privileged_mfa_coverage_pct": nil, "privileged_phishing_resistant_pct": nil,
+		"standing_privileged_users_present": false, "standing_privileged_users_count": 0.0,
+	}
+	if !reflect.DeepEqual(data.PrivilegedAccess, want) {
+		t.Errorf("privileged_access = %v, want %v", data.PrivilegedAccess, want)
+	}
+}
+
+func TestToIDPPostureRoundsAsTheSchemaSays(t *testing.T) {
+	// One of three users is 33.3%. A share where more is better rounds down,
+	// and one where more is worse rounds up.
+	one := intPtr(1)
+	orgPosture := &OrgPosture{
+		CollectedAtLevel: "audit",
+		OrgDomain:        "test.okta.com",
+		Posture:          Posture{MFACoverage: intPtr(33), MFAEnrolledUsersCount: one},
+		Users: UserMetrics{
+			TotalCount: intPtr(3),
+			Inactive:   intPtr(33), InactiveCount: one,
+			LockedOut: intPtr(33), LockedOutCount: one,
+			Suspended: intPtr(33), SuspendedCount: one,
+		},
+	}
+	idpPosture := orgPosture.ToIDPPosture()
+	assertFloat(t, "UserSecurity.MFACoveragePct", idpPosture.UserSecurity.MFACoveragePct.Value, 33)
+	assertFloat(t, "UserSecurity.InactivePct", idpPosture.UserSecurity.InactivePct.Value, 34)
+	assertFloat(t, "UserSecurity.LockedOutPct", idpPosture.UserSecurity.LockedOutPct.Value, 34)
+	assertFloat(t, "Lifecycle.SuspendedPct", idpPosture.Lifecycle.SuspendedPct.Value, 34)
+}
+
+func TestToIDPPostureCountsByLevel(t *testing.T) {
+	// The counts are audit-level, and the present flags are written at
+	// every level.
+	orgPosture := &OrgPosture{
+		CollectedAtLevel: "trust",
+		OrgDomain:        "test.okta.com",
+		Posture:          Posture{MFACoverage: intPtr(50), MFAEnrolledUsersCount: intPtr(1), SSOCoverage: intPtr(100)},
+		Users:            UserMetrics{TotalCount: intPtr(2), Suspended: intPtr(0), SuspendedCount: intPtr(0)},
+		Apps:             AppMetrics{TotalCount: intPtr(1), SSOCount: intPtr(1)},
+		Policy:           PolicyConfig{MFARequiredCoveragePct: intPtr(50), MFARequiredUsersCount: intPtr(1)},
+	}
+	idpPosture := orgPosture.ToIDPPosture()
+	for name, count := range map[string]*int{
+		"UserSecurity.UserCount":          idpPosture.UserSecurity.UserCount,
+		"UserSecurity.MFAUserCount":       idpPosture.UserSecurity.MFAUserCount,
+		"AppSecurity.AppCount":            idpPosture.AppSecurity.AppCount,
+		"AppSecurity.SSOAppCount":         idpPosture.AppSecurity.SSOAppCount,
+		"Lifecycle.AccountCount":          idpPosture.Lifecycle.AccountCount,
+		"Lifecycle.SuspendedAccountCount": idpPosture.Lifecycle.SuspendedAccountCount,
+		"Policy.MFARequiredUserCount":     idpPosture.Policy.MFARequiredUserCount,
+	} {
+		if count != nil {
+			t.Errorf("%s at trust = %d, want it left out", name, *count)
+		}
+	}
+	assertBool(t, "UserSecurity.UsersPresent", idpPosture.UserSecurity.UsersPresent, true)
+	assertBool(t, "AppSecurity.AppsPresent", idpPosture.AppSecurity.AppsPresent, true)
+	assertBool(t, "Lifecycle.AccountsPresent", idpPosture.Lifecycle.AccountsPresent, true)
+	assertFloat(t, "UserSecurity.MFACoveragePct", idpPosture.UserSecurity.MFACoveragePct.Value, 50)
+	assertFloat(t, "AppSecurity.SSOCoveragePct", idpPosture.AppSecurity.SSOCoveragePct.Value, 100)
+	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct.Value, 50)
+}
+
+func TestToIDPPostureEmptyOrg(t *testing.T) {
+	// An org with no users or apps has null percentages and false present
+	// flags.
+	zero := intPtr(0)
+	orgPosture := &OrgPosture{
+		CollectedAtLevel: "audit",
+		OrgDomain:        "test.okta.com",
+		Posture:          Posture{MFAEnrolledUsersCount: zero, MFAPhishingResistantUsersCount: zero},
+		Users:            UserMetrics{TotalCount: zero, InactiveCount: zero, LockedOutCount: zero, SuspendedCount: zero},
+		Apps:             AppMetrics{TotalCount: zero, SSOCount: zero, ProvisioningEnabledCount: zero, DeprovisioningEnabledCount: zero},
+		Policy:           PolicyConfig{MFARequiredUsersCount: zero},
+	}
+	data := idpPostureSections(t, orgPosture.ToIDPPosture())
+	for section, flag := range map[string]string{"user_security": "users_present", "app_security": "apps_present", "lifecycle": "accounts_present"} {
+		if got, ok := data[section][flag]; !ok || got != false {
+			t.Errorf("%s.%s = %v, want false", section, flag, got)
+		}
+	}
+	for section, fields := range map[string][]string{
+		"user_security": {"mfa_coverage_pct", "mfa_phishing_resistant_pct", "inactive_pct", "locked_out_pct"},
+		"app_security":  {"sso_coverage_pct", "provisioning_enabled_pct", "deprovisioning_enabled_pct"},
+		"lifecycle":     {"suspended_pct"},
+		"policy":        {"mfa_required_coverage_pct"},
+	} {
+		for _, field := range fields {
+			if got, ok := data[section][field]; !ok || got != nil {
+				t.Errorf("%s.%s = %v (written: %t), want null", section, field, got, ok)
+			}
+		}
+	}
+}
+
+func TestToIDPPostureLeavesOutUnreadPercentages(t *testing.T) {
+	// The users were read, and their factors were not.
+	orgPosture := &OrgPosture{
+		CollectedAtLevel: "audit",
+		OrgDomain:        "test.okta.com",
+		Users:            UserMetrics{TotalCount: intPtr(5), InactiveCount: intPtr(1), Inactive: intPtr(20)},
+	}
+	data := idpPostureSections(t, orgPosture.ToIDPPosture())
+	for _, field := range []string{"mfa_coverage_pct", "mfa_user_count", "weak_password_pct"} {
+		if got, ok := data["user_security"][field]; ok {
+			t.Errorf("user_security.%s = %v, want it left out", field, got)
+		}
+	}
+	if got := data["user_security"]["inactive_pct"]; got != 20.0 {
+		t.Errorf("user_security.inactive_pct = %v, want 20", got)
+	}
+}
+
+// idpPostureSections returns each object section of the normalized
+// artifact as written, by name.
+func idpPostureSections(t *testing.T, posture *IDPPosture) map[string]map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(posture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	sections := map[string]map[string]any{}
+	for name, value := range doc {
+		if section, ok := value.(map[string]any); ok {
+			sections[name] = section
+		}
+	}
+	return sections
 }
 
 func TestToIDPPosture_MFARequiredAll(t *testing.T) {
 	// Test that MFARequired is true when MFARequiredAll is true
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
+		Users:     UserMetrics{TotalCount: intPtr(4)},
 		Policy: PolicyConfig{
 			MFARequiredAll:         boolPtr(true),
 			MFARequiredAny:         boolPtr(true),
 			MFARequiredCoveragePct: intPtr(100),
+			MFARequiredUsersCount:  intPtr(4),
 		},
 	}
 
 	idpPosture := orgPosture.ToIDPPosture()
 
 	assertBool(t, "Policy.MFARequired", idpPosture.Policy.MFARequired, true)
-	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct, 100)
+	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct.Value, 100)
 }
 
 func TestToIDPPosture_NoMFARequired(t *testing.T) {
 	// Test that MFARequired is false when neither MFARequiredAll nor MFARequiredAny
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
+		Users:     UserMetrics{TotalCount: intPtr(4)},
 		Policy: PolicyConfig{
 			MFARequiredAll:         boolPtr(false),
 			MFARequiredAny:         boolPtr(false),
 			MFARequiredCoveragePct: intPtr(0),
+			MFARequiredUsersCount:  intPtr(0),
 		},
 	}
 
 	idpPosture := orgPosture.ToIDPPosture()
 
 	assertBool(t, "Policy.MFARequired", idpPosture.Policy.MFARequired, false)
-	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct, 0)
+	assertFloat(t, "Policy.MFARequiredCoveragePct", idpPosture.Policy.MFARequiredCoveragePct.Value, 0)
 }
 
 func TestToIDPPosture_NilPolicyValues(t *testing.T) {
@@ -1534,32 +2092,46 @@ func TestToIDPPosture_NoEvidence(t *testing.T) {
 func TestIDPPostureJSONStructure(t *testing.T) {
 	// Test that IDPPosture JSON output matches idp-posture@v1 schema
 	orgPosture := &OrgPosture{
-		OrgDomain: "test.okta.com",
+		CollectedAtLevel: "audit",
+		OrgDomain:        "test.okta.com",
 		Posture: Posture{
-			MFACoverage:          intPtr(100),
-			MFAPhishingResistant: intPtr(50),
-			SSOCoverage:          intPtr(90),
+			MFACoverage:                    intPtr(100),
+			MFAEnrolledUsersCount:          intPtr(20),
+			MFAPhishingResistant:           intPtr(50),
+			MFAPhishingResistantUsersCount: intPtr(10),
+			SSOCoverage:                    intPtr(90),
 		},
 		Users: UserMetrics{
-			LockedOut: intPtr(1),
-			Inactive:  intPtr(5),
-			Suspended: intPtr(4),
+			TotalCount:     intPtr(20),
+			LockedOut:      intPtr(5),
+			LockedOutCount: intPtr(1),
+			Inactive:       intPtr(25),
+			InactiveCount:  intPtr(5),
+			Suspended:      intPtr(20),
+			SuspendedCount: intPtr(4),
 		},
 		Apps: AppMetrics{
-			ProvisioningEnabled:   intPtr(75),
-			DeprovisioningEnabled: intPtr(0),
+			TotalCount:                 intPtr(10),
+			SSOCount:                   intPtr(9),
+			ProvisioningEnabled:        intPtr(70),
+			ProvisioningEnabledCount:   intPtr(7),
+			DeprovisioningEnabled:      intPtr(0),
+			DeprovisioningEnabledCount: intPtr(0),
 		},
 		PrivilegedAccess: PrivilegedAccessMetrics{
-			PrivilegedUsersCount:           intPtr(2),
-			SuperAdminCount:                intPtr(1),
-			StandingPrivilegedUsersCount:   intPtr(2),
-			PrivilegedMFACoveragePct:       intPtr(100),
-			PrivilegedPhishingResistantPct: intPtr(50),
+			PrivilegedUsersCount:             intPtr(2),
+			SuperAdminCount:                  intPtr(1),
+			StandingPrivilegedUsersCount:     intPtr(2),
+			PrivilegedMFACoveragePct:         intPtr(100),
+			PrivilegedMFAEnrolledCount:       intPtr(2),
+			PrivilegedPhishingResistantPct:   intPtr(50),
+			PrivilegedPhishingResistantCount: intPtr(1),
 		},
 		Policy: PolicyConfig{
 			MFARequiredAll:            boolPtr(false),
 			MFARequiredAny:            boolPtr(true),
 			MFARequiredCoveragePct:    intPtr(50),
+			MFARequiredUsersCount:     intPtr(10),
 			SessionLifetimeMaxMinutes: intPtr(480),
 			IdleTimeoutMaxMinutes:     intPtr(30),
 		},
@@ -1640,10 +2212,12 @@ func TestIDPPostureJSONStructure(t *testing.T) {
 		t.Fatal("privileged_access is not an object")
 	}
 	privilegedFields := []string{
+		"privileged_users_present",
 		"privileged_users_count",
 		"super_admin_count",
 		"privileged_mfa_coverage_pct",
 		"privileged_phishing_resistant_pct",
+		"standing_privileged_users_present",
 		"standing_privileged_users_count",
 	}
 	for _, field := range privilegedFields {
@@ -1817,5 +2391,173 @@ func TestToIDPPosture_WithoutDeviceAccess(t *testing.T) {
 	// DeviceAccess should be nil when ManagedDeviceRequired is false (no positive evidence)
 	if idpPosture.DeviceAccess != nil {
 		t.Error("DeviceAccess should be nil when ManagedDeviceRequired is false")
+	}
+}
+
+// TestLeftOutIDPPostureValuesGetTheirCodes checks the gaps on the normalized
+// values the collector leaves out. Okta reports third-party app grants and
+// phishing-resistant requirements, so those are not_read. The counts get a
+// gap only at the audit level.
+func TestLeftOutIDPPostureValuesGetTheirCodes(t *testing.T) {
+	want := map[string]map[string]componentsdk.Code{
+		"trust": {
+			"/lifecycle/archived_pct":                            componentsdk.CodeUnsupported,
+			"/policy/phishing_resistant_required_for_privileged": componentsdk.CodeNotRead,
+			"/user_security/password_policy_noncompliant_pct":    componentsdk.CodeUnsupported,
+			"/user_security/weak_password_pct":                   componentsdk.CodeUnsupported,
+		},
+		"audit": {
+			"/app_security/authorized_third_party_apps_count":        componentsdk.CodeNotRead,
+			"/lifecycle/archived_account_count":                      componentsdk.CodeUnsupported,
+			"/lifecycle/archived_pct":                                componentsdk.CodeUnsupported,
+			"/policy/phishing_resistant_required_for_privileged":     componentsdk.CodeNotRead,
+			"/user_security/password_policy_noncompliant_pct":        componentsdk.CodeUnsupported,
+			"/user_security/password_policy_noncompliant_user_count": componentsdk.CodeUnsupported,
+			"/user_security/weak_password_pct":                       componentsdk.CodeUnsupported,
+			"/user_security/weak_password_user_count":                componentsdk.CodeUnsupported,
+		},
+	}
+	for level, codes := range want {
+		rec := &componentsdk.Recorder{}
+		c := NewWithClient(Config{Recorder: rec}, nil)
+		c.Artifacts(&OrgPosture{CollectedAtLevel: level, Users: UserMetrics{TotalCount: intPtr(3)}})
+		got := map[string]componentsdk.Code{}
+		for _, g := range rec.Gaps() {
+			if g.Path == idpPosturePath {
+				got[g.Pointer] = g.Code
+			}
+		}
+		if !reflect.DeepEqual(got, codes) {
+			t.Errorf("%s: normalized gaps = %v, want %v", level, got, codes)
+		}
+	}
+}
+
+// appSignInOrg is an org of two active users and the given apps. Its one
+// sign-on rule requires a factor when requireFactor is set.
+func appSignInOrg(requireFactor bool, apps ...okta.Application) *mockOktaClient {
+	recent := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -5)
+	signon := &okta.SignonActions{Access: "ALLOW", RequireFactor: requireFactor}
+	signon.Session.MaxSessionLifetimeMinutes = 120
+	return &mockOktaClient{
+		users:    []okta.User{{ID: "a", Status: "ACTIVE", LastLogin: recent}, {ID: "b", Status: "ACTIVE", LastLogin: recent}},
+		factors:  map[string][]okta.Factor{},
+		apps:     apps,
+		policies: map[string][]okta.Policy{PolicyTypeSignOn: {{ID: "gsp", Type: PolicyTypeSignOn, Status: "ACTIVE", Priority: 1}}},
+		policyRules: map[string][]okta.PolicyRule{
+			"gsp": {{ID: "r1", Status: "ACTIVE", Priority: 1, Actions: okta.PolicyRuleActions{Signon: signon}}},
+		},
+	}
+}
+
+// appWithSignInPolicy is an active SAML app linked to the app sign-in policy
+// policyID.
+func appWithSignInPolicy(id, policyID string) okta.Application {
+	return okta.Application{
+		ID: id, Label: "Wiki " + id, Status: "ACTIVE", SignOnMode: "SAML_2_0",
+		Links: okta.AppLinks{AccessPolicy: &okta.Link{Href: "https://acme.okta.com/api/v1/policies/" + policyID}},
+	}
+}
+
+// collectIDPPosture collects client's org at level. It returns the
+// normalized artifact and the code of each gap on it.
+func collectIDPPosture(t *testing.T, client *mockOktaClient, level componentsdk.Level) (*IDPPosture, map[string]componentsdk.Code) {
+	t.Helper()
+	rec := &componentsdk.Recorder{}
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	c := NewWithClient(Config{OrgDomain: "acme.okta.com", Recorder: rec, Now: func() time.Time { return now }}, client)
+	posture, err := c.Collect(context.Background(), level)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	c.Artifacts(posture)
+	gaps := map[string]componentsdk.Code{}
+	for _, g := range rec.Gaps() {
+		if g.Path == idpPosturePath {
+			gaps[g.Pointer] = g.Code
+		}
+	}
+	return posture.ToIDPPosture(), gaps
+}
+
+// TestMFARequirementLeftOutUnderAppSignInPolicies checks the normalized MFA
+// requirement in an org whose sign-on rule does not require a factor. An
+// active app's sign-in policy can still require MFA in its ACCESS_POLICY
+// rules, which the collector does not read. The three values are then left
+// out with a not_read gap. When the app list cannot be read, they are left out
+// with its gap. The count is written, and gets a gap, only at audit.
+func TestMFARequirementLeftOutUnderAppSignInPolicies(t *testing.T) {
+	inactive := appWithSignInPolicy("app2", "rst2")
+	inactive.Status = AppStatusInactive
+	refused := appSignInOrg(false)
+	refused.appsErr = &okta.APIStatusError{StatusCode: 403, Path: "/api/v1/apps"}
+	cases := []struct {
+		name   string
+		client *mockOktaClient
+		code   componentsdk.Code // empty when the values are written
+	}{
+		{"active app with an app sign-in policy", appSignInOrg(false, appWithSignInPolicy("app1", "rst1")), componentsdk.CodeNotRead},
+		{"no app sign-in policy", appSignInOrg(false, okta.Application{ID: "app1", Label: "Wiki", Status: "ACTIVE", SignOnMode: "SAML_2_0"}), ""},
+		{"inactive app with an app sign-in policy", appSignInOrg(false, inactive), ""},
+		{"app list refused", refused, componentsdk.CodePermissionDenied},
+	}
+	for _, tc := range cases {
+		for _, level := range []componentsdk.Level{componentsdk.LevelTrust, componentsdk.LevelAudit} {
+			t.Run(fmt.Sprintf("%s at %s", tc.name, level), func(t *testing.T) {
+				posture, gaps := collectIDPPosture(t, tc.client, level)
+				if posture.Policy == nil {
+					t.Fatal("policy section left out, want session_lifetime_max_min")
+				}
+				pointers := []string{"/policy/mfa_required", "/policy/mfa_required_coverage_pct"}
+				if level == componentsdk.LevelAudit {
+					pointers = append(pointers, "/policy/mfa_required_user_count")
+				}
+				p := posture.Policy
+				if tc.code == "" {
+					if p.MFARequired == nil || *p.MFARequired || p.MFARequiredCoveragePct.Value == nil || *p.MFARequiredCoveragePct.Value != 0 {
+						t.Errorf("mfa_required = %v, coverage = %v, want false and 0", p.MFARequired, p.MFARequiredCoveragePct.Value)
+					}
+					for _, pointer := range pointers {
+						if code, ok := gaps[pointer]; ok {
+							t.Errorf("%s has a %s gap, want none", pointer, code)
+						}
+					}
+					return
+				}
+				if p.MFARequired != nil || p.MFARequiredCoveragePct.Read || p.MFARequiredUserCount != nil {
+					t.Errorf("mfa_required = %v, coverage = %+v, count = %v, want all left out", p.MFARequired, p.MFARequiredCoveragePct, p.MFARequiredUserCount)
+				}
+				for _, pointer := range pointers {
+					if got := gaps[pointer]; got != tc.code {
+						t.Errorf("%s gap = %q, want %q", pointer, got, tc.code)
+					}
+				}
+				if code, ok := gaps["/policy/mfa_required_user_count"]; ok && level != componentsdk.LevelAudit {
+					t.Errorf("mfa_required_user_count has a %s gap at %s, want none below audit", code, level)
+				}
+			})
+		}
+	}
+}
+
+// TestMFARequirementWrittenWhenSignOnPoliciesCoverEveryone checks that the
+// MFA requirement is written when the sign-on rule requires a factor of
+// everyone, even with an app sign-in policy.
+func TestMFARequirementWrittenWhenSignOnPoliciesCoverEveryone(t *testing.T) {
+	posture, gaps := collectIDPPosture(t, appSignInOrg(true, appWithSignInPolicy("app1", "rst1")), componentsdk.LevelAudit)
+	p := posture.Policy
+	if p == nil || p.MFARequired == nil || !*p.MFARequired {
+		t.Fatalf("mfa_required = %+v, want true", p)
+	}
+	if v := p.MFARequiredCoveragePct.Value; v == nil || *v != 100 {
+		t.Errorf("mfa_required_coverage_pct = %v, want 100", v)
+	}
+	if v := p.MFARequiredUserCount; v == nil || *v != 2 {
+		t.Errorf("mfa_required_user_count = %v, want 2", v)
+	}
+	for _, pointer := range []string{"/policy/mfa_required", "/policy/mfa_required_coverage_pct", "/policy/mfa_required_user_count"} {
+		if code, ok := gaps[pointer]; ok {
+			t.Errorf("%s has a %s gap, want none", pointer, code)
+		}
 	}
 }

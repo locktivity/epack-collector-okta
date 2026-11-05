@@ -9,6 +9,15 @@ const (
 	StatusSuspended       = "SUSPENDED"
 )
 
+// App status of a deactivated app.
+const AppStatusInactive = "INACTIVE"
+
+// App type of an API service app in the inventory.
+const AppTypeService = "SERVICE"
+
+// Group type of the groups Okta manages itself, such as Everyone.
+const GroupTypeBuiltIn = "BUILT_IN"
+
 // Policy types.
 const (
 	PolicyTypeSignOn    = "OKTA_SIGN_ON"
@@ -16,8 +25,17 @@ const (
 	PolicyTypePassword  = "PASSWORD"
 )
 
-// Password policy rule access values.
-const AccessAllow = "ALLOW"
+// Policy scope summaries.
+const (
+	ScopeGroupAssigned = "group-assigned"
+	ScopeEveryone      = "everyone"
+)
+
+// Policy rule access values.
+const (
+	AccessAllow = "ALLOW"
+	AccessDeny  = "DENY"
+)
 
 // Sign-on modes (SSO protocols).
 const (
@@ -53,11 +71,8 @@ var phishingResistantFactorTypes = map[string]bool{
 // Role types.
 const RoleTypeSuperAdmin = "SUPER_ADMIN"
 
-// MFA enrollment actions.
-const (
-	MFAActionChallenge = "CHALLENGE"
-	MFAActionLogin     = "LOGIN"
-)
+// MFA enrollment action that has users enroll when they sign in.
+const MFAActionLogin = "LOGIN"
 
 // Percentage constants.
 const MaxPercentage = 100

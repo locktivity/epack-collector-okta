@@ -120,7 +120,7 @@ Application lifecycle management health.
 
 | Metric | Why It Matters |
 |--------|----------------|
-| `total_count` | **Population.** The apps that `sso_coverage` and the provisioning percentages are shares of. |
+| `total_count` | **Population.** Apps other than inactive ones, API service apps and Okta's own Admin Console, Dashboard and Browser Plugin apps. `sso_coverage` and the provisioning percentages are shares of this count. |
 | `provisioning_enabled` | **Onboarding automation.** Manual provisioning delays access and increases admin burden. Automated provisioning ensures consistent access based on role. |
 | `deprovisioning_enabled` | **Offboarding security.** Without automated deprovisioning, departing employees retain app access. This is a major source of data breaches. |
 

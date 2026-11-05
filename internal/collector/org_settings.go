@@ -22,15 +22,16 @@ type OrgSettings struct {
 	Subdomain string `json:"subdomain,omitempty"`
 	Status    string `json:"status,omitempty"`
 
-	// Audit-level field: true when an active password policy rule lets users
-	// reset their password or unlock their account themselves.
+	// Audit-level field: true when the password policy rule that applies to
+	// at least one person lets them reset their password or unlock their
+	// account themselves.
 	SelfServiceRecoveryEnabled *bool `json:"self_service_recovery_enabled,omitempty"`
 
 	// Internal-level field.
 	NotificationContactLogins []string `json:"notification_contact_logins,omitempty"`
 }
 
-func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.Level, users *userMetricsCollector) *OrgSettings {
+func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.Level, users *userMetricsCollector, policyMetrics *policyMetricsCollector) *OrgSettings {
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
@@ -43,11 +44,9 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 
 	out := &OrgSettings{Subdomain: org.Subdomain, Status: org.Status}
 
-	if policies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypePassword); err != nil {
-		err = c.warnSurface("password policies", "okta.policies.read", err)
+	if recovery, err := c.selfServiceRecovery(ctx, users, policyMetrics.groupMembers); err != nil {
 		c.gaps.notCollected(err, "/org_settings/self_service_recovery_enabled")
 	} else {
-		recovery := allowsSelfServiceRecovery(policies)
 		out.SelfServiceRecoveryEnabled = &recovery
 	}
 
@@ -78,18 +77,43 @@ func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.L
 	return out
 }
 
-func allowsSelfServiceRecovery(policies []scopedPolicy) bool {
-	for _, sp := range policies {
-		for _, rule := range sp.rules {
-			if rule.Status != StatusActive {
-				continue
-			}
-			if allows(rule.Actions.SelfServicePasswordReset) || allows(rule.Actions.SelfServiceUnlock) {
-				return true
-			}
+// selfServiceRecovery reports whether anyone can reset their own password or
+// unlock their own account. Okta applies the first password policy that
+// matches a person, and in it the first rule whose conditions are met. A rule
+// lower down can then apply to no one. known holds the group members the
+// policy step read, and they are not read again.
+func (c *Collector) selfServiceRecovery(ctx context.Context, users *userMetricsCollector, known groupMembership) (bool, error) {
+	policies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypePassword)
+	if err != nil {
+		return false, c.warnSurface("password policies", "okta.policies.read", err)
+	}
+	if users.err != nil {
+		return false, users.err
+	}
+	members, err := c.fetchGroupMembersForPolicies(ctx, policies, known)
+	if err != nil {
+		return false, c.warnSurface("password policy group memberships", "okta.groups.read", err)
+	}
+	for _, user := range users.users {
+		if user.Status == StatusDeprovisioned {
+			continue
+		}
+		if firstMatchingRuleDecides(user.ID, policies, members, anyRule, recoveryRuleDecision) {
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
+}
+
+// recoveryRuleDecision gives the self-service recovery result for a password
+// rule that matches the person. A rule that denies recovery to only some
+// sign-ins, such as those from one network zone, leaves the person's other
+// sign-ins to the next rule.
+func recoveryRuleDecision(r okta.PolicyRule) (covered, decided bool) {
+	if allows(r.Actions.SelfServicePasswordReset) || allows(r.Actions.SelfServiceUnlock) {
+		return true, true
+	}
+	return false, !limitedToSomeSignIns(r.Conditions)
 }
 
 func allows(action *okta.RuleAccess) bool {

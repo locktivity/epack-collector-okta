@@ -64,10 +64,11 @@ func TestRunRecordsTheSignedInPrincipal(t *testing.T) {
 			},
 		},
 		{
+			// Below the audit level the result has no tenant.
 			name: "service app at trust", config: map[string]any{"org_domain": kitOrgDomain, "client_id": kitClientID, "key_id": kitKeyID, "level": "trust"},
 			secrets: map[string]string{"OKTA_PRIVATE_KEY": kitPrivateKey()}, responses: kitOAuthResponses(kitTenant()),
 			want: componentsdk.Principal{
-				Provider: "okta", Kind: "service_app", TenantID: kitOrgDomain, AuthMethod: componentsdk.AuthPrivateKeyJWT,
+				Provider: "okta", Kind: "service_app", AuthMethod: componentsdk.AuthPrivateKeyJWT,
 				RequestedScopes: []string{
 					"okta.apps.read", "okta.deviceAssurance.read", "okta.groups.read", "okta.policies.read", "okta.roles.read", "okta.users.read",
 				},
@@ -128,6 +129,51 @@ func TestReadOnlyNeedsAServiceAppGrantedOnlyTheReadScopesItAskedFor(t *testing.T
 		if got := readOnly(&tc.id); got != tc.want {
 			t.Errorf("%s: readOnly = %t, want %t", tc.name, got, tc.want)
 		}
+	}
+}
+
+// TestEachCallDeclaresItsScope checks that each management API call lists
+// the OAuth scope Okta's API reference gives for it, and that the two
+// sign-in calls list none.
+func TestEachCallDeclaresItsScope(t *testing.T) {
+	want := map[string]string{
+		"okta.token.create":               "",
+		"okta.users.list":                 "okta.users.read",
+		"okta.users.factors.list":         "okta.users.read",
+		"okta.users.groups.list":          "okta.users.read",
+		"okta.users.roles.list":           "okta.roles.read",
+		"okta.iam.assignees.list":         "okta.roles.read",
+		"okta.iam.roles.list":             "okta.roles.read",
+		"okta.iam.roles.permissions.list": "okta.roles.read",
+		"okta.apps.list":                  "okta.apps.read",
+		"okta.policies.list":              "okta.policies.read",
+		"okta.policies.rules.list":        "okta.policies.read",
+		"okta.groups.list":                "okta.groups.read",
+		"okta.groups.users.list":          "okta.groups.read",
+		"okta.device_assurances.list":     "okta.deviceAssurance.read",
+		"okta.authenticators.list":        "okta.authenticators.read",
+		"okta.zones.list":                 "okta.networkZones.read",
+		"okta.idps.list":                  "okta.idps.read",
+		"okta.api_tokens.list":            "okta.apiTokens.read",
+		"okta.event_hooks.list":           "okta.eventHooks.read",
+		"okta.inline_hooks.list":          "okta.inlineHooks.read",
+		"okta.logs.list":                  "okta.logs.read",
+		"okta.org.get":                    "okta.orgs.read",
+		"okta.org.contacts.get":           "okta.orgs.read",
+	}
+	res := runInProcess(t, kitOAuthConfig(), map[string]string{"OKTA_PRIVATE_KEY": kitPrivateKey()}, kitOAuthResponses(kitTenant()))
+	if res.ExitCode != 0 || res.Result == nil {
+		t.Fatalf("run failed with exit %d: %s", res.ExitCode, res.Stderr)
+	}
+	got := map[string]string{}
+	for _, op := range res.Operations {
+		got[op.Name] = op.Permission
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("declared scopes = %v, want %v", got, want)
+	}
+	if scope := okta.Scope("okta.users.me.get"); scope != "" {
+		t.Errorf("the API token sign-in declares %q, want none", scope)
 	}
 }
 

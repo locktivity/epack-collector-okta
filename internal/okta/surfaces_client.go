@@ -57,8 +57,13 @@ func (c *Client) ListSystemLog(ctx context.Context, filter string, since time.Ti
 		if page == nil {
 			return nil, invalidResponse(resp, op, "has no list")
 		}
+		// Okta can offer a next page of the System Log when no events
+		// remain, so an empty page ends the read.
+		if len(*page) == 0 {
+			break
+		}
 		events = append(events, *page...)
-		path = getNextLink(resp.Header.Get("Link"))
+		path = getNextLink(resp)
 	}
 
 	if len(events) > max {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/locktivity/epack-collector-okta/internal/okta"
 	"github.com/locktivity/epack/componentsdk"
 )
 
@@ -96,8 +97,8 @@ func TestE2E_RealOktaCollection(t *testing.T) {
 		t.Errorf("expected schema version %s, got %s", SchemaVersion, posture.SchemaVersion)
 	}
 
-	if posture.OrgDomain != config.OrgDomain {
-		t.Errorf("expected org domain %s, got %s", config.OrgDomain, posture.OrgDomain)
+	if want := okta.Host(config.OrgDomain); posture.OrgDomain != want {
+		t.Errorf("expected org domain %s, got %s", want, posture.OrgDomain)
 	}
 
 	if posture.CollectedAt == "" {

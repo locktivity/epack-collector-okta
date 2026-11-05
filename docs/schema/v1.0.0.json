@@ -10,25 +10,35 @@
     "schema_version": {
       "type": "string",
       "const": "1.0.0",
-      "description": "Version of this schema"
+      "description": "Version of this schema",
+      "x-epack-label": "Data format version",
+      "x-epack-summary": "Version of the data shape this report follows. Fixed at 1.0.0 for this collector."
     },
     "collected_at": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp when data was collected"
+      "description": "ISO 8601 timestamp when data was collected",
+      "x-epack-label": "Collected at",
+      "x-epack-summary": "When the snapshot was taken, in UTC."
     },
     "collected_at_level": {
       "type": "string",
       "enum": ["trust", "audit", "internal"],
-      "description": "Collection level this artifact was produced at. Levels are cumulative: audit is a superset of trust, internal of audit."
+      "description": "Collection level this artifact was produced at. Levels are cumulative: audit is a superset of trust, internal of audit.",
+      "x-epack-label": "Collection level",
+      "x-epack-summary": "How deep the collection ran."
     },
     "org_domain": {
       "type": "string",
-      "description": "Okta organization domain"
+      "description": "Okta organization domain",
+      "x-epack-label": "Okta domain",
+      "x-epack-summary": "The Okta organization this snapshot describes, such as company.okta.com."
     },
     "posture": {
       "type": "object",
       "description": "High-level security posture scores",
+      "x-epack-label": "Security posture",
+      "x-epack-summary": "MFA and single sign-on adoption across the org.",
       "required": ["mfa_coverage", "mfa_phishing_resistant", "sso_coverage"],
       "properties": {
         "mfa_coverage": {
@@ -39,13 +49,19 @@
           "x-epack-numerator": "mfa_enrolled_users_count",
           "x-epack-rounding": "floor",
           "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_active_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "pct"},
-          "description": "Percentage of users with any MFA factor enrolled"
+          "description": "Percentage of users with any MFA factor enrolled",
+          "x-epack-label": "MFA adoption",
+          "x-epack-summary": "Share of people with at least one active MFA method. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Reads each user's factors and divides the users with an active factor by the users other than deprovisioned ones."
         },
         "mfa_enrolled_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_active_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "count"},
-          "description": "People other than deprovisioned ones with at least one active factor"
+          "description": "People other than deprovisioned ones with at least one active factor",
+          "x-epack-label": "People with MFA",
+          "x-epack-summary": "Number of people with at least one active MFA method, not counting deprovisioned accounts. MFA adoption is this number as a share of total people.",
+          "x-epack-method": "Reads each user's factors and counts the users other than deprovisioned ones with at least one active factor."
         },
         "mfa_phishing_resistant": {
           "type": ["integer", "null"],
@@ -55,39 +71,54 @@
           "x-epack-numerator": "mfa_phishing_resistant_users_count",
           "x-epack-rounding": "floor",
           "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "pct"},
-          "description": "Percentage of users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)"
+          "description": "Percentage of users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)",
+          "x-epack-label": "Phishing-resistant MFA adoption",
+          "x-epack-summary": "Share of people with an active passkey, security key or Okta FastPass. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Reads each user's factors and divides the users with an active WebAuthn, U2F or FastPass factor by the users other than deprovisioned ones."
         },
         "mfa_phishing_resistant_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "count"},
-          "description": "People with an active WebAuthn, U2F or FastPass factor"
+          "description": "People with an active WebAuthn, U2F or FastPass factor",
+          "x-epack-label": "People with phishing-resistant MFA",
+          "x-epack-summary": "Number of people with an active passkey, security key or Okta FastPass. Phishing-resistant MFA adoption is this number as a share of total people.",
+          "x-epack-method": "Reads each user's factors and counts the users with an active WebAuthn, U2F or FastPass factor."
         },
         "sso_coverage": {
+          "x-epack-rollup": {"rows": "/apps/inventory", "among": [{"where": "/status", "not_equals": "INACTIVE"}, {"where": "/type", "not_equals": "SERVICE"}, {"where": "/label", "not_equals": "Okta Admin Console"}, {"where": "/label", "not_equals": "Okta Dashboard"}, {"where": "/label", "not_equals": "Okta Browser Plugin"}], "where": "/sso_configured", "equals": true, "truncated": "/apps/inventory_truncated", "as": "pct"},
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "/apps/total_count",
           "x-epack-numerator": "/apps/sso_count",
           "x-epack-rounding": "floor",
-          "x-epack-rollup": {"rows": "/apps/inventory", "where": "/sso_configured", "equals": true, "truncated": "/apps/inventory_truncated", "as": "pct"},
-          "description": "Percentage of apps using SSO (SAML/OIDC/WS-Fed)"
+          "description": "Percentage of apps using SSO (SAML/OIDC/WS-Fed)",
+          "x-epack-label": "Single sign-on adoption",
+          "x-epack-summary": "Share of apps that sign people in with SAML, OIDC or WS-Federation. Inactive apps, API service apps and Okta's default apps are left out.",
+          "x-epack-method": "Divides the apps whose sign-on mode is SAML 1.1, SAML 2.0, OpenID Connect or WS-Federation by the org's apps. Inactive apps, API service apps and Okta's default apps are left out of both counts."
         },
         "per_factor_type": {
           "type": "array",
           "x-epack-level": "audit",
           "description": "Enrolled-user count per active factor type",
+          "x-epack-label": "Methods in use",
+          "x-epack-summary": "Number of people with each type of MFA method, one row for each factor type someone has enrolled.",
           "items": {
             "type": "object",
             "properties": {
               "factor_type": {
                 "type": "string",
-                "description": "Okta factor type in lowercase, such as push, webauthn, sms, email, or token:software:totp."
+                "description": "Okta factor type in lowercase, such as push, webauthn, sms, email, or token:software:totp.",
+                "x-epack-label": "Method type",
+                "x-epack-summary": "Okta factor type, such as webauthn, push, sms, email or token:software:totp."
               },
               "enrolled_users": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Number of non-deprovisioned users with at least one active factor of this type."
+                "description": "Number of non-deprovisioned users with at least one active factor of this type.",
+                "x-epack-label": "People with this method",
+                "x-epack-summary": "Number of people with at least one active factor of this type. Deprovisioned accounts are not counted."
               }
             }
           }
@@ -96,20 +127,27 @@
           "type": "integer",
           "minimum": 0,
           "x-epack-level": "audit",
-          "description": "Count of non-deprovisioned users with no active MFA"
+          "description": "Count of non-deprovisioned users with no active MFA",
+          "x-epack-label": "People without MFA",
+          "x-epack-summary": "Number of people with no active MFA method. Deprovisioned accounts are not counted."
         }
       }
     },
     "users": {
       "type": "object",
       "description": "User status metrics",
+      "x-epack-label": "People",
+      "x-epack-summary": "Account status across the people in the directory, and a row for each person.",
       "required": ["password_expired", "locked_out", "inactive", "suspended"],
       "properties": {
         "total_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "truncated": "inventory_truncated", "as": "count"},
-          "description": "Users other than deprovisioned ones: the population of every user percentage"
+          "description": "Users other than deprovisioned ones: the population of every user percentage",
+          "x-epack-label": "Total people",
+          "x-epack-summary": "Number of people in the directory, not counting deprovisioned accounts. The account-health and MFA adoption percentages are shares of this number.",
+          "x-epack-method": "Lists the org's users and counts each one whose status is not DEPROVISIONED."
         },
         "password_expired": {
           "type": ["integer", "null"],
@@ -119,13 +157,19 @@
           "x-epack-numerator": "password_expired_count",
           "x-epack-rounding": "floor",
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "PASSWORD_EXPIRED", "truncated": "inventory_truncated", "as": "pct"},
-          "description": "Percentage of users with expired passwords"
+          "description": "Percentage of users with expired passwords",
+          "x-epack-label": "Expired passwords",
+          "x-epack-summary": "Share of people whose password has expired. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Divides the users with the PASSWORD_EXPIRED status by the users other than deprovisioned ones."
         },
         "password_expired_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "PASSWORD_EXPIRED", "truncated": "inventory_truncated", "as": "count"},
-          "description": "People whose password has expired"
+          "description": "People whose password has expired",
+          "x-epack-label": "People with expired passwords",
+          "x-epack-summary": "Number of people whose password has expired. The Expired passwords percentage is this number as a share of total people.",
+          "x-epack-method": "Counts the listed users with the PASSWORD_EXPIRED status."
         },
         "locked_out": {
           "type": ["integer", "null"],
@@ -135,13 +179,19 @@
           "x-epack-numerator": "locked_out_count",
           "x-epack-rounding": "floor",
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "LOCKED_OUT", "truncated": "inventory_truncated", "as": "pct"},
-          "description": "Percentage of users currently locked out"
+          "description": "Percentage of users currently locked out",
+          "x-epack-label": "Locked-out accounts",
+          "x-epack-summary": "Share of people who are locked out, usually after repeated failed sign-ins. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Divides the users with the LOCKED_OUT status by the users other than deprovisioned ones."
         },
         "locked_out_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "LOCKED_OUT", "truncated": "inventory_truncated", "as": "count"},
-          "description": "People who are locked out"
+          "description": "People who are locked out",
+          "x-epack-label": "Locked-out people",
+          "x-epack-summary": "Number of people who are locked out. The Locked-out accounts percentage is this number as a share of total people.",
+          "x-epack-method": "Counts the listed users with the LOCKED_OUT status."
         },
         "inactive": {
           "type": ["integer", "null"],
@@ -150,12 +200,18 @@
           "x-epack-denominator": "total_count",
           "x-epack-numerator": "inactive_count",
           "x-epack-rounding": "floor",
-          "description": "Percentage of users inactive for 90+ days"
+          "description": "Percentage of users inactive for 90+ days",
+          "x-epack-label": "Dormant accounts",
+          "x-epack-summary": "Share of people who have not signed in for 90 days or have never signed in. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Divides the users with no sign-in in the 90 days before the run by the users other than deprovisioned ones."
         },
         "inactive_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "People who haven't signed in for 90 days, or ever"
+          "description": "People who haven't signed in for 90 days, or ever",
+          "x-epack-label": "People with dormant accounts",
+          "x-epack-summary": "Number of people who have not signed in for 90 days or have never signed in. The Dormant accounts percentage is this number as a share of total people.",
+          "x-epack-method": "Counts the users other than deprovisioned ones whose last sign-in is more than 90 days before the run or who have never signed in."
         },
         "suspended": {
           "type": ["integer", "null"],
@@ -165,68 +221,94 @@
           "x-epack-numerator": "suspended_count",
           "x-epack-rounding": "floor",
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "SUSPENDED", "truncated": "inventory_truncated", "as": "pct"},
-          "description": "Percentage of users currently suspended"
+          "description": "Percentage of users currently suspended",
+          "x-epack-label": "Suspended accounts",
+          "x-epack-summary": "Share of people whose account is suspended. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Divides the users with the SUSPENDED status by the users other than deprovisioned ones."
         },
         "suspended_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "SUSPENDED", "truncated": "inventory_truncated", "as": "count"},
-          "description": "People who are suspended"
+          "description": "People who are suspended",
+          "x-epack-label": "Suspended people",
+          "x-epack-summary": "Number of people whose account is suspended. The Suspended accounts percentage is this number as a share of total people.",
+          "x-epack-method": "Counts the listed users with the SUSPENDED status."
         },
         "inventory": {
           "type": "array",
           "x-epack-level": "audit",
           "description": "Per-user inventory. Login is the only identifier; profile attributes beyond login are excluded. Capped at 50000 (ACTIVE-first, login-asc).",
+          "x-epack-label": "Person inventory",
+          "x-epack-summary": "One row per person, with the login as the only identifier. Up to 50,000 rows, with active accounts first.",
           "items": {
             "type": "object",
             "properties": {
               "login": {
                 "type": "string",
-                "description": "The user's Okta login."
+                "description": "The user's Okta login.",
+                "x-epack-label": "Login",
+                "x-epack-summary": "The person's Okta username."
               },
               "status": {
                 "type": "string",
-                "description": "The user's Okta status: STAGED, PROVISIONED, ACTIVE, RECOVERY, LOCKED_OUT, PASSWORD_EXPIRED, or SUSPENDED. Deprovisioned users are not listed."
+                "description": "The user's Okta status: STAGED, PROVISIONED, ACTIVE, RECOVERY, LOCKED_OUT, PASSWORD_EXPIRED, or SUSPENDED. Deprovisioned users are not listed.",
+                "x-epack-label": "Account status",
+                "x-epack-summary": "The person's Okta status, such as ACTIVE, SUSPENDED, LOCKED_OUT or PASSWORD_EXPIRED. Deprovisioned accounts are not listed."
               },
-              "user_type": {"type": "string", "enum": ["Human", "Service"], "description": "Coarse classification; raw userType never emitted"},
+              "user_type": {"type": "string", "enum": ["Human", "Service"], "description": "Coarse classification; raw userType never emitted", "x-epack-label": "Account kind", "x-epack-summary": "Human or Service, from words such as svc or bot in the person's userType attribute. The attribute's own value is left out."},
               "created_at": {
                 "type": "string",
                 "format": "date-time",
-                "description": "When the user was created, in RFC 3339 UTC."
+                "description": "When the user was created, in RFC 3339 UTC.",
+                "x-epack-label": "Created at",
+                "x-epack-summary": "When the account was created."
               },
               "last_login_at": {
                 "type": "string",
                 "format": "date-time",
                 "x-epack-level": "internal",
-                "description": "When the user last signed in, in RFC 3339 UTC. Absent when the user has never signed in."
+                "description": "When the user last signed in, in RFC 3339 UTC. Absent when the user has never signed in.",
+                "x-epack-label": "Last sign-in",
+                "x-epack-summary": "When the person last signed in. Left out when they have never signed in."
               },
               "last_updated_at": {
                 "type": "string",
                 "format": "date-time",
                 "x-epack-level": "internal",
-                "description": "When Okta last changed the user's record, in RFC 3339 UTC."
+                "description": "When Okta last changed the user's record, in RFC 3339 UTC.",
+                "x-epack-label": "Last updated",
+                "x-epack-summary": "When the account record last changed."
               },
               "status_changed_at": {
                 "type": "string",
                 "format": "date-time",
                 "x-epack-level": "internal",
-                "description": "When the user's status last changed, in RFC 3339 UTC. Absent when Okta reports no status change."
+                "description": "When the user's status last changed, in RFC 3339 UTC. Absent when Okta reports no status change.",
+                "x-epack-label": "Status changed at",
+                "x-epack-summary": "When the account's lifecycle status last changed."
               },
               "password_changed_at": {
                 "type": "string",
                 "format": "date-time",
                 "x-epack-level": "internal",
-                "description": "When the user's password last changed, in RFC 3339 UTC. Absent when Okta reports no password change."
+                "description": "When the user's password last changed, in RFC 3339 UTC. Absent when Okta reports no password change.",
+                "x-epack-label": "Password changed at",
+                "x-epack-summary": "When the password was last changed."
               },
               "has_active_mfa": {
                 "type": "boolean",
                 "x-epack-level": "internal",
-                "description": "True when the user has at least one factor with status ACTIVE. Absent, with a gap, when the user's factors could not be read."
+                "description": "True when the user has at least one factor with status ACTIVE. Absent, with a gap, when the user's factors could not be read.",
+                "x-epack-label": "Has MFA",
+                "x-epack-summary": "Whether the person has at least one active multi-factor method. Left out when the person's methods could not be read."
               },
               "has_phishing_resistant_mfa": {
                 "type": "boolean",
                 "x-epack-level": "internal",
-                "description": "True when one of the user's active factors is WebAuthn, U2F, or FastPass. Absent, with a gap, when the user's factors could not be read."
+                "description": "True when one of the user's active factors is WebAuthn, U2F, or FastPass. Absent, with a gap, when the user's factors could not be read.",
+                "x-epack-label": "Has phishing-resistant MFA",
+                "x-epack-summary": "Whether one of the person's active methods is a passkey, a security key, or Okta FastPass. Left out when the person's methods could not be read."
               },
               "factors": {
                 "type": "array",
@@ -236,66 +318,90 @@
                   "properties": {
                     "factor_type": {
                       "type": "string",
-                      "description": "Okta factor type as Okta reports it, such as push, webauthn, sms, email, or token:software:totp."
+                      "description": "Okta factor type as Okta reports it, such as push, webauthn, sms, email, or token:software:totp.",
+                      "x-epack-label": "Method type",
+                      "x-epack-summary": "Okta factor type, such as webauthn, push, sms, email or token:software:totp."
                     },
                     "status": {
                       "type": "string",
-                      "description": "The factor's Okta status. Only active factors are listed."
+                      "description": "The factor's Okta status. Only active factors are listed.",
+                      "x-epack-label": "Method status",
+                      "x-epack-summary": "The factor's Okta status. Only active factors are listed."
                     },
                     "enrolled_at": {
                       "type": "string",
                       "format": "date-time",
-                      "description": "When the factor was enrolled, in RFC 3339 UTC."
+                      "description": "When the factor was enrolled, in RFC 3339 UTC.",
+                      "x-epack-label": "Enrolled at",
+                      "x-epack-summary": "When the person set up this method."
                     }
                   }
                 },
-                "description": "The user's active MFA factors. Absent when the user has none."
+                "description": "The user's active MFA factors. Absent when the user has none.",
+                "x-epack-label": "Enrolled methods",
+                "x-epack-summary": "The person's active multi-factor methods, one entry per enrolled factor."
               },
               "group_ids": {
                 "type": "array",
                 "x-epack-level": "internal",
                 "items": {"type": "string"},
-                "description": "Okta IDs of the groups the user belongs to."
+                "description": "Okta IDs of the groups the user belongs to.",
+                "x-epack-label": "Group memberships",
+                "x-epack-summary": "Okta IDs of the groups the person belongs to. They match the IDs in the group inventory."
               }
             }
           }
         },
-        "inventory_truncated": {"type": "boolean", "x-epack-level": "audit", "description": "True when the user inventory hit the 50000 cap"},
-        "inventory_dropped": {"type": "integer", "minimum": 0, "x-epack-level": "audit", "description": "Rows dropped on truncation"}
+        "inventory_truncated": {"type": "boolean", "x-epack-level": "audit", "description": "True when the user inventory hit the 50000 cap", "x-epack-label": "Person inventory truncated", "x-epack-summary": "Whether the person list stopped at 50,000 rows. The counts and percentages still cover every person."},
+        "inventory_dropped": {"type": "integer", "minimum": 0, "x-epack-level": "audit", "description": "Rows dropped on truncation", "x-epack-label": "People left out", "x-epack-summary": "Number of people left out of the list by the 50,000-row cap. Accounts that are not ACTIVE are left out first."}
       }
     },
     "apps": {
       "type": "object",
       "description": "Application lifecycle metrics",
+      "x-epack-label": "Applications",
+      "x-epack-summary": "Single sign-on and automatic account creation and removal across the org's apps.",
       "required": ["provisioning_enabled", "deprovisioning_enabled"],
       "properties": {
         "total_count": {
+          "x-epack-rollup": {"rows": "inventory", "among": [{"where": "/status", "not_equals": "INACTIVE"}, {"where": "/type", "not_equals": "SERVICE"}, {"where": "/label", "not_equals": "Okta Admin Console"}, {"where": "/label", "not_equals": "Okta Dashboard"}, {"where": "/label", "not_equals": "Okta Browser Plugin"}], "truncated": "inventory_truncated", "as": "count"},
           "type": ["integer", "null"],
           "minimum": 0,
-          "x-epack-rollup": {"rows": "inventory", "truncated": "inventory_truncated", "as": "count"},
-          "description": "Apps: the population of every app percentage"
+          "description": "Apps other than inactive ones, API service apps and Okta's default apps. Every app percentage is a share of this count.",
+          "x-epack-label": "Total apps",
+          "x-epack-summary": "Number of app integrations in the org. Inactive apps, API service apps and Okta's own Admin Console, Dashboard and Browser Plugin apps are not counted. The single sign-on and automatic account percentages are shares of this number.",
+          "x-epack-method": "Lists the org's apps and counts each one whose status is not INACTIVE. API service apps, whose only grant type is client_credentials, are left out. The Okta Admin Console, Okta Dashboard and Okta Browser Plugin apps are left out too. Every org has them."
         },
         "sso_count": {
+          "x-epack-rollup": {"rows": "/apps/inventory", "among": [{"where": "/status", "not_equals": "INACTIVE"}, {"where": "/type", "not_equals": "SERVICE"}, {"where": "/label", "not_equals": "Okta Admin Console"}, {"where": "/label", "not_equals": "Okta Dashboard"}, {"where": "/label", "not_equals": "Okta Browser Plugin"}], "where": "/sso_configured", "equals": true, "truncated": "/apps/inventory_truncated", "as": "count"},
           "type": ["integer", "null"],
           "minimum": 0,
-          "x-epack-rollup": {"rows": "/apps/inventory", "where": "/sso_configured", "equals": true, "truncated": "/apps/inventory_truncated", "as": "count"},
-          "description": "Apps that sign people in with SAML, OIDC or WS-Federation"
+          "description": "Apps in total_count that sign people in with SAML, OIDC or WS-Federation",
+          "x-epack-label": "Apps with single sign-on",
+          "x-epack-summary": "Number of apps that sign people in with SAML, OIDC or WS-Federation. Inactive apps, API service apps and Okta's default apps are left out. Single sign-on adoption is this number as a share of total apps.",
+          "x-epack-method": "Counts the apps whose sign-on mode is SAML 1.1, SAML 2.0, OpenID Connect or WS-Federation and whose status is not INACTIVE. API service apps and Okta's default apps are left out."
         },
         "provisioning_enabled": {
+          "x-epack-rollup": {"rows": "inventory", "among": [{"where": "/status", "not_equals": "INACTIVE"}, {"where": "/type", "not_equals": "SERVICE"}, {"where": "/label", "not_equals": "Okta Admin Console"}, {"where": "/label", "not_equals": "Okta Dashboard"}, {"where": "/label", "not_equals": "Okta Browser Plugin"}], "where": "/provisioning_configured", "equals": true, "truncated": "inventory_truncated", "as": "pct"},
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
           "x-epack-denominator": "total_count",
           "x-epack-numerator": "provisioning_enabled_count",
           "x-epack-rounding": "floor",
-          "x-epack-rollup": {"rows": "inventory", "where": "/provisioning_configured", "equals": true, "truncated": "inventory_truncated", "as": "pct"},
-          "description": "Percentage of apps with automatic user provisioning"
+          "description": "Percentage of apps with automatic user provisioning",
+          "x-epack-label": "Auto account creation",
+          "x-epack-summary": "Share of apps that create or import accounts automatically. Inactive apps, API service apps and Okta's default apps are left out.",
+          "x-epack-method": "Divides the apps with the PUSH_NEW_USERS or IMPORT_NEW_USERS feature by the org's apps. Inactive apps, API service apps and Okta's default apps are left out of both counts."
         },
         "provisioning_enabled_count": {
+          "x-epack-rollup": {"rows": "inventory", "among": [{"where": "/status", "not_equals": "INACTIVE"}, {"where": "/type", "not_equals": "SERVICE"}, {"where": "/label", "not_equals": "Okta Admin Console"}, {"where": "/label", "not_equals": "Okta Dashboard"}, {"where": "/label", "not_equals": "Okta Browser Plugin"}], "where": "/provisioning_configured", "equals": true, "truncated": "inventory_truncated", "as": "count"},
           "type": ["integer", "null"],
           "minimum": 0,
-          "x-epack-rollup": {"rows": "inventory", "where": "/provisioning_configured", "equals": true, "truncated": "inventory_truncated", "as": "count"},
-          "description": "Apps that provision people"
+          "description": "Apps in total_count that provision people",
+          "x-epack-label": "Apps that create accounts",
+          "x-epack-summary": "Number of apps that create or import accounts automatically. Inactive apps, API service apps and Okta's default apps are left out. Auto account creation is this number as a share of total apps.",
+          "x-epack-method": "Counts the apps with the PUSH_NEW_USERS or IMPORT_NEW_USERS feature whose status is not INACTIVE. API service apps and Okta's default apps are left out."
         },
         "deprovisioning_enabled": {
           "type": ["integer", "null"],
@@ -304,48 +410,70 @@
           "x-epack-denominator": "total_count",
           "x-epack-numerator": "deprovisioning_enabled_count",
           "x-epack-rounding": "floor",
-          "description": "Percentage of apps with automatic user deprovisioning"
+          "description": "Percentage of apps with automatic user deprovisioning",
+          "x-epack-label": "Auto account removal",
+          "x-epack-summary": "Share of apps that deactivate a person's app account automatically when they are deactivated in Okta. Inactive apps, API service apps and Okta's default apps are left out.",
+          "x-epack-method": "Divides the apps with the PUSH_USER_DEACTIVATION feature by the org's apps. Inactive apps, API service apps and Okta's default apps are left out of both counts."
         },
         "deprovisioning_enabled_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Apps that deprovision people"
+          "description": "Apps in total_count that deprovision people",
+          "x-epack-label": "Apps that remove accounts",
+          "x-epack-summary": "Number of apps that deactivate accounts automatically. Inactive apps, API service apps and Okta's default apps are left out. Auto account removal is this number as a share of total apps.",
+          "x-epack-method": "Counts the apps with the PUSH_USER_DEACTIVATION feature whose status is not INACTIVE. API service apps and Okta's default apps are left out."
         },
         "inventory": {
           "type": "array",
           "x-epack-level": "audit",
-          "description": "Per-app inventory (label, name, type, sign_on_mode, status, sso_configured, provisioning_configured). Capped at 5000 (ACTIVE-first, label-asc).",
+          "description": "Per-app inventory (label, name, type, sign_on_mode, status, sso_configured, provisioning_configured), including inactive apps, API service apps and Okta's default apps. Capped at 5000 (ACTIVE-first, label-asc).",
+          "x-epack-label": "App inventory",
+          "x-epack-summary": "One row per app, including the apps left out of the counts. Up to 5,000 rows, with active apps first.",
           "items": {
             "type": "object",
             "properties": {
               "label": {
                 "type": "string",
-                "description": "The app's display label."
+                "description": "The app's display label.",
+                "x-epack-label": "App label",
+                "x-epack-summary": "The app's display name as shown to admins and users."
               },
               "name": {
                 "type": "string",
-                "description": "Name of the Okta app integration the app is built from, such as bookmark or oidc_client."
+                "description": "Name of the Okta app integration the app is built from, such as bookmark or oidc_client.",
+                "x-epack-label": "App name",
+                "x-epack-summary": "Okta's internal catalog name for the app integration."
               },
               "type": {
                 "type": "string",
-                "enum": ["SAML", "OIDC", "SWA", "BOOKMARK"],
-                "description": "App type taken from the sign-on mode: SAML for SAML 1.1, SAML 2.0, and WS-Federation, OIDC for OpenID Connect, BOOKMARK, or SWA for every other mode."
+                "enum": ["SAML", "OIDC", "SWA", "BOOKMARK", "SERVICE"],
+                "description": "App type taken from the sign-on mode: SAML for SAML 1.1, SAML 2.0, and WS-Federation, OIDC for OpenID Connect, BOOKMARK, or SWA for every other mode. An OpenID Connect app whose only grant type is client_credentials is an API service app, and its type is SERVICE.",
+                "x-epack-label": "App type",
+                "x-epack-summary": "SAML, OIDC, BOOKMARK or SWA, taken from the sign-on mode. SAML also covers WS-Federation, and SWA covers every other mode. An API service app is SERVICE."
               },
               "sign_on_mode": {
                 "type": "string",
-                "description": "The app's Okta sign-on mode, such as SAML_2_0, OPENID_CONNECT, BOOKMARK, or BROWSER_PLUGIN."
+                "description": "The app's Okta sign-on mode, such as SAML_2_0, OPENID_CONNECT, BOOKMARK, or BROWSER_PLUGIN.",
+                "x-epack-label": "Sign-on mode",
+                "x-epack-summary": "The app's Okta sign-on mode, such as SAML_2_0, OPENID_CONNECT, BOOKMARK or BROWSER_PLUGIN."
               },
               "status": {
                 "type": "string",
-                "description": "The app's Okta status, ACTIVE or INACTIVE."
+                "description": "The app's Okta status, ACTIVE or INACTIVE.",
+                "x-epack-label": "App status",
+                "x-epack-summary": "Whether the app integration is ACTIVE or INACTIVE."
               },
               "sso_configured": {
                 "type": "boolean",
-                "description": "True when the app's sign-on mode is SAML 1.1, SAML 2.0, OpenID Connect, or WS-Federation."
+                "description": "True when the app's sign-on mode is SAML 1.1, SAML 2.0, OpenID Connect, or WS-Federation. False for an API service app, since no one signs in to it.",
+                "x-epack-label": "Single sign-on",
+                "x-epack-summary": "Whether the app signs people in with SAML, OIDC or WS-Federation."
               },
               "provisioning_configured": {
                 "type": "boolean",
-                "description": "True when the app's features include pushing or importing new users."
+                "description": "True when the app's features include pushing or importing new users.",
+                "x-epack-label": "Auto provisioning",
+                "x-epack-summary": "Whether the app has automatic account creation or import turned on."
               }
             }
           }
@@ -353,19 +481,25 @@
         "inventory_truncated": {
           "type": "boolean",
           "x-epack-level": "audit",
-          "description": "True when the app inventory reached the 5000-app cap and the rest were left out."
+          "description": "True when the app inventory reached the 5000-app cap and the rest were left out.",
+          "x-epack-label": "App inventory truncated",
+          "x-epack-summary": "Whether the app list stopped at 5,000 rows. The counts and percentages still cover every app."
         },
         "inventory_dropped": {
           "type": "integer",
           "minimum": 0,
           "x-epack-level": "audit",
-          "description": "Number of apps left out of the inventory by the cap."
+          "description": "Number of apps left out of the inventory by the cap.",
+          "x-epack-label": "Apps left out",
+          "x-epack-summary": "Number of apps left out of the list by the 5,000-row cap. Inactive apps are left out first."
         }
       }
     },
     "privileged_access": {
       "type": "object",
       "description": "Privileged access counts and MFA coverage",
+      "x-epack-label": "Admin access",
+      "x-epack-summary": "How many people hold Okta admin roles and how many of them use MFA.",
       "required": [
         "privileged_users_count",
         "super_admin_count",
@@ -378,17 +512,26 @@
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "as": "count"},
-          "description": "Count of active users with any effective Okta admin role"
+          "description": "Count of active users with any effective Okta admin role",
+          "x-epack-label": "Admins",
+          "x-epack-summary": "Number of people with any Okta admin role. Suspended and deprovisioned accounts are not counted.",
+          "x-epack-method": "Reads the roles of each user with an admin role assignment and counts those who hold a role and are not suspended or deprovisioned."
         },
         "super_admin_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Count of active users with the SUPER_ADMIN role"
+          "description": "Count of active users with the SUPER_ADMIN role",
+          "x-epack-label": "Super admins",
+          "x-epack-summary": "Number of people with the Super Administrator role, which can do every admin task. Suspended and deprovisioned accounts are not counted.",
+          "x-epack-method": "Counts the admins whose role assignments include SUPER_ADMIN."
         },
         "standing_privileged_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Count of active users with standing privileged access"
+          "description": "Count of active users with standing privileged access",
+          "x-epack-label": "Always-on admins",
+          "x-epack-summary": "Number of admins whose access is always on. Every Okta admin role assignment is counted as standing.",
+          "x-epack-method": "Counts every admin, since each Okta admin role assignment is treated as standing access."
         },
         "privileged_mfa_coverage_pct": {
           "type": ["integer", "null"],
@@ -398,13 +541,19 @@
           "x-epack-numerator": "privileged_mfa_enrolled_count",
           "x-epack-rounding": "floor",
           "x-epack-rollup": {"rows": "inventory", "where": "/has_active_mfa", "equals": true, "as": "pct"},
-          "description": "Percentage of privileged users with any MFA factor enrolled"
+          "description": "Percentage of privileged users with any MFA factor enrolled",
+          "x-epack-label": "Admin MFA adoption",
+          "x-epack-summary": "Share of admins with at least one active MFA method.",
+          "x-epack-method": "Divides the admins with at least one active factor by all admins."
         },
         "privileged_mfa_enrolled_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "where": "/has_active_mfa", "equals": true, "as": "count"},
-          "description": "Admins with at least one active factor"
+          "description": "Admins with at least one active factor",
+          "x-epack-label": "Admins with MFA",
+          "x-epack-summary": "Number of admins with at least one active MFA method. Admin MFA adoption is this number as a share of all admins.",
+          "x-epack-method": "Counts the admins with at least one active factor."
         },
         "privileged_phishing_resistant_pct": {
           "type": ["integer", "null"],
@@ -414,51 +563,71 @@
           "x-epack-numerator": "privileged_phishing_resistant_count",
           "x-epack-rounding": "floor",
           "x-epack-rollup": {"rows": "inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "as": "pct"},
-          "description": "Percentage of privileged users with phishing-resistant MFA"
+          "description": "Percentage of privileged users with phishing-resistant MFA",
+          "x-epack-label": "Admin phishing-resistant MFA",
+          "x-epack-summary": "Share of admins with an active passkey, security key or Okta FastPass.",
+          "x-epack-method": "Divides the admins with an active WebAuthn, U2F or FastPass factor by all admins."
         },
         "privileged_phishing_resistant_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "as": "count"},
-          "description": "Admins with an active WebAuthn, U2F or FastPass factor"
+          "description": "Admins with an active WebAuthn, U2F or FastPass factor",
+          "x-epack-label": "Admins with phishing-resistant MFA",
+          "x-epack-summary": "Number of admins with an active passkey, security key or Okta FastPass. Admin phishing-resistant MFA is this number as a share of all admins.",
+          "x-epack-method": "Counts the admins with an active WebAuthn, U2F or FastPass factor."
         },
         "inventory": {
           "type": "array",
           "x-epack-level": "audit",
           "description": "Per-privileged-user login and roles.",
+          "x-epack-label": "Admin inventory",
+          "x-epack-summary": "One row per admin, with their login and admin roles.",
           "items": {
             "type": "object",
             "properties": {
               "login": {
                 "type": "string",
-                "description": "The privileged user's Okta login."
+                "description": "The privileged user's Okta login.",
+                "x-epack-label": "Admin login",
+                "x-epack-summary": "The admin's Okta username."
               },
               "roles": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "The admin roles assigned to the user: the role type for a built-in role, such as SUPER_ADMIN, or the label for a custom role."
+                "description": "The admin roles assigned to the user: the role type for a built-in role, such as SUPER_ADMIN, or the label for a custom role.",
+                "x-epack-label": "Assigned roles",
+                "x-epack-summary": "The admin roles assigned to the person, such as SUPER_ADMIN or ORG_ADMIN. A custom role shows its label."
               },
               "role_assignment_source": {
                 "type": "string",
                 "enum": ["direct", "group", "mixed"],
                 "x-epack-level": "internal",
-                "description": "How the user holds their admin roles: direct when each is assigned to the user, group when each comes through a group, or mixed for both."
+                "description": "How the user holds their admin roles: direct when each is assigned to the user, group when each comes through a group, or mixed for both.",
+                "x-epack-label": "How assigned",
+                "x-epack-summary": "Whether the person's admin roles are assigned directly, through a group, or both."
               },
               "last_login_at": {
                 "type": "string",
                 "format": "date-time",
                 "x-epack-level": "internal",
-                "description": "When the user last signed in, in RFC 3339 UTC. Absent when the user has never signed in."
+                "description": "When the user last signed in, in RFC 3339 UTC. Absent when the user has never signed in.",
+                "x-epack-label": "Admin last sign-in",
+                "x-epack-summary": "When this admin last signed in. Left out when they have never signed in."
               },
               "has_active_mfa": {
                 "type": "boolean",
                 "x-epack-level": "internal",
-                "description": "True when the admin has at least one factor with status ACTIVE. Absent, with a gap, when the admin's factors could not be read."
+                "description": "True when the admin has at least one factor with status ACTIVE. Absent, with a gap, when the admin's factors could not be read.",
+                "x-epack-label": "Admin has MFA",
+                "x-epack-summary": "Whether the admin has at least one active multi-factor method. Left out when the admin's methods could not be read."
               },
               "has_phishing_resistant_mfa": {
                 "type": "boolean",
                 "x-epack-level": "internal",
-                "description": "True when one of the admin's active factors is WebAuthn, U2F, or FastPass. Absent, with a gap, when the admin's factors could not be read."
+                "description": "True when one of the admin's active factors is WebAuthn, U2F, or FastPass. Absent, with a gap, when the admin's factors could not be read.",
+                "x-epack-label": "Admin has phishing-resistant MFA",
+                "x-epack-summary": "Whether one of the admin's active methods is a passkey, a security key, or Okta FastPass. Left out when the admin's methods could not be read."
               }
             }
           }
@@ -467,25 +636,35 @@
           "type": "array",
           "x-epack-level": "audit",
           "description": "Custom admin roles (Okta Identity Governance feature). Absent, with a not_licensed gap, when Identity Governance is not licensed. Okta's built-in Workflows Administrator role (WORKFLOWS_ADMIN), which Okta lists with the custom roles, is left out.",
+          "x-epack-label": "Custom admin roles",
+          "x-epack-summary": "Custom admin roles defined in the org. Not collected when the org does not license Okta Identity Governance.",
           "items": {
             "type": "object",
             "properties": {
               "name": {
                 "type": "string",
-                "description": "The custom role's Okta ID."
+                "description": "The custom role's Okta ID.",
+                "x-epack-label": "Custom role id",
+                "x-epack-summary": "Okta's ID for the custom role."
               },
               "label": {
                 "type": "string",
-                "description": "The custom role's display label."
+                "description": "The custom role's display label.",
+                "x-epack-label": "Custom role name",
+                "x-epack-summary": "The custom role's display name."
               },
               "description": {
                 "type": "string",
-                "description": "The custom role's description in Okta. Absent when it has none."
+                "description": "The custom role's description in Okta. Absent when it has none.",
+                "x-epack-label": "Custom role description",
+                "x-epack-summary": "The administrator-written description of what the custom role is for."
               },
               "permission_count": {
                 "type": ["integer", "null"],
                 "minimum": 0,
-                "description": "Number of permissions the custom role grants. Null, with a gap, when its permissions could not be read."
+                "description": "Number of permissions the custom role grants. Null, with a gap, when its permissions could not be read.",
+                "x-epack-label": "Permissions granted",
+                "x-epack-summary": "Number of permissions the custom role grants."
               }
             }
           }
@@ -495,23 +674,34 @@
     "policy": {
       "type": "object",
       "description": "Aggregated security policy settings across all active policies",
+      "x-epack-label": "Sign-in rules",
+      "x-epack-summary": "Settings drawn from the org's active sign-on and MFA-enrollment policies, evaluated across the directory.",
       "required": ["policy_count", "mfa_required_all", "mfa_required_any", "mfa_required_coverage_pct"],
       "properties": {
         "policy_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "policies", "where": "/type", "equals": "OKTA_SIGN_ON", "as": "count"},
-          "description": "Number of active sign-on policies"
+          "description": "Number of active sign-on policies",
+          "x-epack-label": "Active sign-on policies",
+          "x-epack-summary": "Number of active sign-on policies. Their rules set who must use MFA and how long sessions last.",
+          "x-epack-method": "Counts the org's sign-on policies with the ACTIVE status."
         },
         "mfa_required_all": {
           "type": ["boolean", "null"],
           "x-epack-denominator": "/users/total_count",
           "x-epack-numerator": "mfa_required_users_count",
-          "description": "Whether MFA is required for all non-deprovisioned users after evaluating active policies and rules"
+          "description": "Whether MFA is required for all non-deprovisioned users after evaluating active policies and rules",
+          "x-epack-label": "MFA required for everyone",
+          "x-epack-summary": "Whether the active policies require MFA for every person. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Checks whether the MFA requirement covers every user other than deprovisioned ones."
         },
         "mfa_required_any": {
           "type": ["boolean", "null"],
-          "description": "Whether MFA is required for at least one non-deprovisioned user after evaluating active policies and rules"
+          "description": "Whether MFA is required for at least one non-deprovisioned user after evaluating active policies and rules",
+          "x-epack-label": "MFA required for some",
+          "x-epack-summary": "Whether the active policies require MFA for at least one person.",
+          "x-epack-method": "Checks whether the MFA requirement covers at least one user."
         },
         "mfa_required_coverage_pct": {
           "type": ["integer", "null"],
@@ -520,141 +710,205 @@
           "x-epack-denominator": "/users/total_count",
           "x-epack-numerator": "mfa_required_users_count",
           "x-epack-rounding": "floor",
-          "description": "Percentage of non-deprovisioned users covered by an MFA requirement"
+          "description": "Percentage of non-deprovisioned users covered by an MFA requirement",
+          "x-epack-label": "MFA requirement coverage",
+          "x-epack-summary": "Share of people that the active policies require to use MFA. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Divides the users an MFA requirement covers by the users other than deprovisioned ones."
         },
         "mfa_required_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "People covered by an MFA requirement"
+          "description": "People covered by an MFA requirement",
+          "x-epack-label": "People required to use MFA",
+          "x-epack-summary": "Number of people that the active policies require to use MFA. MFA requirement coverage is this number as a share of total people.",
+          "x-epack-method": "Counts the users who must use a factor at every sign-in their sign-on rules allow, or whose first matching enrollment rule is set to LOGIN. Policies and rules are read in Okta's priority order, and a policy with no rule for the user leaves them to the next policy. A rule with a network zone or another sign-in condition covers only the sign-ins that meet it."
         },
         "session_lifetime_min_minutes": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-null": "No active sign-on rule sets a session lifetime",
-          "description": "Shortest session lifetime across active sign-on rules (in minutes)"
+          "description": "Shortest session lifetime across active sign-on rules (in minutes)",
+          "x-epack-label": "Shortest session limit",
+          "x-epack-summary": "Shortest session lifetime that an active sign-on rule sets, in minutes. Rules that set no limit are not counted.",
+          "x-epack-method": "Takes the shortest session lifetime among the active rules of active sign-on policies, leaving out rules that set no limit."
         },
         "session_lifetime_max_minutes": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-null": "No active sign-on rule sets a session lifetime",
-          "description": "Longest session lifetime across active sign-on rules (in minutes)"
+          "description": "Longest session lifetime across active sign-on rules (in minutes)",
+          "x-epack-label": "Longest session limit",
+          "x-epack-summary": "Longest session lifetime that an active sign-on rule sets, in minutes. Rules that set no limit are not counted.",
+          "x-epack-method": "Takes the longest session lifetime among the active rules of active sign-on policies, leaving out rules that set no limit."
         },
         "idle_timeout_min_minutes": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-null": "No active sign-on rule sets an idle timeout",
-          "description": "Shortest idle timeout across active sign-on rules (in minutes)"
+          "description": "Shortest idle timeout across active sign-on rules (in minutes)",
+          "x-epack-label": "Shortest idle limit",
+          "x-epack-summary": "Shortest idle time before sign-out that an active sign-on rule sets, in minutes. Rules that set no limit are not counted.",
+          "x-epack-method": "Takes the shortest idle timeout among the active rules of active sign-on policies, leaving out rules that set no limit."
         },
         "idle_timeout_max_minutes": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-null": "No active sign-on rule sets an idle timeout",
-          "description": "Longest idle timeout across active sign-on rules (in minutes)"
+          "description": "Longest idle timeout across active sign-on rules (in minutes)",
+          "x-epack-label": "Longest idle limit",
+          "x-epack-summary": "Longest idle time before sign-out that an active sign-on rule sets, in minutes. Rules that set no limit are not counted.",
+          "x-epack-method": "Takes the longest idle timeout among the active rules of active sign-on policies, leaving out rules that set no limit."
         },
         "policies": {
           "type": "array",
           "x-epack-level": "audit",
           "description": "Per-policy summary (name, type, status, priority, rule_count, scope_summary) for sign-on and MFA-enroll policies.",
+          "x-epack-label": "Policy summaries",
+          "x-epack-summary": "One row per active sign-on or MFA enrollment policy.",
           "items": {
             "type": "object",
             "properties": {
               "name": {
                 "type": "string",
-                "description": "The policy's name."
+                "description": "The policy's name.",
+                "x-epack-label": "Policy name",
+                "x-epack-summary": "The policy's display name."
               },
               "type": {
                 "type": "string",
-                "description": "The policy type: OKTA_SIGN_ON for a global session policy or MFA_ENROLL for an authenticator enrollment policy."
+                "description": "The policy type: OKTA_SIGN_ON for a global session policy or MFA_ENROLL for an authenticator enrollment policy.",
+                "x-epack-label": "Policy type",
+                "x-epack-summary": "OKTA_SIGN_ON for a global session policy, or MFA_ENROLL for an authenticator enrollment policy."
               },
               "status": {
                 "type": "string",
-                "description": "The policy's Okta status. Only active policies are listed."
+                "description": "The policy's Okta status. Only active policies are listed.",
+                "x-epack-label": "Policy status",
+                "x-epack-summary": "The policy's Okta status. Only active policies are listed."
               },
               "priority": {
                 "type": "integer",
-                "description": "The policy's priority among policies of its type. Okta evaluates lower numbers first."
+                "description": "The policy's priority among policies of its type. Okta evaluates lower numbers first.",
+                "x-epack-label": "Policy priority",
+                "x-epack-summary": "The policy's order among policies of its type. Lower numbers are evaluated first."
               },
               "rule_count": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Number of rules in the policy, active or not."
+                "description": "Number of rules in the policy, active or not.",
+                "x-epack-label": "Rule count",
+                "x-epack-summary": "Number of rules in the policy, active or not."
               },
               "scope_summary": {
                 "type": "string",
                 "enum": ["group-assigned", "everyone"],
-                "description": "group-assigned when the policy names groups or users to include, or everyone when it applies to all users."
+                "description": "everyone when the policy names no one to include or includes the built-in Everyone group, as each default policy does. group-assigned when it includes only other groups or named users. Left out, with a gap, when the policy includes groups and the group list could not be read.",
+                "x-epack-label": "Who it covers",
+                "x-epack-summary": "everyone when the policy applies to all users, as the default policies do. group-assigned when it covers only some groups or people."
               },
               "rules": {
                 "type": "array",
                 "x-epack-level": "internal",
                 "description": "Rule conditions and actions",
+                "x-epack-label": "Policy rules",
+                "x-epack-summary": "Each rule's conditions and actions.",
                 "items": {
                   "type": "object",
                   "properties": {
                     "name": {
                       "type": "string",
-                      "description": "The rule's name."
+                      "description": "The rule's name.",
+                      "x-epack-label": "Rule name",
+                      "x-epack-summary": "The rule's display name."
                     },
                     "priority": {
                       "type": "integer",
-                      "description": "The rule's priority within its policy. Okta evaluates lower numbers first."
+                      "description": "The rule's priority within its policy. Okta evaluates lower numbers first.",
+                      "x-epack-label": "Rule priority",
+                      "x-epack-summary": "The rule's order within its policy. Lower numbers are evaluated first."
                     },
                     "status": {
                       "type": "string",
-                      "description": "The rule's Okta status, ACTIVE or INACTIVE."
+                      "description": "The rule's Okta status, ACTIVE or INACTIVE.",
+                      "x-epack-label": "Rule status",
+                      "x-epack-summary": "The rule's Okta status, ACTIVE or INACTIVE."
                     },
                     "network_connection": {
                       "type": "string",
-                      "description": "The rule's network condition: ANYWHERE, ZONE, or ON_NETWORK. Absent when the rule sets none."
+                      "description": "The rule's network condition: ANYWHERE, ZONE, or ON_NETWORK. Absent when the rule sets none.",
+                      "x-epack-label": "Network condition",
+                      "x-epack-summary": "The rule's network condition, ANYWHERE, ZONE or ON_NETWORK. Left out when the rule sets none."
                     },
                     "network_zones_included": {
                       "type": "array",
                       "items": {"type": "string"},
-                      "description": "Okta IDs of the network zones the rule's network condition includes."
+                      "description": "Okta IDs of the network zones the rule's network condition includes.",
+                      "x-epack-label": "Network zones in scope",
+                      "x-epack-summary": "Okta IDs of the network zones the rule's network condition includes. They match the IDs in the network zone inventory."
                     },
                     "groups_included": {
                       "type": "array",
                       "items": {"type": "string"},
-                      "description": "Okta IDs of the groups the rule applies to. Absent when the rule names none."
+                      "description": "Okta IDs of the groups the rule applies to. Absent when the rule names none.",
+                      "x-epack-label": "Groups included",
+                      "x-epack-summary": "Okta IDs of the groups the rule applies to. Left out when the rule names none."
                     },
                     "groups_excluded": {
                       "type": "array",
                       "items": {"type": "string"},
-                      "description": "Okta IDs of the groups the rule excludes."
+                      "description": "Okta IDs of the groups the rule excludes.",
+                      "x-epack-label": "Groups excluded",
+                      "x-epack-summary": "Okta IDs of the groups the rule leaves out."
                     },
                     "device_managed": {
                       "type": "string",
-                      "description": "The rule's managed-device condition, \"true\" or \"false\" as Okta reports it. Absent when the rule sets none."
+                      "description": "The rule's managed-device condition, \"true\" or \"false\" as Okta reports it. Absent when the rule sets none.",
+                      "x-epack-label": "Managed device condition",
+                      "x-epack-summary": "The rule's managed-device condition, true or false as text. Left out when the rule sets none."
                     },
                     "access": {
                       "type": "string",
-                      "description": "For a sign-on rule, whether it allows or denies the sign-on: ALLOW or DENY."
+                      "description": "For a sign-on rule, whether it allows or denies the sign-on: ALLOW or DENY.",
+                      "x-epack-label": "Access action",
+                      "x-epack-summary": "Whether the rule allows or denies a matching sign-in, ALLOW or DENY."
                     },
                     "require_factor": {
                       "type": "boolean",
-                      "description": "For a sign-on rule, true when it requires a second factor."
+                      "description": "For a sign-on rule, true when it requires a second factor.",
+                      "x-epack-label": "Requires MFA",
+                      "x-epack-summary": "Whether the rule requires a second factor."
                     },
                     "factor_prompt_mode": {
                       "type": "string",
-                      "description": "For a sign-on rule, when Okta asks for the second factor: ALWAYS, DEVICE, or SESSION."
+                      "description": "For a sign-on rule, when Okta asks for the second factor: ALWAYS, DEVICE, or SESSION.",
+                      "x-epack-label": "MFA prompt frequency",
+                      "x-epack-summary": "When the rule asks for the second factor. DEVICE asks once per device, SESSION once per session, and ALWAYS at every sign-in."
                     },
                     "max_session_lifetime_minutes": {
                       "type": "integer",
                       "minimum": 0,
-                      "description": "For a sign-on rule, the longest a session can last, in minutes. 0 means no limit."
+                      "description": "For a sign-on rule, the longest a session can last, in minutes. 0 means no limit.",
+                      "x-epack-label": "Rule session limit",
+                      "x-epack-summary": "Longest session the rule allows, in minutes. Left out when the rule sets no limit."
                     },
                     "max_session_idle_minutes": {
                       "type": "integer",
                       "minimum": 0,
-                      "description": "For a sign-on rule, how long a session can stay idle before it ends, in minutes."
+                      "description": "For a sign-on rule, how long a session can stay idle before it ends, in minutes.",
+                      "x-epack-label": "Rule idle limit",
+                      "x-epack-summary": "Longest idle time before sign-out that the rule allows, in minutes. Left out when the rule sets no limit."
                     },
                     "persistent_cookie": {
                       "type": "boolean",
-                      "description": "For a sign-on rule, true when the session cookie lasts across browser restarts."
+                      "description": "For a sign-on rule, true when the session cookie lasts across browser restarts.",
+                      "x-epack-label": "Persistent session cookie",
+                      "x-epack-summary": "Whether the session cookie lasts across browser restarts."
                     },
                     "enroll_self": {
                       "type": "string",
-                      "description": "For an enrollment rule, when it prompts users to enroll authenticators: CHALLENGE, LOGIN, or NEVER."
+                      "description": "For an enrollment rule, when it prompts users to enroll authenticators: CHALLENGE, LOGIN, or NEVER.",
+                      "x-epack-label": "Self-enrollment",
+                      "x-epack-summary": "When the enrollment rule prompts people to enroll authenticators, CHALLENGE, LOGIN or NEVER."
                     }
                   }
                 }
@@ -667,6 +921,8 @@
     "device_access": {
       "type": "object",
       "description": "Device access enforcement posture",
+      "x-epack-label": "Device rules",
+      "x-epack-summary": "Whether sign-on rules require a managed device, and the org's device assurance policies.",
       "required": [
         "managed_device_required",
         "managed_device_required_coverage_pct",
@@ -676,7 +932,10 @@
       "properties": {
         "managed_device_required": {
           "type": ["boolean", "null"],
-          "description": "Whether any sign-on policy rule requires managed devices"
+          "description": "Whether any sign-on policy rule requires managed devices",
+          "x-epack-label": "Managed device required",
+          "x-epack-summary": "Whether any active sign-on rule requires a managed device.",
+          "x-epack-method": "Checks whether any active rule of an active sign-on policy has a managed-device condition."
         },
         "managed_device_required_coverage_pct": {
           "type": ["integer", "null"],
@@ -685,64 +944,95 @@
           "x-epack-denominator": "/users/total_count",
           "x-epack-numerator": "managed_device_required_users_count",
           "x-epack-rounding": "floor",
-          "description": "Percentage of users covered by a managed device requirement"
+          "description": "Percentage of users covered by a managed device requirement",
+          "x-epack-label": "Managed device coverage",
+          "x-epack-summary": "Share of people covered by a managed-device requirement. Deprovisioned accounts are not counted.",
+          "x-epack-method": "Divides the users a managed-device requirement covers by the users other than deprovisioned ones."
         },
         "managed_device_required_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "People covered by a managed device requirement"
+          "description": "People covered by a managed device requirement",
+          "x-epack-label": "People required to use a managed device",
+          "x-epack-summary": "Number of people covered by a managed-device requirement. Managed device coverage is this number as a share of total people.",
+          "x-epack-method": "Counts the users other than deprovisioned ones whose first matching active sign-on rule has a managed-device condition."
         },
         "managed_device_required_for_admins": {
           "type": ["boolean", "null"],
           "x-epack-denominator": "/privileged_access/privileged_users_count",
           "x-epack-numerator": "managed_device_required_admins_count",
-          "description": "Whether all privileged users are covered by a managed device requirement"
+          "description": "Whether all privileged users are covered by a managed device requirement",
+          "x-epack-label": "Managed device for admins",
+          "x-epack-summary": "Whether every admin is covered by a managed-device requirement.",
+          "x-epack-method": "Checks whether a managed-device requirement covers every admin."
         },
         "managed_device_required_admins_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Admins covered by a managed device requirement"
+          "description": "Admins covered by a managed device requirement",
+          "x-epack-label": "Admins required to use a managed device",
+          "x-epack-summary": "Number of admins covered by a managed-device requirement. Managed device for admins is true when this equals the number of admins.",
+          "x-epack-method": "Counts the admins whose first matching active sign-on rule has a managed-device condition."
         },
         "device_assurance_policies_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "policies", "as": "count"},
-          "description": "Number of device assurance policies defined"
+          "description": "Number of device assurance policies defined",
+          "x-epack-label": "Device health policies",
+          "x-epack-summary": "Number of device assurance policies in the org. They set device requirements such as OS version, disk encryption and screen lock.",
+          "x-epack-method": "Lists the org's device assurance policies and counts them."
         },
         "policies": {
           "type": "array",
           "x-epack-level": "audit",
           "description": "Per-device-assurance-policy summary (name, platform, status, min_os_version, disk_encryption_required, screen_lock_required, jailbreak_protection).",
+          "x-epack-label": "Device health policy summaries",
+          "x-epack-summary": "One row per device assurance policy.",
           "items": {
             "type": "object",
             "properties": {
               "name": {
                 "type": "string",
-                "description": "The device assurance policy's name."
+                "description": "The device assurance policy's name.",
+                "x-epack-label": "Device policy name",
+                "x-epack-summary": "The device-assurance policy's display name."
               },
               "platform": {
                 "type": "string",
-                "description": "The device platform the policy covers, such as WINDOWS, MACOS, IOS, ANDROID, or CHROMEOS."
+                "description": "The device platform the policy covers, such as WINDOWS, MACOS, IOS, ANDROID, or CHROMEOS.",
+                "x-epack-label": "Platform",
+                "x-epack-summary": "The operating system the policy applies to, such as MACOS, WINDOWS, IOS, ANDROID or CHROMEOS."
               },
               "status": {
                 "type": "string",
-                "description": "The policy's Okta status. Absent when Okta reports none."
+                "description": "The policy's Okta status. Absent when Okta reports none.",
+                "x-epack-label": "Device policy status",
+                "x-epack-summary": "The policy's Okta status. Left out when there is none."
               },
               "min_os_version": {
                 "type": "string",
-                "description": "The minimum operating system version the policy requires. Absent when it sets none."
+                "description": "The minimum operating system version the policy requires. Absent when it sets none.",
+                "x-epack-label": "Minimum OS version",
+                "x-epack-summary": "Lowest OS version the policy accepts. Left out when the policy sets none."
               },
               "disk_encryption_required": {
                 "type": "boolean",
-                "description": "True when the policy lists at least one accepted disk encryption type."
+                "description": "True when the policy lists at least one accepted disk encryption type and does not accept NONE.",
+                "x-epack-label": "Disk encryption required",
+                "x-epack-summary": "Whether the policy requires disk encryption."
               },
               "screen_lock_required": {
                 "type": "boolean",
-                "description": "True when the policy lists at least one accepted screen lock type."
+                "description": "True when the policy lists at least one accepted screen lock type and does not accept NONE.",
+                "x-epack-label": "Screen lock required",
+                "x-epack-summary": "Whether the policy requires a screen lock."
               },
               "jailbreak_protection": {
                 "type": "boolean",
-                "description": "True when the policy includes Okta's jailbreak condition."
+                "description": "True when the policy includes Okta's jailbreak condition.",
+                "x-epack-label": "Jailbreak detection",
+                "x-epack-summary": "Whether the policy includes Okta's jailbreak condition for jailbroken or rooted devices."
               }
             }
           }
@@ -753,15 +1043,22 @@
       "type": "object",
       "x-epack-level": "audit",
       "description": "Group inventory and counts. Omitted at trust. Internal adds per-group member_logins (capped at 200000 total rows; smallest groups truncated first).",
+      "x-epack-label": "Groups",
+      "x-epack-summary": "The org's groups and how many members each has.",
       "properties": {
         "total_count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of groups in the org."
+          "description": "Number of groups in the org.",
+          "x-epack-label": "Group count",
+          "x-epack-summary": "Total number of groups in the directory."
         },
         "count_by_source": {
           "type": "object",
-          "description": "Number of groups per Okta group type: OKTA_GROUP for groups created in Okta, APP_GROUP for groups imported from an app or directory, and BUILT_IN for Okta's own groups, such as Everyone."
+          "description": "Number of groups per Okta group type: OKTA_GROUP for groups created in Okta, APP_GROUP for groups imported from an app or directory, and BUILT_IN for Okta's own groups, such as Everyone.",
+          "x-epack-label": "Groups by type",
+          "x-epack-summary": "Number of groups of each Okta type, OKTA_GROUP, APP_GROUP or BUILT_IN. APP_GROUP groups are imported from an app or directory.",
+          "additionalProperties": {"type": "integer", "minimum": 0, "x-epack-label": "Groups of this type", "x-epack-summary": "Number of groups of this Okta type."}
         },
         "inventory": {
           "type": "array",
@@ -770,54 +1067,76 @@
             "properties": {
               "id": {
                 "type": "string",
-                "description": "The group's Okta ID."
+                "description": "The group's Okta ID.",
+                "x-epack-label": "Group id",
+                "x-epack-summary": "Okta's ID for the group. Policy rules and people's group memberships use the same IDs."
               },
               "name": {
                 "type": "string",
-                "description": "The group's name."
+                "description": "The group's name.",
+                "x-epack-label": "Group name",
+                "x-epack-summary": "The group's display name."
               },
               "type": {
                 "type": "string",
-                "description": "The group's Okta type: OKTA_GROUP, APP_GROUP, or BUILT_IN."
+                "description": "The group's Okta type: OKTA_GROUP, APP_GROUP, or BUILT_IN.",
+                "x-epack-label": "Group type",
+                "x-epack-summary": "The group's Okta type, OKTA_GROUP, APP_GROUP or BUILT_IN."
               },
               "source": {
                 "type": "string",
-                "description": "Where the group comes from, taken from its Okta type, so it always equals type."
+                "description": "Where the group comes from, taken from its Okta type, so it always equals type.",
+                "x-epack-label": "Group source",
+                "x-epack-summary": "Where the group comes from. It always equals the group type."
               },
               "description": {
                 "type": "string",
-                "description": "The group's description in Okta. Absent when it has none."
+                "description": "The group's description in Okta. Absent when it has none.",
+                "x-epack-label": "Group description",
+                "x-epack-summary": "The administrator-written description of the group's purpose."
               },
               "member_count": {
                 "type": ["integer", "null"],
                 "minimum": 0,
                 "x-epack-rollup": {"rows": "member_logins", "as": "count"},
-                "description": "Okta's group statistics at audit. At internal, the members read live, so it matches member_logins; a group past the membership budget keeps the statistics."
+                "description": "Okta's group statistics at audit. At internal, the members read live, so it matches member_logins; a group past the membership budget keeps the statistics.",
+                "x-epack-label": "Members",
+                "x-epack-summary": "Number of members in the group. At the audit level it comes from Okta's group statistics, which can lag the member list."
               },
               "created_at": {
                 "type": "string",
                 "format": "date-time",
-                "description": "When the group was created, in RFC 3339 UTC."
+                "description": "When the group was created, in RFC 3339 UTC.",
+                "x-epack-label": "Group created at",
+                "x-epack-summary": "When the group was created."
               },
               "member_logins": {
                 "type": "array",
                 "x-epack-level": "internal",
                 "items": {"type": "string"},
-                "description": "Okta logins of the group's members. A group can have a shorter list when the total cap applies."
+                "description": "Okta logins of the group's members. A group can have a shorter list when the total cap applies.",
+                "x-epack-label": "Member logins",
+                "x-epack-summary": "Okta logins of the group's members. A group can list fewer members when the 200,000-row cap applies."
               }
             }
           },
-          "description": "One row per group, largest member count first. Capped at 10000 groups."
+          "description": "One row per group, largest member count first. Capped at 10000 groups.",
+          "x-epack-label": "Group inventory",
+          "x-epack-summary": "One row per group, largest first. Up to 10,000 rows."
         },
         "truncated_memberships": {
           "type": "boolean",
           "x-epack-level": "internal",
-          "description": "True when member lists were cut to stay within 200000 member rows in total. The smallest groups lose their lists first."
+          "description": "True when member lists were cut to stay within 200000 member rows in total. The smallest groups lose their lists first.",
+          "x-epack-label": "Memberships truncated",
+          "x-epack-summary": "Whether member lists stopped at 200,000 rows in total. The smallest groups lose their lists first."
         },
         "truncated_memberships_dropped": {
           "type": "integer",
           "x-epack-level": "internal",
-          "description": "Number of member rows left out by that cap."
+          "description": "Number of member rows left out by that cap.",
+          "x-epack-label": "Members left out",
+          "x-epack-summary": "Number of member rows left out by the 200,000-row cap."
         }
       }
     },
@@ -825,26 +1144,37 @@
       "type": "object",
       "x-epack-level": "audit",
       "description": "Network zone inventory and counts. Omitted at trust. Internal adds per-zone gateways/proxies/locations/asns.",
+      "x-epack-label": "Network zones",
+      "x-epack-summary": "Defined network locations used by policy rules to allow or restrict sign-in.",
       "properties": {
         "total_count": {
           "type": "integer",
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "as": "count"},
-          "description": "Number of network zones in the org."
+          "description": "Number of network zones in the org.",
+          "x-epack-label": "Zone count",
+          "x-epack-summary": "Total number of network zones defined."
         },
         "count_by_type": {
           "type": "object",
-          "description": "Number of zones per Okta zone type, such as IP, DYNAMIC, or DYNAMIC_V2."
+          "description": "Number of zones per Okta zone type, such as IP, DYNAMIC, or DYNAMIC_V2.",
+          "x-epack-label": "Zones by type",
+          "x-epack-summary": "Number of zones of each Okta type, such as IP, DYNAMIC or DYNAMIC_V2.",
+          "additionalProperties": {"type": "integer", "minimum": 0, "x-epack-label": "Zones of this type", "x-epack-summary": "Number of network zones of this Okta type."}
         },
         "gateway_zone_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Number of zones that list at least one gateway address. Null, with a gap, when any zone's gateways could not be read."
+          "description": "Number of zones that list at least one gateway address. Null, with a gap, when any zone's gateways could not be read.",
+          "x-epack-label": "Gateway zones",
+          "x-epack-summary": "Number of zones that list at least one gateway address, such as an office or VPN range."
         },
         "proxy_zone_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Number of zones that list at least one trusted proxy address. Null, with a gap, when any zone's proxies could not be read."
+          "description": "Number of zones that list at least one trusted proxy address. Null, with a gap, when any zone's proxies could not be read.",
+          "x-epack-label": "Proxy zones",
+          "x-epack-summary": "Number of zones that list at least one trusted proxy address."
         },
         "inventory": {
           "type": "array",
@@ -853,51 +1183,71 @@
             "properties": {
               "id": {
                 "type": "string",
-                "description": "The zone's Okta ID."
+                "description": "The zone's Okta ID.",
+                "x-epack-label": "Zone id",
+                "x-epack-summary": "Okta's ID for the zone. Policy rules name zones by this ID."
               },
               "name": {
                 "type": "string",
-                "description": "The zone's name."
+                "description": "The zone's name.",
+                "x-epack-label": "Zone name",
+                "x-epack-summary": "The zone's display name."
               },
               "type": {
                 "type": "string",
-                "description": "The zone's Okta type, such as IP, DYNAMIC, or DYNAMIC_V2."
+                "description": "The zone's Okta type, such as IP, DYNAMIC, or DYNAMIC_V2.",
+                "x-epack-label": "Zone type",
+                "x-epack-summary": "IP, DYNAMIC or DYNAMIC_V2. IP zones list addresses, and dynamic zones match on location, IP service category or ASN."
               },
               "status": {
                 "type": "string",
-                "description": "The zone's Okta status, ACTIVE or INACTIVE."
+                "description": "The zone's Okta status, ACTIVE or INACTIVE.",
+                "x-epack-label": "Zone status",
+                "x-epack-summary": "Whether the zone is ACTIVE or INACTIVE. An inactive zone is defined but not enforced."
               },
               "usage": {
                 "type": "string",
-                "description": "POLICY for a zone that policies can reference, or BLOCKLIST for a zone whose traffic Okta blocks."
+                "description": "POLICY for a zone that policies can reference, or BLOCKLIST for a zone whose traffic Okta blocks.",
+                "x-epack-label": "Zone usage",
+                "x-epack-summary": "POLICY for a zone that policies can use, or BLOCKLIST for a zone whose traffic is blocked."
               },
               "gateways": {
                 "type": "array",
                 "x-epack-level": "internal",
                 "items": {"type": "string"},
-                "description": "The zone's gateway addresses as Okta stores them: single addresses, CIDR ranges, or address ranges."
+                "description": "The zone's gateway addresses as Okta stores them: single addresses, CIDR ranges, or address ranges.",
+                "x-epack-label": "Gateway addresses",
+                "x-epack-summary": "The zone's gateway addresses, as single addresses, CIDR ranges or address ranges."
               },
               "proxies": {
                 "type": "array",
                 "x-epack-level": "internal",
                 "items": {"type": "string"},
-                "description": "The zone's trusted proxy addresses, in the same forms as gateways."
+                "description": "The zone's trusted proxy addresses, in the same forms as gateways.",
+                "x-epack-label": "Proxy addresses",
+                "x-epack-summary": "The zone's trusted proxy IP addresses and ranges."
               },
               "locations": {
                 "type": "array",
                 "x-epack-level": "internal",
                 "items": {"type": "string"},
-                "description": "Locations the zone matches: a country code, or a country and region code such as US-CA."
+                "description": "Locations the zone matches: a country code, or a country and region code such as US-CA. A DYNAMIC_V2 zone lists them under include. Its locations are left out, with a gap, when it also excludes locations.",
+                "x-epack-label": "Locations",
+                "x-epack-summary": "Locations the zone matches, as a country code or a country and region code such as US-CA."
               },
               "asns": {
                 "type": "array",
                 "x-epack-level": "internal",
                 "items": {"type": "string"},
-                "description": "Autonomous system numbers the zone matches."
+                "description": "Autonomous system numbers the zone matches. A DYNAMIC_V2 zone lists them under include. Its ASNs are left out, with a gap, when it also excludes ASNs.",
+                "x-epack-label": "ASNs",
+                "x-epack-summary": "Autonomous system numbers the zone matches."
               }
             }
           },
-          "description": "One row per zone, in the order Okta lists them."
+          "description": "One row per zone, in the order Okta lists them.",
+          "x-epack-label": "Zone inventory",
+          "x-epack-summary": "One row per network zone."
         }
       }
     },
@@ -905,16 +1255,23 @@
       "type": "object",
       "x-epack-level": "audit",
       "description": "Federation identity providers. Omitted at trust. Client secrets, signing keys, and full SSO URLs are never emitted.",
+      "x-epack-label": "Federated logins",
+      "x-epack-summary": "External identity providers that people can use to sign in to Okta.",
       "properties": {
         "total_count": {
           "type": "integer",
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "as": "count"},
-          "description": "Number of identity providers configured in the org."
+          "description": "Number of identity providers configured in the org.",
+          "x-epack-label": "Provider count",
+          "x-epack-summary": "Number of external identity providers connected to the org."
         },
         "count_by_protocol": {
           "type": "object",
-          "description": "Number of identity providers per Okta identity provider type, such as SAML2, OIDC, GOOGLE, or MICROSOFT."
+          "description": "Number of identity providers per Okta identity provider type, such as SAML2, OIDC, GOOGLE, or MICROSOFT.",
+          "x-epack-label": "Providers by protocol",
+          "x-epack-summary": "Number of identity providers of each Okta type, such as SAML2, OIDC or GOOGLE.",
+          "additionalProperties": {"type": "integer", "minimum": 0, "x-epack-label": "Providers of this type", "x-epack-summary": "Number of identity providers of this Okta type."}
         },
         "inventory": {
           "type": "array",
@@ -923,43 +1280,61 @@
             "properties": {
               "id": {
                 "type": "string",
-                "description": "The identity provider's Okta ID."
+                "description": "The identity provider's Okta ID.",
+                "x-epack-label": "Provider id",
+                "x-epack-summary": "Okta's ID for the identity provider."
               },
               "name": {
                 "type": "string",
-                "description": "The identity provider's name."
+                "description": "The identity provider's name.",
+                "x-epack-label": "Provider name",
+                "x-epack-summary": "The identity provider's display name."
               },
               "type": {
                 "type": "string",
-                "description": "The identity provider's Okta type, such as SAML2, OIDC, GOOGLE, or MICROSOFT."
+                "description": "The identity provider's Okta type, such as SAML2, OIDC, GOOGLE, or MICROSOFT.",
+                "x-epack-label": "Provider type",
+                "x-epack-summary": "The identity provider's Okta type, such as SAML2, OIDC or GOOGLE."
               },
               "status": {
                 "type": "string",
-                "description": "The identity provider's Okta status, ACTIVE or INACTIVE."
+                "description": "The identity provider's Okta status, ACTIVE or INACTIVE.",
+                "x-epack-label": "Provider status",
+                "x-epack-summary": "The identity provider's Okta status, ACTIVE or INACTIVE."
               },
               "issuer_host": {
                 "type": "string",
-                "description": "Host of the identity provider's issuer URL or URN. The full issuer value is not emitted. Absent when Okta reports no issuer."
+                "description": "Host of the identity provider's issuer URL or URN. The full issuer value is not emitted. Absent when Okta reports no issuer.",
+                "x-epack-label": "Issuer host",
+                "x-epack-summary": "Host of the identity provider's issuer URL or URN, such as login.partner.com. The full issuer is left out."
               },
               "signing_cert_thumbprint": {
                 "type": "string",
                 "x-epack-level": "internal",
-                "description": "ID (kid) of the signing key Okta trusts for this identity provider."
+                "description": "ID (kid) of the signing key Okta trusts for this identity provider.",
+                "x-epack-label": "Signing key ID",
+                "x-epack-summary": "ID (kid) of the signing key trusted for this identity provider."
               },
               "jit_provisioning": {
                 "type": "boolean",
                 "x-epack-level": "internal",
-                "description": "True when Okta creates a user from this identity provider the first time they sign in."
+                "description": "True when Okta creates a user from this identity provider the first time they sign in.",
+                "x-epack-label": "Just-in-time provisioning",
+                "x-epack-summary": "Whether an Okta account is created the first time someone signs in through this provider."
               },
               "group_mapping_count": {
                 "type": "integer",
                 "minimum": 0,
                 "x-epack-level": "internal",
-                "description": "Number of groups Okta assigns to users provisioned through this identity provider."
+                "description": "Number of groups Okta can add users provisioned through this identity provider to. For the ASSIGN group action these are the assigned groups. For APPEND and SYNC they are the groups in the filter allowlist.",
+                "x-epack-label": "Group mappings",
+                "x-epack-summary": "Number of groups that people provisioned through this identity provider can be added to."
               }
             }
           },
-          "description": "One row per identity provider."
+          "description": "One row per identity provider.",
+          "x-epack-label": "Provider inventory",
+          "x-epack-summary": "One row per identity provider. Client secrets, signing keys and full sign-in URLs are left out."
         }
       }
     },
@@ -967,17 +1342,23 @@
       "type": "object",
       "x-epack-level": "audit",
       "description": "SSWS API tokens. Omitted at trust. Requires a SUPER_ADMIN-level scope; omitted with a gap and a diagnostic on 403. Token secret values are never exposed by the API.",
+      "x-epack-label": "API tokens",
+      "x-epack-summary": "Okta API tokens, which give programmatic access with their creator's permissions. Reading them needs a Super Administrator scope.",
       "properties": {
         "total_active_count": {
           "type": "integer",
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "ACTIVE", "as": "count"},
-          "description": "Number of active API tokens."
+          "description": "Number of active API tokens.",
+          "x-epack-label": "Active tokens",
+          "x-epack-summary": "Number of active API tokens. Each has the permissions of the admin who created it."
         },
         "recently_used_count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of active API tokens used in the 30 days before the run, judged by the lastUpdated time Okta reports for each token."
+          "description": "Number of active API tokens used in the 30 days before the run, judged by the lastUpdated time Okta reports for each token.",
+          "x-epack-label": "Recently used tokens",
+          "x-epack-summary": "Number of active API tokens used in the 30 days before the run. Use is judged by each token's last-updated time in Okta."
         },
         "inventory": {
           "type": "array",
@@ -986,40 +1367,56 @@
             "properties": {
               "id": {
                 "type": "string",
-                "description": "The token's Okta ID."
+                "description": "The token's Okta ID.",
+                "x-epack-label": "Token id",
+                "x-epack-summary": "Okta's ID for the token."
               },
               "name": {
                 "type": "string",
-                "description": "The token's name."
+                "description": "The token's name.",
+                "x-epack-label": "Token name",
+                "x-epack-summary": "The administrator-given name of the token."
               },
               "status": {
                 "type": "string",
-                "description": "The token's Okta status, such as ACTIVE."
+                "description": "ACTIVE for every token. Okta's token list holds only active tokens, and its token object has no status.",
+                "x-epack-label": "Token status",
+                "x-epack-summary": "ACTIVE for every token, since Okta's token list holds only active tokens."
               },
               "created_at": {
                 "type": "string",
                 "format": "date-time",
-                "description": "When the token was created, in RFC 3339 UTC."
+                "description": "When the token was created, in RFC 3339 UTC.",
+                "x-epack-label": "Token created at",
+                "x-epack-summary": "When the token was created."
               },
               "created_by_login": {
                 "type": "string",
                 "x-epack-level": "internal",
-                "description": "Okta login of the user who created the token. Absent when that user is not in the org's user list."
+                "description": "Okta login of the user who created the token. Absent when that user is not in the org's user list.",
+                "x-epack-label": "Created by",
+                "x-epack-summary": "Login of the person who created the token. Left out when they are not in the org's user list."
               },
               "last_used_at": {
                 "type": "string",
                 "format": "date-time",
                 "x-epack-level": "internal",
-                "description": "When the token was last used, in RFC 3339 UTC, from the lastUpdated time Okta reports for it."
+                "description": "When the token was last used, in RFC 3339 UTC, from the lastUpdated time Okta reports for it.",
+                "x-epack-label": "Token last used",
+                "x-epack-summary": "When the token was last used, from its last-updated time in Okta."
               },
               "network_zone_scoped": {
                 "type": "boolean",
                 "x-epack-level": "internal",
-                "description": "True when the token's network condition limits it to one or more network zones."
+                "description": "True when the token's network condition limits it to one or more network zones.",
+                "x-epack-label": "Network-restricted",
+                "x-epack-summary": "Whether the token can be used only from certain network zones."
               }
             }
           },
-          "description": "One row per API token. Token values are never read."
+          "description": "One row per API token. Token values are never read.",
+          "x-epack-label": "Token inventory",
+          "x-epack-summary": "One row per API token. Token values are never read."
         }
       }
     },
@@ -1027,36 +1424,50 @@
       "type": "object",
       "x-epack-level": "audit",
       "description": "Event and inline hooks. Omitted at trust. Hook auth headers, full URLs, and secrets are never emitted.",
+      "x-epack-label": "Hooks",
+      "x-epack-summary": "Event hooks and inline hooks. Both call an outside service.",
       "properties": {
         "event_hook_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "event_hooks", "as": "count"},
-          "description": "Number of event hooks. Null, with a gap, when the event hooks could not be read."
+          "description": "Number of event hooks. Null, with a gap, when the event hooks could not be read.",
+          "x-epack-label": "Event hooks",
+          "x-epack-summary": "Number of event hooks. An event hook tells an outside service about an event after it happens."
         },
         "inline_hook_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inline_hooks", "as": "count"},
-          "description": "Number of inline hooks. Null, with a gap, when the inline hooks could not be read."
+          "description": "Number of inline hooks. Null, with a gap, when the inline hooks could not be read.",
+          "x-epack-label": "Inline hooks",
+          "x-epack-summary": "Number of inline hooks. An inline hook calls an outside service during a flow, and the answer can change the result."
         },
         "active_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Number of event and inline hooks whose status is ACTIVE. Null, with a gap, when either kind could not be read."
+          "description": "Number of event and inline hooks whose status is ACTIVE. Null, with a gap, when either kind could not be read.",
+          "x-epack-label": "Active hooks",
+          "x-epack-summary": "Number of event and inline hooks that are ACTIVE."
         },
         "inactive_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Number of event and inline hooks in any other status. Null, with a gap, when either kind could not be read."
+          "description": "Number of event and inline hooks in any other status. Null, with a gap, when either kind could not be read.",
+          "x-epack-label": "Inactive hooks",
+          "x-epack-summary": "Number of event and inline hooks with a status other than ACTIVE."
         },
         "event_hooks": {
           "$ref": "#/$defs/hooks",
-          "description": "One row per event hook."
+          "description": "One row per event hook.",
+          "x-epack-label": "Event hook inventory",
+          "x-epack-summary": "One row per event hook. Auth headers, full URLs and secrets are left out."
         },
         "inline_hooks": {
           "$ref": "#/$defs/hooks",
-          "description": "One row per inline hook."
+          "description": "One row per inline hook.",
+          "x-epack-label": "Inline hook inventory",
+          "x-epack-summary": "One row per inline hook. Auth headers, full URLs and secrets are left out."
         }
       }
     },
@@ -1064,14 +1475,21 @@
       "type": "object",
       "x-epack-level": "audit",
       "description": "Security-relevant system-log events. Absent at trust. audit: count_by_category over the last 7 days. internal: events[] (event_type, published, actor login+type, targets[], outcome, client_ip, user_agent; no debug-context). Capped at 5000, newest first.",
+      "x-epack-label": "Activity log",
+      "x-epack-summary": "Security-related events from the Okta System Log in the 7 days before the run.",
       "properties": {
         "window_days": {
           "type": "integer",
-          "description": "Number of days before the run that the system log values cover. Always 7."
+          "description": "Number of days before the run that the system log values cover. Always 7.",
+          "x-epack-label": "Window length",
+          "x-epack-summary": "Number of days the System Log values cover. Always 7."
         },
         "count_by_category": {
           "type": "object",
-          "description": "Number of security-relevant events in the window per category: user.account, user.session, policy, application, group, system, iam, and security. Counted from the newest 5000 matching events."
+          "description": "Number of security-relevant events in the window per category: user.account, user.session, policy, application, group, system, iam, and security. Counted from the newest 5000 matching events.",
+          "x-epack-label": "Events by category",
+          "x-epack-summary": "Number of security-related events in the window in each category, such as user.account, policy or iam. Only the newest 5,000 matching events are counted.",
+          "additionalProperties": {"type": "integer", "minimum": 0, "x-epack-label": "Events in this category", "x-epack-summary": "Number of security-related events in this category in the window."}
         },
         "events": {
           "type": "array",
@@ -1081,32 +1499,46 @@
             "properties": {
               "event_type": {
                 "type": "string",
-                "description": "The Okta event type, such as user.session.start."
+                "description": "The Okta event type, such as user.session.start.",
+                "x-epack-label": "Event type",
+                "x-epack-summary": "The Okta event type, such as user.session.start or policy.rule.update."
               },
               "published": {
                 "type": "string",
                 "format": "date-time",
-                "description": "When Okta recorded the event, in RFC 3339 UTC."
+                "description": "When Okta recorded the event, in RFC 3339 UTC.",
+                "x-epack-label": "Event time",
+                "x-epack-summary": "When the event occurred, in UTC."
               },
               "outcome": {
                 "type": "string",
-                "description": "The event's result as Okta reports it, such as SUCCESS or FAILURE. Absent when Okta reports none."
+                "description": "The event's result as Okta reports it, such as SUCCESS or FAILURE. Absent when Okta reports none.",
+                "x-epack-label": "Outcome",
+                "x-epack-summary": "The event's result, such as SUCCESS or FAILURE."
               },
               "actor_login": {
                 "type": "string",
-                "description": "The actor's alternate ID in Okta, usually a login. Absent when Okta reports none."
+                "description": "The actor's alternate ID in Okta, usually a login. Absent when Okta reports none.",
+                "x-epack-label": "Actor login",
+                "x-epack-summary": "The actor's alternate ID in Okta, usually a login. Left out when there is none."
               },
               "actor_type": {
                 "type": "string",
-                "description": "The actor's Okta type, such as User or PublicClientApp."
+                "description": "The actor's Okta type, such as User or PublicClientApp.",
+                "x-epack-label": "Actor type",
+                "x-epack-summary": "The actor's Okta type, such as User or PublicClientApp."
               },
               "client_ip": {
                 "type": "string",
-                "description": "The client IP address Okta recorded for the event."
+                "description": "The client IP address Okta recorded for the event.",
+                "x-epack-label": "Client IP",
+                "x-epack-summary": "The IP address the request came from."
               },
               "user_agent": {
                 "type": "string",
-                "description": "The client's raw user agent string."
+                "description": "The client's raw user agent string.",
+                "x-epack-label": "User agent",
+                "x-epack-summary": "Raw browser or client user-agent string for the request."
               },
               "targets": {
                 "type": "array",
@@ -1115,34 +1547,48 @@
                   "properties": {
                     "display_name": {
                       "type": "string",
-                      "description": "The target's display name in Okta."
+                      "description": "The target's display name in Okta.",
+                      "x-epack-label": "Target name",
+                      "x-epack-summary": "Display name of an entity the event acted on."
                     },
                     "type": {
                       "type": "string",
-                      "description": "The target's Okta type, such as User, AppInstance, or PolicyEntity."
+                      "description": "The target's Okta type, such as User, AppInstance, or PolicyEntity.",
+                      "x-epack-label": "Target type",
+                      "x-epack-summary": "The target's Okta type, such as User, AppInstance or PolicyEntity."
                     }
                   }
                 },
-                "description": "What the event acted on."
+                "description": "What the event acted on.",
+                "x-epack-label": "Targets",
+                "x-epack-summary": "What the event acted on, such as a user, app, group or policy."
               }
             }
           },
-          "description": "The security-relevant events in the window, newest first. Capped at 5000."
+          "description": "The security-relevant events in the window, newest first. Capped at 5000.",
+          "x-epack-label": "Event slice",
+          "x-epack-summary": "The security-related events in the window, newest first. Up to 5,000 events."
         },
         "truncated": {
           "type": "boolean",
           "x-epack-level": "internal",
-          "description": "True when the events reached the 5000-event cap, so older events in the window are left out."
+          "description": "True when the events reached the 5000-event cap, so older events in the window are left out.",
+          "x-epack-label": "Event slice truncated",
+          "x-epack-summary": "Whether the events stopped at 5,000, which leaves older events in the window out. The category counts then cover only the newest 5,000."
         },
         "oldest_event_id": {
           "type": "string",
           "x-epack-level": "internal",
-          "description": "Okta ID of the oldest event listed. Present only when the events were truncated."
+          "description": "Okta ID of the oldest event listed. Present only when the events were truncated.",
+          "x-epack-label": "Oldest event id",
+          "x-epack-summary": "Okta ID of the oldest event listed. Present only when the events were truncated."
         },
         "newest_event_id": {
           "type": "string",
           "x-epack-level": "internal",
-          "description": "Okta ID of the newest event listed. Present only when the events were truncated."
+          "description": "Okta ID of the newest event listed. Present only when the events were truncated.",
+          "x-epack-label": "Newest event id",
+          "x-epack-summary": "Okta ID of the newest event listed. Present only when the events were truncated."
         }
       }
     },
@@ -1150,32 +1596,44 @@
       "type": "object",
       "x-epack-level": "audit",
       "description": "Organization settings. Omitted at trust. audit: subdomain + status + self_service_recovery_enabled. internal: notification_contact_logins[].",
+      "x-epack-label": "Org settings",
+      "x-epack-summary": "Basic organization identity and account-recovery settings.",
       "properties": {
         "subdomain": {
           "type": "string",
-          "description": "The org's Okta subdomain."
+          "description": "The org's Okta subdomain.",
+          "x-epack-label": "Org subdomain",
+          "x-epack-summary": "The org's Okta subdomain, such as company in company.okta.com."
         },
         "status": {
           "type": "string",
-          "description": "The org's Okta status, such as ACTIVE."
+          "description": "The org's Okta status, such as ACTIVE.",
+          "x-epack-label": "Org status",
+          "x-epack-summary": "The org's Okta status, such as ACTIVE."
         },
-        "self_service_recovery_enabled": {"type": "boolean", "description": "True when an active password policy rule allows self-service password reset or account unlock."},
+        "self_service_recovery_enabled": {"type": "boolean", "description": "True when the password policy rule that applies to at least one person allows self-service password reset or account unlock. Okta applies a person's first matching password policy, and in it the first rule whose conditions are met.", "x-epack-label": "Self-service recovery", "x-epack-summary": "Whether the password policy rule that applies to at least one person lets them reset their own password or unlock their own account."},
         "notification_contact_logins": {
           "type": "array",
           "x-epack-level": "internal",
           "items": {"type": "string"},
-          "description": "Okta logins of the org's billing and technical contacts. A contact who is not in the user list is left out."
+          "description": "Okta logins of the org's billing and technical contacts. A contact who is not in the user list is left out.",
+          "x-epack-label": "Notification contacts",
+          "x-epack-summary": "Okta logins of the org's billing and technical contacts. A contact who is not in the user list is left out."
         }
       }
     },
     "diagnostics": {
       "type": "object",
       "description": "Present when any surface was skipped (missing scope, feature not licensed, transient error). Carries the detail so the customer knows what to grant.",
+      "x-epack-label": "Collection notes",
+      "x-epack-summary": "Present when part of the collection was skipped, such as for a missing scope or an unlicensed feature.",
       "properties": {
         "warnings": {
           "type": "array",
           "items": {"type": "string"},
-          "description": "Messages naming each surface or value the run left out and what to grant or enable to collect it."
+          "description": "Messages naming each surface or value the run left out and what to grant or enable to collect it.",
+          "x-epack-label": "Warnings",
+          "x-epack-summary": "One message for each value left out, with what to grant or enable to collect it."
         }
       }
     }
@@ -1188,30 +1646,42 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "The hook's name."
+            "description": "The hook's name.",
+            "x-epack-label": "Hook name",
+            "x-epack-summary": "The hook's name."
           },
           "type": {
             "type": "string",
-            "description": "For an event hook, the type of its event subscription, such as EVENT_TYPE. For an inline hook, the extension point it handles, such as com.okta.oauth2.tokens.transform."
+            "description": "For an event hook, the type of its event subscription, such as EVENT_TYPE. For an inline hook, the extension point it handles, such as com.okta.oauth2.tokens.transform.",
+            "x-epack-label": "Hook type",
+            "x-epack-summary": "The type of an event hook's subscription, such as EVENT_TYPE, or the extension point an inline hook handles."
           },
           "status": {
             "type": "string",
-            "description": "The hook's Okta status, ACTIVE or INACTIVE."
+            "description": "The hook's Okta status, ACTIVE or INACTIVE.",
+            "x-epack-label": "Hook status",
+            "x-epack-summary": "The hook's Okta status, ACTIVE or INACTIVE."
           },
           "subscribed_events": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Okta event types an event hook subscribes to. Absent for inline hooks."
+            "description": "Okta event types an event hook subscribes to. Absent for inline hooks.",
+            "x-epack-label": "Subscribed events",
+            "x-epack-summary": "The Okta event types an event hook subscribes to, such as user.lifecycle.create."
           },
           "endpoint_host": {
             "type": "string",
             "x-epack-level": "internal",
-            "description": "Host of the URL the hook calls. The full URL is not emitted."
+            "description": "Host of the URL the hook calls. The full URL is not emitted.",
+            "x-epack-label": "Endpoint host",
+            "x-epack-summary": "Host of the URL the hook calls, such as hooks.example.com. The full URL is left out."
           },
           "channel_type": {
             "type": "string",
             "x-epack-level": "internal",
-            "description": "The hook's channel type, such as HTTP."
+            "description": "The hook's channel type, such as HTTP.",
+            "x-epack-label": "Channel type",
+            "x-epack-summary": "Delivery channel for the hook, typically HTTP."
           }
         }
       }

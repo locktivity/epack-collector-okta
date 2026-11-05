@@ -206,6 +206,64 @@ func TestIdPs_NeverEmitsSigningKeys(t *testing.T) {
 	}
 }
 
+func TestIdPs_IssuerHostForOpenIDConnect(t *testing.T) {
+	// An OpenID Connect IdP has its issuer at protocol.issuer.url.
+	for _, tt := range []struct{ idp, want string }{
+		{`{"id":"0oa1","name":"Partner","type":"OIDC","status":"ACTIVE",
+			"protocol":{"type":"OIDC","issuer":{"url":"https://login.partner.example.com"},"credentials":{"client":{"client_id":"abc"}}}}`,
+			"login.partner.example.com"},
+		{`{"id":"0oa2","name":"Google","type":"GOOGLE","status":"ACTIVE",
+			"protocol":{"type":"OIDC","issuer":{"url":"https://accounts.google.com"},"scopes":["openid"]}}`,
+			"accounts.google.com"},
+	} {
+		var idp okta.IdentityProvider
+		if err := json.Unmarshal([]byte(tt.idp), &idp); err != nil {
+			t.Fatalf("decoding IdP: %v", err)
+		}
+		client := richClient()
+		client.identityProviders = []okta.IdentityProvider{idp}
+		p, err := NewWithClient(Config{OrgDomain: "acme.okta.com"}, client).Collect(context.Background(), componentsdk.LevelAudit)
+		if err != nil {
+			t.Fatalf("collect: %v", err)
+		}
+		if got := p.IdentityProviders.Inventory[0].IssuerHost; got != tt.want {
+			t.Errorf("issuer_host for %s = %q, want %q", idp.Type, got, tt.want)
+		}
+	}
+}
+
+func TestIdPs_GroupMappingCountFollowsGroupAction(t *testing.T) {
+	// Okta adds people to the assignments groups for ASSIGN. For APPEND and
+	// SYNC it adds them only to groups in the filter allowlist.
+	for _, tt := range []struct {
+		groups string
+		want   int
+	}{
+		{`{"action":"ASSIGN","assignments":["00g1","00g2"]}`, 2},
+		{`{"action":"APPEND","filter":["00g1","00g2","00g3"],"sourceAttributeName":"groups"}`, 3},
+		{`{"action":"SYNC","filter":["00g1"],"sourceAttributeName":"groups"}`, 1},
+		{`{"action":"NONE"}`, 0},
+	} {
+		var idp okta.IdentityProvider
+		raw := `{"id":"0oa1","name":"Entra","type":"SAML2","status":"ACTIVE",
+			"protocol":{"type":"SAML2","credentials":{"trust":{"issuer":"https://sts.windows.net/tenant/","kid":"k1"}}},
+			"policy":{"provisioning":{"action":"AUTO","groups":` + tt.groups + `}}}`
+		if err := json.Unmarshal([]byte(raw), &idp); err != nil {
+			t.Fatalf("decoding IdP: %v", err)
+		}
+		client := richClient()
+		client.identityProviders = []okta.IdentityProvider{idp}
+		p, err := NewWithClient(Config{OrgDomain: "acme.okta.com"}, client).Collect(context.Background(), componentsdk.LevelInternal)
+		if err != nil {
+			t.Fatalf("collect: %v", err)
+		}
+		got := p.IdentityProviders.Inventory[0].GroupMappingCount
+		if got == nil || *got != tt.want {
+			t.Errorf("group_mapping_count for %s = %s, want %d", tt.groups, showInt(got), tt.want)
+		}
+	}
+}
+
 func TestHooks_NeverEmitsFullURLOrAuthHeaders(t *testing.T) {
 	p := collectAt(t, componentsdk.LevelInternal)
 	hook := p.Hooks.EventHooks[0]
@@ -244,6 +302,32 @@ func TestAPITokens_DegradesOnInsufficientScope(t *testing.T) {
 	}
 }
 
+func TestAPITokens_CountsListedTokensWithoutStatus(t *testing.T) {
+	// Okta's token object has no status, and the list holds only active tokens.
+	now := time.Now()
+	client := richClientAt(now)
+	client.apiTokens = []okta.APIToken{
+		{ID: "tok1", Name: "ci-token", Created: now.AddDate(0, 0, -200), LastUpdated: now.AddDate(0, 0, -5), UserID: "u1"},
+		{ID: "tok2", Name: "old-token", Created: now.AddDate(0, 0, -300), LastUpdated: now.AddDate(0, 0, -100), UserID: "u1"},
+	}
+	c := NewWithClient(Config{OrgDomain: "acme.okta.com", Now: func() time.Time { return now }}, client)
+	p, err := c.Collect(context.Background(), componentsdk.LevelAudit)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if p.APITokens.TotalActiveCount != 2 {
+		t.Errorf("total_active_count = %d, want 2", p.APITokens.TotalActiveCount)
+	}
+	if p.APITokens.RecentlyUsedCount != 1 {
+		t.Errorf("recently_used_count = %d, want 1", p.APITokens.RecentlyUsedCount)
+	}
+	for i, row := range p.APITokens.Inventory {
+		if row.Status != StatusActive {
+			t.Errorf("inventory[%d].status = %q, want ACTIVE", i, row.Status)
+		}
+	}
+}
+
 func TestSystemLog_FilterOnlySecurityCategories(t *testing.T) {
 	filter := buildSystemLogFilter()
 
@@ -254,7 +338,7 @@ func TestSystemLog_FilterOnlySecurityCategories(t *testing.T) {
 		}
 	}
 	// Spot-check representative event types are present.
-	for _, want := range []string{"user.account.lock", "policy.lifecycle.create", "system.api_token.create", "security.zone.create"} {
+	for _, want := range []string{"user.account.lock", "policy.lifecycle.create", "system.api_token.create", "zone.create"} {
 		if !strings.Contains(filter, want) {
 			t.Errorf("filter missing security event type %q", want)
 		}
@@ -262,5 +346,22 @@ func TestSystemLog_FilterOnlySecurityCategories(t *testing.T) {
 	// And that nothing non-security (e.g. routine app access) sneaks in.
 	if strings.Contains(filter, "user.authentication.sso") {
 		t.Error("filter must not include routine authentication events")
+	}
+}
+
+func TestSystemLog_PolicyRuleAndNetworkZoneEvents(t *testing.T) {
+	filter := buildSystemLogFilter()
+	for eventType, category := range map[string]string{
+		"policy.rule.add": "policy",
+		"zone.create":     "security",
+		"zone.update":     "security",
+		"zone.delete":     "security",
+	} {
+		if !strings.Contains(filter, `eventType eq "`+eventType+`"`) {
+			t.Errorf("filter missing event type %q", eventType)
+		}
+		if got := eventTypeCategory(eventType); got != category {
+			t.Errorf("category of %q = %q, want %q", eventType, got, category)
+		}
 	}
 }

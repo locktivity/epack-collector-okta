@@ -65,7 +65,7 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 		return metrics
 	}
 	c.status("Resolving policy group memberships...")
-	groupMembers, err := c.fetchGroupMembersForPolicies(ctx, allPolicies)
+	groupMembers, err := c.fetchGroupMembersForPolicies(ctx, allPolicies, nil)
 	if err != nil {
 		metrics.groupsErr = c.warnSurface("policy group memberships", "okta.groups.read", err)
 	}
@@ -91,8 +91,11 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 }
 
 // fillPolicy writes the policy metrics into the posture, leaving out with a
-// gap each value the reads it needs did not give.
-func (c *Collector) fillPolicy(p *OrgPosture, users *userMetricsCollector, m *policyMetricsCollector, level componentsdk.Level) {
+// gap each value the reads it needs did not give. It also records from the
+// app list whether app sign-in policies may require MFA of more people.
+func (c *Collector) fillPolicy(p *OrgPosture, users *userMetricsCollector, apps *appMetricsCollector, m *policyMetricsCollector, level componentsdk.Level) {
+	p.Policy.appSignInPolicies = apps.appSignInPolicies
+	p.Policy.appsErr = apps.err
 	if m.signOnErr != nil {
 		c.gaps.notCollected(m.signOnErr, "/policy/policy_count",
 			"/policy/session_lifetime_min_minutes", "/policy/session_lifetime_max_minutes",
@@ -150,7 +153,7 @@ func policySummary(sp scopedPolicy, level componentsdk.Level) PolicySummary {
 		Status:       sp.policy.Status,
 		Priority:     sp.policy.Priority,
 		RuleCount:    len(sp.rules),
-		ScopeSummary: policyScopeSummary(sp.policy.Conditions.People),
+		people:       sp.policy.Conditions.People,
 	}
 	if level.AtLeast(componentsdk.LevelInternal) {
 		summary.Rules = make([]PolicyRuleDetail, 0, len(sp.rules))
@@ -207,13 +210,28 @@ func policyRuleDetail(rule okta.PolicyRule) PolicyRuleDetail {
 	return detail
 }
 
-// policyScopeSummary describes whether a policy targets specific groups/users or
-// applies to everyone.
-func policyScopeSummary(people *okta.PolicyPeopleCondition) string {
-	if hasPeopleIncludes(people) {
-		return "group-assigned"
+// fillPolicyScopes writes each policy summary's scope_summary. A policy that
+// includes the built-in Everyone group applies to all users. Okta returns each
+// default policy with that group as its included group. Telling the group
+// apart takes the group list. When the list could not be read, a policy that
+// includes groups is left without a scope_summary, with a gap.
+func (c *Collector) fillPolicyScopes(p *OrgPosture, groups *Groups, groupsErr error) {
+	for i := range p.Policy.Policies {
+		row := &p.Policy.Policies[i]
+		people := row.people
+		switch {
+		case !hasPeopleIncludes(people):
+			row.ScopeSummary = ScopeEveryone
+		case people.Groups == nil || len(people.Groups.Include) == 0:
+			row.ScopeSummary = ScopeGroupAssigned
+		case groupsErr != nil:
+			c.gaps.notCollected(groupsErr, rowPointer("/policy/policies", i, "scope_summary"))
+		case groups != nil && groups.everyoneID != "" && containsString(people.Groups.Include, groups.everyoneID):
+			row.ScopeSummary = ScopeEveryone
+		default:
+			row.ScopeSummary = ScopeGroupAssigned
+		}
 	}
-	return "everyone"
 }
 
 // fetchActivePoliciesWithRules reads the active policies of one type and
@@ -257,7 +275,10 @@ func (c *Collector) fetchActivePoliciesWithRules(ctx context.Context, policyType
 	return result, nil
 }
 
-func (c *Collector) fetchGroupMembersForPolicies(ctx context.Context, policies []scopedPolicy) (groupMembership, error) {
+// fetchGroupMembersForPolicies reads the members of each group the policies
+// name. The groups in known were read earlier in the run and are not read
+// again.
+func (c *Collector) fetchGroupMembersForPolicies(ctx context.Context, policies []scopedPolicy, known groupMembership) (groupMembership, error) {
 	groupIDs := collectPolicyGroupIDs(policies)
 	groupMembers := make(groupMembership, len(groupIDs))
 	if len(groupIDs) == 0 {
@@ -266,6 +287,10 @@ func (c *Collector) fetchGroupMembersForPolicies(ctx context.Context, policies [
 
 	total := int64(len(groupIDs))
 	for i, groupID := range groupIDs {
+		if members, ok := known[groupID]; ok {
+			groupMembers[groupID] = members
+			continue
+		}
 		c.progress(int64(i+1), total, fmt.Sprintf("Loading policy group %d of %d", i+1, len(groupIDs)))
 
 		members := make(map[string]struct{})
@@ -322,6 +347,23 @@ type PolicyConfig struct {
 
 	// Audit-level field.
 	Policies []PolicySummary `json:"policies,omitempty"`
+
+	// appSignInPolicies is set when an active app has an app sign-in policy.
+	// Its rules can require MFA, and the collector does not read them.
+	// appsErr is the error that kept the app list from being read.
+	appSignInPolicies bool
+	appsErr           error
+}
+
+// mfaRequirementUnread returns whether app sign-in policies may require MFA
+// of people the sign-on and enrollment policies leave out. It is true when
+// those policies leave someone out and an active app has an app sign-in
+// policy, or the app list could not be read.
+func (p PolicyConfig) mfaRequirementUnread() bool {
+	if p.MFARequiredAll == nil || *p.MFARequiredAll {
+		return false
+	}
+	return p.appSignInPolicies || p.appsErr != nil
 }
 
 // PolicySummary is a per-policy summary (audit+). Internal adds per-rule details.
@@ -331,10 +373,12 @@ type PolicySummary struct {
 	Status       string `json:"status"`
 	Priority     int    `json:"priority"`
 	RuleCount    int    `json:"rule_count"`
-	ScopeSummary string `json:"scope_summary"` // "group-assigned" or "everyone"
+	ScopeSummary string `json:"scope_summary,omitempty"` // ScopeGroupAssigned or ScopeEveryone
 
 	// Internal-level field.
 	Rules []PolicyRuleDetail `json:"rules,omitempty"`
+
+	people *okta.PolicyPeopleCondition
 }
 
 // PolicyRuleDetail captures a policy rule's conditions and actions (internal).

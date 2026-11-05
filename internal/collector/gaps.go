@@ -7,10 +7,11 @@ import (
 	"github.com/locktivity/epack/componentsdk"
 )
 
-// Artifact paths in the pack.
+// Artifact paths in the pack, and the schema ID of the normalized artifact.
 const (
-	detailedPath   = "artifacts/okta.json"
-	idpPosturePath = "artifacts/okta.idp-posture.json"
+	detailedPath     = "artifacts/okta.details.json"
+	idpPosturePath   = "artifacts/okta.idp-posture.json"
+	idpPostureSchema = "evidencepack/idp-posture@v1"
 )
 
 // gapLog records each value the collector leaves out of the detailed
@@ -48,12 +49,12 @@ func failed(err error, warning, missing string) error {
 }
 
 // gapOptions returns the warning and the scope to grant that err carries.
-func gapOptions(err error) []componentsdk.GapOption {
+func gapOptions(err error) []componentsdk.AdviceOption {
 	var f *failure
 	if !errors.As(err, &f) {
 		return nil
 	}
-	opts := []componentsdk.GapOption{componentsdk.Warning(f.warning)}
+	opts := []componentsdk.AdviceOption{componentsdk.Warning(f.warning)}
 	if f.missing != "" {
 		opts = append(opts, componentsdk.MissingPermission(f.missing))
 	}

@@ -58,8 +58,8 @@ than failing the run: the collector result records a gap for each, and
 
 ### Apps (`apps`)
 
-- **trust**: provisioning / deprovisioning automation percentages, with the counts of apps behind them and behind SSO coverage.
-- **audit**: `inventory[]` per-app rows (label, name, type, sign-on mode, status, SSO-configured, provisioning-configured).
+- **trust**: provisioning / deprovisioning automation percentages, with the counts of apps behind them and behind SSO coverage. Inactive apps are left out of the counts and percentages. So are API service apps and Okta's own Admin Console, Dashboard and Browser Plugin apps.
+- **audit**: `inventory[]` per-app rows (label, name, type, sign-on mode, status, SSO-configured, provisioning-configured), including the apps left out of the counts. An API service app has the type `SERVICE`.
 
 ### Privileged access (`privileged_access`)
 
@@ -70,7 +70,7 @@ than failing the run: the collector result records a gap for each, and
 ### Policy (`policy`)
 
 - **trust**: active policy count, MFA-required flags + coverage % with the count of users an MFA requirement covers, session-lifetime and idle-timeout min/max.
-- **audit**: `policies[]` per-policy summary (name, type, status, priority, rule count, scope summary) for sign-on and MFA-enroll policies.
+- **audit**: `policies[]` per-policy summary (name, type, status, priority, rule count, scope summary) for sign-on and MFA-enroll policies. A policy that includes the built-in Everyone group, as each default policy does, has the scope summary `everyone`.
 - **internal**: each policy gains `rules[]` with conditions (network, groups, device) and actions (access, require-factor, session limits, enroll mode).
 
 ### Device access (`device_access`)
@@ -92,7 +92,7 @@ a trust run stays minimal.
 
 - **trust**: omitted.
 - **audit**: counts by type, gateway / proxy zone counts, and `inventory[]` per-zone rows (id, name, type, status, usage).
-- **internal**: each zone gains gateway / proxy / location / ASN definitions.
+- **internal**: each zone gains gateway / proxy / location / ASN definitions. A `DYNAMIC_V2` zone's locations and ASNs are its include lists. When the zone also excludes locations or ASNs, that field is left out with a gap.
 
 ### Identity providers (`identity_providers`)
 
@@ -123,7 +123,7 @@ Reading API tokens needs `okta.apiTokens.read` and the SUPER_ADMIN role; on deni
 ### Org settings (`org_settings`)
 
 - **trust**: omitted.
-- **audit**: subdomain, status, and `self_service_recovery_enabled`, which is true when an active password policy rule allows self-service password reset or account unlock.
+- **audit**: subdomain, status, and `self_service_recovery_enabled`. It is true when the password policy rule that applies to at least one person allows self-service password reset or account unlock. Each person gets the first matching rule of their first matching password policy.
 - **internal**: system-notification contact logins.
 
 ## Artifact contract: what a missing value means
@@ -134,16 +134,18 @@ is left out too: a top-level metric is `null`, and an inventory or a whole
 surface is absent. The collector result artifact,
 `artifacts/okta.collector-result.json`, lists a gap for each value left out, so
 "not collected" never reads as "none found". An inventory with no rows is also
-absent; with no gap for it, none were found.
+absent; with no gap for it, none were found. `privileged_access.custom_roles` is
+an empty list when the org has no custom admin roles.
 
 Every percentage is `floor(100 × count ÷ population)`, with its count beside it,
 so its arithmetic can be redone from the artifact: `mfa_coverage` is
 `mfa_enrolled_users_count` of `users.total_count`. A count left out with a gap
 leaves its percentage out with the same gap. Over a population of 0, the count
 is 0 and the percentage is `null`. At audit and internal, the status-based
-user counts, the SSO and provisioning app counts, and both totals also match the
-rows of their inventories, unless the inventory was cut short (see Truncation);
-the MFA counts match the rows' MFA flags at internal.
+user counts and `users.total_count` also match the rows of the user inventory,
+unless the inventory was cut short (see Truncation); the MFA counts match the
+rows' MFA flags at internal. Inactive apps, API service apps and Okta's own
+default apps are left out of the app counts and listed in the app inventory.
 
 ## Truncation
 

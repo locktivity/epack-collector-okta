@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/locktivity/epack-collector-okta/internal/okta"
 	"github.com/locktivity/epack/componentsdk"
 )
 
@@ -70,19 +71,41 @@ func (c *Collector) collectIdentityProviders(ctx context.Context, level componen
 			Name:       idp.Name,
 			Type:       idp.Type,
 			Status:     idp.Status,
-			IssuerHost: hostOnly(idp.Protocol.Credentials.Trust.Issuer),
+			IssuerHost: issuerHost(idp),
 		}
 		if level.AtLeast(componentsdk.LevelInternal) {
 			row.SigningCertThumbprint = idp.Protocol.Credentials.Trust.Kid
 			jit := strings.EqualFold(idp.Policy.Provisioning.Action, "AUTO")
 			row.JITProvisioning = &jit
-			count := len(idp.Policy.Provisioning.Groups.Assignments)
+			count := groupMappingCount(idp)
 			row.GroupMappingCount = &count
 		}
 		out.Inventory = append(out.Inventory, row)
 	}
 
 	return out
+}
+
+// groupMappingCount counts the groups an IdP can add the people it
+// provisions to. Okta uses assignments for the ASSIGN action, and the filter
+// allowlist for APPEND and SYNC.
+func groupMappingCount(idp okta.IdentityProvider) int {
+	groups := idp.Policy.Provisioning.Groups
+	switch strings.ToUpper(groups.Action) {
+	case "APPEND", "SYNC":
+		return len(groups.Filter)
+	}
+	return len(groups.Assignments)
+}
+
+// issuerHost returns the host of the IdP's issuer. A SAML issuer is in
+// protocol.credentials.trust.issuer. An OpenID Connect issuer, as for Google
+// or Microsoft, is in protocol.issuer.url.
+func issuerHost(idp okta.IdentityProvider) string {
+	if host := hostOnly(idp.Protocol.Credentials.Trust.Issuer); host != "" {
+		return host
+	}
+	return hostOnly(idp.Protocol.Issuer.URL)
 }
 
 // hostOnly returns the host of a URL or URN, never the full value (which can

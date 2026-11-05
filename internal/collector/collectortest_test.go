@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -86,6 +87,10 @@ func (p kitPins) expect() map[string]map[string]any {
 	return map[string]map[string]any{detailedPath: p.detailed, kitResultPath: p.result}
 }
 
+// kitOAuthName is the OAuth suite's configured name. Each suite needs its
+// own, since the name also keys the suite's output under COLLECTORTEST_OUT.
+const kitOAuthName = "okta-oauth"
+
 // steps pins the 14 steps in order, and that there are no more.
 func (p kitPins) steps() kitPins {
 	for i, s := range kitSteps {
@@ -123,10 +128,16 @@ func (p kitPins) row(index int, fields map[string]any) kitPins {
 	return p
 }
 
-// onlyGap pins the run's one gap.
+// onlyGap pins the run's one gap on the detailed artifact, which sorts
+// first. The gaps on the normalized values the collector leaves out follow,
+// one for each at the audit level and above.
 func (p kitPins) onlyGap(gap map[string]any) kitPins {
 	p.result["/gaps/0"] = gap
-	p.result["/gaps/1"] = collectortest.Absent
+	for i, u := range idpPostureLeftOut {
+		p.result[fmt.Sprintf("/gaps/%d/code", i+1)] = string(u.code)
+		p.result[fmt.Sprintf("/gaps/%d/pointer", i+1)] = u.pointer
+	}
+	p.result[fmt.Sprintf("/gaps/%d", len(idpPostureLeftOut)+1)] = collectortest.Absent
 	return p
 }
 
@@ -134,6 +145,13 @@ func sorted(list []string) []string {
 	out := append([]string(nil), list...)
 	sort.Strings(out)
 	return out
+}
+
+// kitOAuthGap is gap as the OAuth suite's runs record it, with the path its
+// configured name gives the detailed artifact.
+func kitOAuthGap(gap map[string]any) map[string]any {
+	gap["path"] = componentsdk.RunPath("okta", kitOAuthName, detailedPath)
+	return gap
 }
 
 // kitRefusedLogGap is the gap a refused system log read leaves at the audit
@@ -179,12 +197,12 @@ func kitLargeOrgScenario() collectortest.Scenario {
 	pins.detailed["/system_log"] = collectortest.Absent
 	pins.result["/steps/1"] = map[string]any{
 		"name": "people", "title": "People and sign-in methods", "start_ms": 0, "end_ms": 0,
-		"requests": 1201, "calls": 1198, "retries": 3, "failed": 3,
+		"requests": 1201, "calls": 1198, "retries": 3, "failed": 3, "any_failed": true,
 		"operations": []any{map[string]any{"name": "okta.users.list", "calls": 6}, map[string]any{"name": factors, "calls": 1192}},
 	}
 	pins.result["/steps/12"] = map[string]any{
 		"name": "system_log", "title": "Activity log", "start_ms": 0, "end_ms": 0,
-		"requests": 1, "calls": 1, "retries": 0, "failed": 1,
+		"requests": 1, "calls": 1, "retries": 0, "failed": 1, "any_failed": true,
 		"operations": []any{map[string]any{"name": "okta.logs.list", "calls": 1}},
 	}
 	// Each retry waits for the rate limit to reset, a second, plus jitter.
@@ -195,7 +213,7 @@ func kitLargeOrgScenario() collectortest.Scenario {
 	pins.result["/calls/requests/1001"] = collectortest.Absent
 	pins.result["/calls/requests_dropped"] = 248
 	pins.result["/calls/problem_requests_dropped"] = 0
-	pins.onlyGap(kitRefusedLogGap(1243, "okta.logs.read", "system log: access denied (403; grant okta.logs.read and an admin role that can read it)"))
+	pins.onlyGap(kitOAuthGap(kitRefusedLogGap(1243, "okta.logs.read", "system log: access denied (403; grant okta.logs.read and an admin role that can read it)")))
 	return collectortest.Scenario{
 		Name:      "large org with throttled factor reads and a refused system log read",
 		Config:    map[string]any{"level": "audit"},
@@ -260,6 +278,7 @@ func TestCollectorKit(t *testing.T) {
 
 func TestCollectorKitOAuth(t *testing.T) {
 	collectortest.Run(t, collectortest.Suite{
+		Name:    kitOAuthName,
 		Spec:    Spec("test", "collectortest"),
 		Run:     Run,
 		Config:  kitOAuthConfig(),
@@ -300,8 +319,8 @@ func TestCollectorKitOAuth(t *testing.T) {
 				Name:      "system log refused for the service app's admin role",
 				Config:    map[string]any{"level": "audit"},
 				Responses: append([]collectortest.Response{kitLogsRefused()}, kitOAuthResponsesGranting(kitTenant(), kitAuditScopes)...),
-				Expect: newKitPins().appSignIn(kitAuditScopes, kitAuditScopes).onlyGap(kitRefusedLogGap(33, "",
-					"system log: access denied (403; okta.logs.read is granted, so the service app needs an admin role that can read it)")).expect(),
+				Expect: newKitPins().appSignIn(kitAuditScopes, kitAuditScopes).onlyGap(kitOAuthGap(kitRefusedLogGap(33, "",
+					"system log: access denied (403; okta.logs.read is granted, so the service app needs an admin role that can read it)"))).expect(),
 			},
 		}, kitRecordings(t, "okta")...),
 		Required:      []string{"okta.token.create"},
@@ -327,8 +346,57 @@ func kitRecordings(t *testing.T, names ...string) []collectortest.Scenario {
 		case err != nil:
 			t.Fatal(err)
 		default:
-			out = append(out, sc)
+			out = append(out, kitEndRecordedSystemLog(kitRefilterRecordedSystemLog(sc)))
 		}
 	}
 	return out
+}
+
+// kitRefilterRecordedSystemLog points a recording's first System Log
+// request at the current filter. The recording was made while the filter
+// named four event types Okta does not have, in place of policy.rule.add and
+// the zone events. Its answer holds no events of those two kinds. Record the
+// sandbox again to replace it.
+func kitRefilterRecordedSystemLog(sc collectortest.Scenario) collectortest.Scenario {
+	for i, r := range sc.Responses {
+		if r.Operation != "okta.logs.list" {
+			continue
+		}
+		u, err := url.Parse(r.URL)
+		if err != nil || u.Query().Get("after") != "" {
+			continue
+		}
+		q := u.Query()
+		q.Set("filter", buildSystemLogFilter())
+		u.RawQuery = q.Encode()
+		sc.Responses[i].URL = u.String()
+	}
+	return sc
+}
+
+// kitEndRecordedSystemLog answers the System Log page that a recording's
+// last System Log answer offers with an empty page. The recording was made
+// when the collector read only the first page, so it holds no answer for
+// the next one. Record the sandbox again to replace it with a recorded
+// page.
+func kitEndRecordedSystemLog(sc collectortest.Scenario) collectortest.Scenario {
+	for i := len(sc.Responses) - 1; i >= 0; i-- {
+		r := sc.Responses[i]
+		if r.Operation != "okta.logs.list" {
+			continue
+		}
+		resp := &http.Response{Header: r.Header}
+		next, ok := componentsdk.NextLink(resp)
+		if !ok {
+			break
+		}
+		for _, answered := range sc.Responses {
+			if answered.URL == next.String() {
+				return sc
+			}
+		}
+		sc.Responses = append(sc.Responses, collectortest.Response{Operation: "okta.logs.list", URL: next.String(), Body: "[]"})
+		break
+	}
+	return sc
 }
