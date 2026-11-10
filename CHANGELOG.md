@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.5.1
+
+- The collector is built on epack v0.10.5.
+- At trust, `diagnostics.warnings` names no Okta user, group, or policy by ID. A warning about one user says "a user", such as `a user: failed to fetch MFA factors`, where it named the user's ID before. A failed call is given by its HTTP status and Okta's error code, such as `okta API returned status 500: E0000009`, or by its failure code, such as `the call failed with timeout`. The error's own text can hold the request's URL and Okta's error summary, which name users, groups, and policies by ID. Audit and internal runs write the same warnings as before.
+- The collector result's `targets` says what the run was pointed at: the organization, chosen by `org_domain`, at `org_domain` in `artifacts/okta.details.json`.
+
 ## v0.5.0
 
 - The detailed artifact moves from `artifacts/okta.json` to `artifacts/okta.details.json`, and `collect` lists it as `details`. A collector configured under another name in `epack.yaml`, such as `okta-prod`, writes every file under that name, such as `artifacts/okta-prod.details.json` and `artifacts/okta-prod.idp-posture.json`. Two Okta orgs can then go in one pack.

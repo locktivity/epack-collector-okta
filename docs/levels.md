@@ -43,6 +43,12 @@ missing or a feature is not licensed, the affected values are left out rather
 than failing the run: the collector result records a gap for each, and
 `diagnostics.warnings` says what to grant.
 
+At `trust`, a warning names no user, group, or policy by ID. A warning about
+one user says "a user", and a failed call is given by its HTTP status and
+Okta's error code, or by its failure code, since the error's own text can hold
+the request's URL and Okta's summary, which name objects by ID. From `audit`, a
+warning names the user's ID and gives the error as Okta returned it.
+
 ## What each level adds, per surface
 
 ### Posture (`posture`)

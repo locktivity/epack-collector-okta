@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -17,6 +18,7 @@ type Collector struct {
 	client   okta.OktaClient
 	config   Config
 	gaps     *gapLog
+	level    componentsdk.Level
 	warnings []string       // Surface-level warnings accumulated during collection
 	signedIn *okta.Identity // Who the sign-in proved the collector is
 }
@@ -45,7 +47,7 @@ func (c *Collector) warnSurface(surface, scope string, err error) error {
 // API token, which has no scopes, acts with its owner's admin roles.
 func (c *Collector) warnSurfaceRole(surface, scope, role string, err error) error {
 	if okta.StatusCodeOf(err) != http.StatusForbidden {
-		return failed(err, c.warn("%s: %v", surface, err), "")
+		return failed(err, c.warn("%s: %s", surface, c.failureText(err)), "")
 	}
 	id := c.signedIn
 	switch {
@@ -59,6 +61,33 @@ func (c *Collector) warnSurfaceRole(surface, scope, role string, err error) erro
 		missing = scope
 	}
 	return failed(err, c.warn("%s: access denied (403; grant %s and %s)", surface, scope, role), missing)
+}
+
+// failureText is err as a diagnostic gives it. Below the audit level it is
+// only the HTTP status and Okta's error code, or the failure's code. The
+// error's own text can hold the request's URL and Okta's error summary,
+// which name users, groups, and policies by ID.
+func (c *Collector) failureText(err error) string {
+	if c.level.AtLeast(componentsdk.LevelAudit) {
+		return err.Error()
+	}
+	var apiErr *okta.APIStatusError
+	switch {
+	case !errors.As(err, &apiErr):
+		return fmt.Sprintf("the call failed with %s", componentsdk.Classify(err))
+	case apiErr.Code != "":
+		return fmt.Sprintf("okta API returned status %d: %s", apiErr.StatusCode, apiErr.Code)
+	}
+	return fmt.Sprintf("okta API returned status %d", apiErr.StatusCode)
+}
+
+// item names one user, group, or other object in a diagnostic: by its ID
+// from the audit level, and as "a user" below it.
+func (c *Collector) item(kind, id string) string {
+	if c.level.AtLeast(componentsdk.LevelAudit) {
+		return kind + " " + id
+	}
+	return "a " + kind
 }
 
 // status reports an indeterminate status update.
@@ -187,6 +216,7 @@ func (c *Collector) Collect(ctx context.Context, level componentsdk.Level) (*Org
 	}
 
 	// Reset surface-level warnings and gaps from any previous run.
+	c.level = level
 	c.warnings = nil
 	c.gaps = newGapLog(c.config.Recorder)
 
@@ -261,6 +291,8 @@ func (c *Collector) signIn(ctx context.Context) error {
 		ReadOnly:        readOnly(identity),
 		ID:              identity.ID,
 	})
+	c.gaps.rec.Targets(componentsdk.TargetOrganization, detailed("/org_domain")).
+		ChosenBy(componentsdk.ChosenByConfig, "org_domain")
 	return nil
 }
 
