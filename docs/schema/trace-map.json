@@ -13,28 +13,28 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:164",
-            "end": 169
+            "line": "internal/collector/collector.go:193",
+            "end": 198
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "input",
-            "line": "internal/collector/collector.go:208"
+            "line": "internal/collector/collector.go:238"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:223"
+            "line": "internal/collector/collector.go:253"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:230"
+            "line": "internal/collector/collector.go:260"
           }
         ],
         "gaps": [
@@ -72,8 +72,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:309",
-            "end": 314
+            "line": "internal/collector/collector.go:341",
+            "end": 346
           }
         ],
         "gaps": [
@@ -193,8 +193,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:309",
-            "end": 314
+            "line": "internal/collector/collector.go:341",
+            "end": 346
           }
         ],
         "gaps": [
@@ -462,8 +462,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           }
         ],
         "gaps": [
@@ -505,7 +505,7 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           }
         ],
         "gaps": [
@@ -775,8 +775,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           }
         ],
         "gaps": [
@@ -818,7 +818,7 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           }
         ],
         "gaps": [
@@ -860,7 +860,7 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           }
         ],
         "gaps": [
@@ -894,7 +894,7 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           }
         ],
         "gaps": [
@@ -913,15 +913,15 @@
         "code": [
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:206"
+            "line": "internal/collector/collector.go:236"
           }
         ]
       },
@@ -932,7 +932,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "input",
@@ -971,7 +971,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "condition",
@@ -1043,7 +1043,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -1198,8 +1198,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "condition",
@@ -1334,7 +1334,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "condition",
@@ -1497,7 +1497,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -1789,31 +1789,31 @@
         "code": [
           {
             "role": "input",
-            "line": "internal/collector/collector.go:28"
+            "line": "internal/collector/collector.go:30"
           },
           {
             "role": "input",
-            "line": "internal/collector/collector.go:29"
+            "line": "internal/collector/collector.go:31"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "input",
-            "line": "internal/collector/collector.go:190"
+            "line": "internal/collector/collector.go:220"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:237"
+            "line": "internal/collector/collector.go:267"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:238"
+            "line": "internal/collector/collector.go:268"
           }
         ]
       },
@@ -1824,23 +1824,23 @@
         "code": [
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:223"
+            "line": "internal/collector/collector.go:253"
           },
           {
             "role": "input",
-            "line": "internal/collector/collector.go:225"
+            "line": "internal/collector/collector.go:255"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:226"
+            "line": "internal/collector/collector.go:256"
           }
         ],
         "gaps": [
@@ -2000,8 +2000,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:309",
-            "end": 314
+            "line": "internal/collector/collector.go:341",
+            "end": 346
           },
           {
             "role": "condition",
@@ -2102,7 +2102,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -2508,7 +2508,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -2566,7 +2566,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -2761,7 +2761,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -2819,7 +2819,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -2958,24 +2958,24 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:164",
-            "end": 169
+            "line": "internal/collector/collector.go:193",
+            "end": 198
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:223"
+            "line": "internal/collector/collector.go:253"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:229"
+            "line": "internal/collector/collector.go:259"
           },
           {
             "role": "helper",
@@ -3379,24 +3379,24 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:164",
-            "end": 169
+            "line": "internal/collector/collector.go:193",
+            "end": 198
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:223"
+            "line": "internal/collector/collector.go:253"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:228"
+            "line": "internal/collector/collector.go:258"
           },
           {
             "role": "helper",
@@ -3505,7 +3505,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -3747,7 +3747,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -3831,32 +3831,32 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:164",
-            "end": 169
+            "line": "internal/collector/collector.go:193",
+            "end": 198
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "input",
-            "line": "internal/collector/collector.go:208"
+            "line": "internal/collector/collector.go:238"
           },
           {
             "role": "input",
-            "line": "internal/collector/collector.go:213"
+            "line": "internal/collector/collector.go:243"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:223"
+            "line": "internal/collector/collector.go:253"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:233"
+            "line": "internal/collector/collector.go:263"
           },
           {
             "role": "helper",
@@ -4311,7 +4311,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "input",
@@ -4448,7 +4448,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "input",
@@ -4569,8 +4569,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "input",
@@ -4703,7 +4703,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "input",
@@ -5355,7 +5355,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "input",
@@ -5560,8 +5560,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "condition",
@@ -5633,7 +5633,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "input",
@@ -5713,7 +5713,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -5773,8 +5773,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "input",
@@ -5858,7 +5858,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "input",
@@ -5931,28 +5931,28 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:164",
-            "end": 169
+            "line": "internal/collector/collector.go:193",
+            "end": 198
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "input",
-            "line": "internal/collector/collector.go:208"
+            "line": "internal/collector/collector.go:238"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:223"
+            "line": "internal/collector/collector.go:253"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:224"
+            "line": "internal/collector/collector.go:254"
           },
           {
             "role": "helper",
@@ -6249,8 +6249,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           }
         ],
         "gaps": [
@@ -6264,19 +6264,19 @@
         "code": [
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "input",
-            "line": "internal/collector/collector.go:210"
+            "line": "internal/collector/collector.go:240"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:212"
+            "line": "internal/collector/collector.go:242"
           },
           {
             "role": "helper",
@@ -6402,7 +6402,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -6570,7 +6570,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "condition",
@@ -6645,7 +6645,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "input",
@@ -6731,8 +6731,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:309",
-            "end": 314
+            "line": "internal/collector/collector.go:341",
+            "end": 346
           },
           {
             "role": "condition",
@@ -6823,8 +6823,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "condition",
@@ -6967,7 +6967,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -7106,7 +7106,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "input",
@@ -7257,8 +7257,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "input",
@@ -7412,7 +7412,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -7489,7 +7489,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -7566,7 +7566,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -7657,24 +7657,24 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:164",
-            "end": 169
+            "line": "internal/collector/collector.go:193",
+            "end": 198
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:185"
+            "line": "internal/collector/collector.go:214"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:199"
+            "line": "internal/collector/collector.go:229"
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:223"
+            "line": "internal/collector/collector.go:253"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:232"
+            "line": "internal/collector/collector.go:262"
           },
           {
             "role": "helper",
@@ -8042,8 +8042,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "condition",
@@ -8085,7 +8085,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -8169,8 +8169,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:309",
-            "end": 314
+            "line": "internal/collector/collector.go:341",
+            "end": 346
           },
           {
             "role": "assign",
@@ -8215,8 +8215,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:309",
-            "end": 314
+            "line": "internal/collector/collector.go:341",
+            "end": 346
           },
           {
             "role": "input",
@@ -8374,7 +8374,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "input",
@@ -8446,7 +8446,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "input",
@@ -8529,8 +8529,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:309",
-            "end": 314
+            "line": "internal/collector/collector.go:341",
+            "end": 346
           },
           {
             "role": "assign",
@@ -8548,8 +8548,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:309",
-            "end": 314
+            "line": "internal/collector/collector.go:341",
+            "end": 346
           },
           {
             "role": "assign",
@@ -8614,8 +8614,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "condition",
@@ -8661,7 +8661,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -8699,8 +8699,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "condition",
@@ -8746,7 +8746,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -8784,8 +8784,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:318",
-            "end": 324
+            "line": "internal/collector/collector.go:350",
+            "end": 356
           },
           {
             "role": "condition",
@@ -8831,7 +8831,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -8869,7 +8869,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:326"
+            "line": "internal/collector/collector.go:358"
           },
           {
             "role": "condition",
@@ -9422,7 +9422,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "condition",
@@ -9503,7 +9503,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:328"
+            "line": "internal/collector/collector.go:360"
           },
           {
             "role": "condition",
@@ -12495,48 +12495,48 @@
     "internal/collector/apps.go:120": "\t\t\tStatus:                 app.Status,",
     "internal/collector/apps.go:121": "\t\t\tSSOConfigured:          sso,",
     "internal/collector/apps.go:122": "\t\t\tProvisioningConfigured: hasProvisioning,",
-    "internal/collector/collector.go:28": "\tmessage := fmt.Sprintf(format, args...)",
-    "internal/collector/collector.go:29": "\tc.warnings = append(c.warnings, message)",
-    "internal/collector/collector.go:164": "func (s *stepper) next(name, title string) context.Context {",
-    "internal/collector/collector.go:165": "\ts.end()",
-    "internal/collector/collector.go:166": "\tctx, step := componentsdk.StartStep(s.ctx, name, title)",
-    "internal/collector/collector.go:167": "\ts.current = step",
-    "internal/collector/collector.go:168": "\treturn ctx",
-    "internal/collector/collector.go:169": "}",
-    "internal/collector/collector.go:185": "\tif c.config.OrgDomain == \"\" {",
-    "internal/collector/collector.go:190": "\tc.warnings = nil",
-    "internal/collector/collector.go:199": "\tif err := c.signIn(steps.next(\"sign_in\", \"Sign in\")); err != nil {",
-    "internal/collector/collector.go:206": "\tposture.CollectedAtLevel = string(level)",
-    "internal/collector/collector.go:208": "\tuserMetrics := c.collectUserMetrics(steps.next(\"people\", \"People and sign-in methods\"), level)",
-    "internal/collector/collector.go:210": "\trolesCtx := steps.next(\"admin_roles\", \"Admin roles\")",
-    "internal/collector/collector.go:212": "\tposture.PrivilegedAccess.CustomRoles = c.collectCustomRoles(rolesCtx, level)",
-    "internal/collector/collector.go:213": "\tpolicyMetrics := c.collectPolicyMetrics(steps.next(\"policies\", \"Sign-on and MFA policies\"), userMetrics, level)",
-    "internal/collector/collector.go:223": "\tif level.AtLeast(componentsdk.LevelAudit) {",
-    "internal/collector/collector.go:224": "\t\tposture.Posture.PerFactorType = c.collectAuthenticatorMetrics(steps.next(\"authenticators\", \"Authenticators\"), userMetrics, level)",
-    "internal/collector/collector.go:225": "\t\tgroups, groupsErr := c.collectGroups(steps.next(\"groups\", \"Groups\"), level)",
-    "internal/collector/collector.go:226": "\t\tposture.Groups = groups",
-    "internal/collector/collector.go:228": "\t\tposture.NetworkZones = c.collectNetworkZones(steps.next(\"network_zones\", \"Network zones\"), level)",
-    "internal/collector/collector.go:229": "\t\tposture.IdentityProviders = c.collectIdentityProviders(steps.next(\"identity_providers\", \"Identity providers\"), level)",
-    "internal/collector/collector.go:230": "\t\tposture.APITokens = c.collectAPITokens(steps.next(\"api_tokens\", \"API tokens\"), level, userMetrics)",
-    "internal/collector/collector.go:232": "\t\tposture.SystemLog = c.collectSystemLog(steps.next(\"system_log\", \"Activity log\"), level)",
-    "internal/collector/collector.go:233": "\t\tposture.OrgSettings = c.collectOrgSettings(steps.next(\"org_settings\", \"Org settings\"), level, userMetrics, policyMetrics)",
-    "internal/collector/collector.go:237": "\tif len(c.warnings) \u003e 0 {",
-    "internal/collector/collector.go:238": "\t\tposture.Diagnostics = \u0026Diagnostics{Warnings: c.warnings}",
-    "internal/collector/collector.go:309": "func formatTime(t time.Time) string {",
-    "internal/collector/collector.go:310": "\tif t.IsZero() {",
-    "internal/collector/collector.go:311": "\t\treturn \"\"",
-    "internal/collector/collector.go:312": "\t}",
-    "internal/collector/collector.go:313": "\treturn t.UTC().Format(time.RFC3339)",
-    "internal/collector/collector.go:314": "}",
-    "internal/collector/collector.go:318": "func percent(count, total int) *int {",
-    "internal/collector/collector.go:319": "\tif total == 0 {",
-    "internal/collector/collector.go:320": "\t\treturn nil",
-    "internal/collector/collector.go:321": "\t}",
-    "internal/collector/collector.go:322": "\tp := (count * MaxPercentage) / total",
-    "internal/collector/collector.go:323": "\treturn \u0026p",
-    "internal/collector/collector.go:324": "}",
-    "internal/collector/collector.go:326": "func intPtr(i int) *int { return \u0026i }",
-    "internal/collector/collector.go:328": "func boolPtr(b bool) *bool { return \u0026b }",
+    "internal/collector/collector.go:30": "\tmessage := fmt.Sprintf(format, args...)",
+    "internal/collector/collector.go:31": "\tc.warnings = append(c.warnings, message)",
+    "internal/collector/collector.go:193": "func (s *stepper) next(name, title string) context.Context {",
+    "internal/collector/collector.go:194": "\ts.end()",
+    "internal/collector/collector.go:195": "\tctx, step := componentsdk.StartStep(s.ctx, name, title)",
+    "internal/collector/collector.go:196": "\ts.current = step",
+    "internal/collector/collector.go:197": "\treturn ctx",
+    "internal/collector/collector.go:198": "}",
+    "internal/collector/collector.go:214": "\tif c.config.OrgDomain == \"\" {",
+    "internal/collector/collector.go:220": "\tc.warnings = nil",
+    "internal/collector/collector.go:229": "\tif err := c.signIn(steps.next(\"sign_in\", \"Sign in\")); err != nil {",
+    "internal/collector/collector.go:236": "\tposture.CollectedAtLevel = string(level)",
+    "internal/collector/collector.go:238": "\tuserMetrics := c.collectUserMetrics(steps.next(\"people\", \"People and sign-in methods\"), level)",
+    "internal/collector/collector.go:240": "\trolesCtx := steps.next(\"admin_roles\", \"Admin roles\")",
+    "internal/collector/collector.go:242": "\tposture.PrivilegedAccess.CustomRoles = c.collectCustomRoles(rolesCtx, level)",
+    "internal/collector/collector.go:243": "\tpolicyMetrics := c.collectPolicyMetrics(steps.next(\"policies\", \"Sign-on and MFA policies\"), userMetrics, level)",
+    "internal/collector/collector.go:253": "\tif level.AtLeast(componentsdk.LevelAudit) {",
+    "internal/collector/collector.go:254": "\t\tposture.Posture.PerFactorType = c.collectAuthenticatorMetrics(steps.next(\"authenticators\", \"Authenticators\"), userMetrics, level)",
+    "internal/collector/collector.go:255": "\t\tgroups, groupsErr := c.collectGroups(steps.next(\"groups\", \"Groups\"), level)",
+    "internal/collector/collector.go:256": "\t\tposture.Groups = groups",
+    "internal/collector/collector.go:258": "\t\tposture.NetworkZones = c.collectNetworkZones(steps.next(\"network_zones\", \"Network zones\"), level)",
+    "internal/collector/collector.go:259": "\t\tposture.IdentityProviders = c.collectIdentityProviders(steps.next(\"identity_providers\", \"Identity providers\"), level)",
+    "internal/collector/collector.go:260": "\t\tposture.APITokens = c.collectAPITokens(steps.next(\"api_tokens\", \"API tokens\"), level, userMetrics)",
+    "internal/collector/collector.go:262": "\t\tposture.SystemLog = c.collectSystemLog(steps.next(\"system_log\", \"Activity log\"), level)",
+    "internal/collector/collector.go:263": "\t\tposture.OrgSettings = c.collectOrgSettings(steps.next(\"org_settings\", \"Org settings\"), level, userMetrics, policyMetrics)",
+    "internal/collector/collector.go:267": "\tif len(c.warnings) \u003e 0 {",
+    "internal/collector/collector.go:268": "\t\tposture.Diagnostics = \u0026Diagnostics{Warnings: c.warnings}",
+    "internal/collector/collector.go:341": "func formatTime(t time.Time) string {",
+    "internal/collector/collector.go:342": "\tif t.IsZero() {",
+    "internal/collector/collector.go:343": "\t\treturn \"\"",
+    "internal/collector/collector.go:344": "\t}",
+    "internal/collector/collector.go:345": "\treturn t.UTC().Format(time.RFC3339)",
+    "internal/collector/collector.go:346": "}",
+    "internal/collector/collector.go:350": "func percent(count, total int) *int {",
+    "internal/collector/collector.go:351": "\tif total == 0 {",
+    "internal/collector/collector.go:352": "\t\treturn nil",
+    "internal/collector/collector.go:353": "\t}",
+    "internal/collector/collector.go:354": "\tp := (count * MaxPercentage) / total",
+    "internal/collector/collector.go:355": "\treturn \u0026p",
+    "internal/collector/collector.go:356": "}",
+    "internal/collector/collector.go:358": "func intPtr(i int) *int { return \u0026i }",
+    "internal/collector/collector.go:360": "func boolPtr(b bool) *bool { return \u0026b }",
     "internal/collector/constants.go:65": "var phishingResistantFactorTypes = map[string]bool{",
     "internal/collector/device_access.go:21": "func deviceAssurancePolicySummary(dap okta.DeviceAssurancePolicy) DeviceAssurancePolicySummary {",
     "internal/collector/device_access.go:22": "\tsummary := DeviceAssurancePolicySummary{",
@@ -13295,7 +13295,7 @@
     "internal/collector/users.go:248": "}",
     "internal/collector/users.go:255": "\tfactors, err := c.client.FetchUserFactors(ctx, userID)",
     "internal/collector/users.go:256": "\tif err != nil {",
-    "internal/collector/users.go:257": "\t\terr = c.warnSurface(fmt.Sprintf(\"user %s: failed to fetch MFA factors\", userID), \"okta.users.read\", err)",
+    "internal/collector/users.go:257": "\t\terr = c.warnSurface(c.item(\"user\", userID)+\": failed to fetch MFA factors\", \"okta.users.read\", err)",
     "internal/collector/users.go:258": "\t\tmetrics.factorErrs[userID] = err",
     "internal/collector/users.go:265": "\thasMFA := false",
     "internal/collector/users.go:266": "\thasPhishingResistant := false",

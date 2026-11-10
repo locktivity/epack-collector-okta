@@ -2,8 +2,11 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,6 +112,125 @@ func TestRunStepsByLevel(t *testing.T) {
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("%s: steps = %v, want %v", level, got, want)
+		}
+	}
+}
+
+// Every level declares the org the config named, at the detailed artifact's
+// org_domain, which every level holds. Only the audit level counts it.
+func TestRunDeclaresTheConfiguredOrg(t *testing.T) {
+	one, complete := 1, true
+	for level, count := range map[string]*int{"trust": nil, "audit": &one} {
+		res := runInProcess(t, map[string]any{"org_domain": kitOrgDomain, "level": level}, map[string]string{"OKTA_API_TOKEN": kitAPIToken}, kitResponses(kitTenant()))
+		if res.ExitCode != 0 || res.Result == nil {
+			t.Fatalf("%s: run failed with exit %d: %s", level, res.ExitCode, res.Stderr)
+		}
+		want := []componentsdk.ResultTarget{{
+			Kind: componentsdk.TargetOrganization, ChosenBy: componentsdk.ChosenByConfig, ConfigKey: "org_domain",
+			At:    &componentsdk.Location{Path: detailedPath, Pointer: "/org_domain"},
+			Count: count, Complete: &complete,
+		}}
+		if !reflect.DeepEqual(res.Result.Targets, want) {
+			got, _ := json.Marshal(res.Result.Targets)
+			wanted, _ := json.Marshal(want)
+			t.Errorf("%s: targets = %s, want %s", level, got, wanted)
+		}
+		for _, f := range res.Result.Checks {
+			t.Errorf("%s: check finding %+v", level, f)
+		}
+	}
+}
+
+// A trust run's diagnostics name no user, policy, or group by ID, and leave
+// out the error text that names them, in any artifact. An audit run still
+// names each one.
+func TestATrustRunWritesNoOktaIDs(t *testing.T) {
+	const (
+		failingUser = "00ukitfailing0000001"
+		missingUser = "00ukitmissing0000001"
+		policy      = "00pkitpolicy00000001"
+		group       = "00gkitgroup000000001"
+	)
+	tenant := kitTenant()
+	tenant.users = append(tenant.users, okta.User{ID: failingUser, Status: "ACTIVE", Created: kitNow, LastLogin: kitNow, Profile: okta.UserProfile{Login: "grace@acme.com"}})
+	tenant.roleAssignees = append(tenant.roleAssignees, okta.RoleAssignedUser{ID: failingUser}, okta.RoleAssignedUser{ID: missingUser})
+	tenant.policies[PolicyTypeMFAEnroll] = append(tenant.policies[PolicyTypeMFAEnroll], okta.Policy{ID: policy, Name: "Contractors", Type: PolicyTypeMFAEnroll, Status: "ACTIVE", Priority: 2})
+	tenant.policies[PolicyTypeSignOn] = append(tenant.policies[PolicyTypeSignOn], okta.Policy{ID: "p4", Name: "Contractors", Type: PolicyTypeSignOn, Status: "ACTIVE", Priority: 3,
+		Conditions: okta.PolicyConditions{People: &okta.PolicyPeopleCondition{Groups: &struct {
+			Include []string `json:"include,omitempty"`
+			Exclude []string `json:"exclude,omitempty"`
+		}{Include: []string{group}}}}})
+	notFound := func(path, id, kind string) collectortest.Response {
+		return collectortest.Response{URL: kitBase + path, Status: http.StatusNotFound, Body: kitJSON(map[string]any{
+			"errorCode": "E0000007", "errorSummary": "Not found: Resource not found: " + id + " (" + kind + ")",
+			"errorLink": "E0000007", "errorId": "oae-kit-missing", "errorCauses": []any{},
+		})}
+	}
+	responses := append([]collectortest.Response{
+		notFound("/api/v1/users/"+failingUser+"/factors", failingUser, "User"),
+		notFound("/api/v1/users/"+failingUser+"/roles", failingUser, "User"),
+		notFound("/api/v1/policies/"+policy+"/rules", policy, "Policy"),
+		notFound("/api/v1/groups/"+group+"/users?limit=200", group, "UserGroup"),
+	}, kitResponses(tenant)...)
+	ids := []string{failingUser, missingUser, policy, group}
+
+	warnings := func(res componentsdk.InProcessResult) []string {
+		t.Helper()
+		for _, a := range res.Artifacts {
+			if a.Path != detailedPath {
+				continue
+			}
+			var out OrgPosture
+			if err := json.Unmarshal(a.Data, &out); err != nil {
+				t.Fatal(err)
+			}
+			if out.Diagnostics == nil {
+				return nil
+			}
+			return out.Diagnostics.Warnings
+		}
+		t.Fatalf("no %s", detailedPath)
+		return nil
+	}
+
+	trust := runInProcess(t, map[string]any{"org_domain": kitOrgDomain, "level": "trust"}, map[string]string{"OKTA_API_TOKEN": kitAPIToken}, responses)
+	if trust.ExitCode != 0 {
+		t.Fatalf("the trust run failed with exit %d: %s", trust.ExitCode, trust.Stderr)
+	}
+	for _, a := range trust.Artifacts {
+		for _, id := range ids {
+			if strings.Contains(string(a.Data), id) {
+				t.Errorf("the trust run wrote %s in %s", id, a.Path)
+			}
+		}
+	}
+	got := warnings(trust)
+	for _, want := range []string{
+		"a user: failed to fetch MFA factors: okta API returned status 404: E0000007",
+		"privileged access: a role-assigned user missing from user inventory; skipping",
+		"privileged access: failed to fetch roles for a user: okta API returned status 404: E0000007",
+		"MFA-enrollment policies: okta API returned status 404: E0000007",
+		"policy group memberships: okta API returned status 404: E0000007",
+	} {
+		if !slices.Contains(got, want) {
+			t.Errorf("the trust run's warnings %q do not include %q", got, want)
+		}
+	}
+
+	audit := runInProcess(t, map[string]any{"org_domain": kitOrgDomain, "level": "audit"}, map[string]string{"OKTA_API_TOKEN": kitAPIToken}, responses)
+	if audit.ExitCode != 0 {
+		t.Fatalf("the audit run failed with exit %d: %s", audit.ExitCode, audit.Stderr)
+	}
+	got = warnings(audit)
+	for _, want := range []string{
+		"user " + failingUser + ": failed to fetch MFA factors: okta API /api/v1/users/" + failingUser + "/factors returned status 404: E0000007 Not found: Resource not found: " + failingUser + " (User)",
+		"privileged access: role-assigned user " + missingUser + " missing from user inventory; skipping",
+		"privileged access: failed to fetch roles for user " + failingUser + ": okta API /api/v1/users/" + failingUser + "/roles returned status 404: E0000007 Not found: Resource not found: " + failingUser + " (User)",
+		"MFA-enrollment policies: okta API /api/v1/policies/" + policy + "/rules returned status 404: E0000007 Not found: Resource not found: " + policy + " (Policy)",
+		"policy group memberships: okta API /api/v1/groups/" + group + "/users returned status 404: E0000007 Not found: Resource not found: " + group + " (UserGroup)",
+	} {
+		if !slices.Contains(got, want) {
+			t.Errorf("the audit run's warnings %q do not include %q", got, want)
 		}
 	}
 }

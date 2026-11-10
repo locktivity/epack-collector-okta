@@ -66,7 +66,7 @@ func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *u
 
 		user, ok := userMetrics.userByID[userID]
 		if !ok {
-			c.warn("privileged access: role-assigned user %s missing from user inventory; skipping", userID)
+			c.warn("privileged access: %s missing from user inventory; skipping", c.item("role-assigned user", userID))
 			continue
 		}
 		if user.Status == StatusDeprovisioned || user.Status == StatusSuspended {
@@ -75,7 +75,7 @@ func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *u
 
 		roles, err := c.client.FetchUserRoleAssignments(ctx, userID)
 		if err != nil {
-			err = c.warnSurface(fmt.Sprintf("privileged access: failed to fetch roles for user %s", userID), "okta.roles.read", err)
+			err = c.warnSurface("privileged access: failed to fetch roles for "+c.item("user", userID), "okta.roles.read", err)
 			metrics.rolesFailed++
 			if metrics.firstRolesErr == nil {
 				metrics.firstRolesErr = err

@@ -254,7 +254,7 @@ func classifyUserType(user okta.User) string {
 func (c *Collector) processUserFactors(ctx context.Context, userID string, metrics *userMetricsCollector, level componentsdk.Level) ([]UserFactor, error) {
 	factors, err := c.client.FetchUserFactors(ctx, userID)
 	if err != nil {
-		err = c.warnSurface(fmt.Sprintf("user %s: failed to fetch MFA factors", userID), "okta.users.read", err)
+		err = c.warnSurface(c.item("user", userID)+": failed to fetch MFA factors", "okta.users.read", err)
 		metrics.factorErrs[userID] = err
 		if metrics.firstFactorErr == nil {
 			metrics.firstFactorErr = err
