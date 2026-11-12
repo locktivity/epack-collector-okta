@@ -1,9 +1,13 @@
 package collector
 
 import (
+	"encoding/json"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/locktivity/epack/componentsdk"
 
 	"github.com/locktivity/epack/componentsdk/collectortest/roster"
 	"github.com/locktivity/epack/componentsdk/collectortest/simulate"
@@ -114,6 +118,17 @@ func setPolicyPriority(r *roster.Roster, key string, priority int) {
 	}
 }
 
+// partner gives the roster the partner identity provider, then makes the
+// changes.
+func partner(idp simIdP, changes ...func(*roster.Roster)) func(*roster.Roster) {
+	return func(r *roster.Roster) {
+		simulate.SetExtra(&r.Extra, "identity_providers", map[string]simIdP{simPartner: idp})
+		for _, change := range changes {
+			change(r)
+		}
+	}
+}
+
 // setEnroll sets an enrollment rule's action.
 func setEnroll(policy, rule, enroll string) func(*roster.Roster) {
 	return func(r *roster.Roster) {
@@ -213,6 +228,18 @@ func simMatrixAxes() []roster.Axis {
 			}},
 			{Name: "policies listed lowest priority first", Change: func(r *roster.Roster) { simulate.SetExtra(&r.Extra, "render", []string{"policies_reversed"}) }},
 		}},
+		{Name: "admin.signs_in", Values: []roster.Value{
+			{Name: "okta"},
+			{Name: "a partner provider for its domain", Change: partner(simIdP{Name: simPartnerName}, onAdmin(throughPartner))},
+			{Name: "a partner provider for its login", Change: partner(simIdP{Name: simPartnerName}, onAdmin(func(a *roster.Account) { a.SignsInThrough = simPartner }))},
+			{Name: "a partner provider from the office", Change: partner(simIdP{Name: simPartnerName, Zone: "office"}, onAdmin(throughPartner))},
+			{Name: "a partner provider that created it", Change: partner(simIdP{Name: simPartnerName}, onAdmin(func(a *roster.Account) {
+				throughPartner(a)
+				simulate.SetExtra(&a.Extra, "provider", "FEDERATION")
+				simulate.SetExtra(&a.Extra, "routed", false)
+			}))},
+			{Name: "okta, with a partner provider for another domain", Change: partner(simIdP{Name: simPartnerName, Domains: []string{"partner.example"}})},
+		}},
 		{Name: "enroll", Values: []roster.Value{
 			{Name: "challenge"},
 			{Name: "at sign-in for everyone else", Change: setEnroll("default", "default", "LOGIN")},
@@ -233,6 +260,97 @@ var simMatrixAlone = map[string]simulate.Differences{
 
 func TestSimulatedMatrix(t *testing.T) {
 	simHarness(t, simMatrixStanding).Matrix(t, simMatrixBase(t), simMatrixAxes(), simMatrixAlone, nil)
+}
+
+// simMFAPointers are the values roster.Derive leaves out when an account
+// signs in through another identity provider: the first seven when a user
+// does, the rest when an admin does.
+var simMFAPointers = []string{
+	"/user_security/mfa_user_count", "/user_security/phishing_resistant_user_count",
+	"/user_security/mfa_coverage_pct", "/user_security/mfa_phishing_resistant_pct",
+	"/policy/mfa_required", "/policy/mfa_required_user_count", "/policy/mfa_required_coverage_pct",
+	"/privileged_access/privileged_mfa_user_count", "/privileged_access/privileged_phishing_resistant_user_count",
+	"/privileged_access/privileged_mfa_coverage_pct", "/privileged_access/privileged_phishing_resistant_pct",
+}
+
+// TestSimulatedSignInElsewhere checks what the matrix can't: that the
+// collector leaves out each MFA value Derive leaves out, for an account
+// that signs in through another identity provider. In the scenarios and the
+// one-at-a-time admin.signs_in rows, its gap names the provider. In a
+// pairwise row another gap can say why first.
+func TestSimulatedSignInElsewhere(t *testing.T) {
+	type check struct {
+		sc    simulate.Scenario
+		named bool
+	}
+	var checks []check
+	for _, sc := range simScenarios(t) {
+		if strings.Contains(sc.Name, "identity provider") || strings.Contains(sc.Name, "routing rule") {
+			checks = append(checks, check{sc, true})
+		}
+	}
+	h, base, axes := simHarness(t, simMatrixStanding), simMatrixBase(t), simMatrixAxes()
+	for _, set := range []struct {
+		rows  []roster.Row
+		named bool
+	}{{roster.OneAtATime(axes), true}, {roster.Pairwise(axes), false}} {
+		for _, row := range set.rows {
+			if !slices.ContainsFunc(row.Choices(axes), func(c string) bool { return strings.HasPrefix(c, "admin.signs_in=") }) {
+				continue
+			}
+			v, err := roster.Build(base, axes, row)
+			if err != nil {
+				t.Fatal(err)
+			}
+			checks = append(checks, check{simulate.Scenario{Name: v.Name, Roster: v.Roster}, set.named})
+		}
+	}
+	for _, c := range checks {
+		t.Run(c.sc.Name, func(t *testing.T) {
+			derived, err := roster.Derive(c.sc.Roster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res := h.Collect(t, h.Simulate(c.sc.Roster, 0))
+			var doc map[string]any
+			for _, a := range res.Artifacts {
+				if a.Path == idpPosturePath {
+					if err := json.Unmarshal(a.Data, &doc); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for _, pointer := range simMFAPointers {
+				if _, want := derived[roster.IDPPosture][pointer]; want {
+					continue
+				}
+				i := slices.IndexFunc(res.Result.Gaps, func(g componentsdk.Gap) bool { return g.Path == idpPosturePath && g.Pointer == pointer })
+				switch _, got := simLookup(doc, pointer); {
+				case got:
+					t.Errorf("%s: left out by Derive, collector wrote it", pointer)
+				case i < 0:
+					t.Errorf("%s: left out with no gap", pointer)
+				case c.named && !strings.Contains(res.Result.Gaps[i].Detail, simPartnerName):
+					t.Errorf("%s: left out with a gap that doesn't name %s: %s", pointer, simPartnerName, res.Result.Gaps[i].Detail)
+				}
+			}
+		})
+	}
+}
+
+// simLookup reads the value at a JSON pointer of doc.
+func simLookup(doc map[string]any, pointer string) (any, bool) {
+	var at any = doc
+	for _, key := range strings.Split(strings.TrimPrefix(pointer, "/"), "/") {
+		m, ok := at.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if at, ok = m[key]; !ok || at == nil {
+			return nil, false
+		}
+	}
+	return at, true
 }
 
 // simRules hold whatever the right values are, so they run on random

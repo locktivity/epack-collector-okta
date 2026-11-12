@@ -329,7 +329,9 @@ func (c *Client) FetchPolicies(ctx context.Context, policyType string) ([]Policy
 	policies := []Policy{}
 	err := listResponses(ctx, c, op, "/api/v1/policies?type="+url.QueryEscape(policyType), func(resp *http.Response, page []Policy) error {
 		for _, p := range page {
-			if p.Status == "ACTIVE" && !p.Conditions.People.includesGroups() {
+			// An IdP routing policy applies to every sign-in and names no
+			// group.
+			if p.Status == "ACTIVE" && policyType != "IDP_DISCOVERY" && !p.Conditions.People.includesGroups() {
 				return invalidResponse(resp, op, "has an active policy that includes no group")
 			}
 		}

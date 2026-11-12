@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,6 +54,9 @@ func simHarness(t testing.TB, standing simulate.Differences) simulate.Harness {
 		Recorded:   rec,
 		Unrecorded: simUnrecorded,
 		Coverage:   true,
+		Uncompared: map[string]string{
+			"/privileged_access/privileged_users_present": "roster.Derive in epack v0.11.1 gives it only with the admins' MFA percentages, which it leaves out when an admin signs in through another identity provider",
+		},
 	}
 }
 
@@ -70,7 +74,17 @@ var simUnrecorded = map[string]string{
 	"okta.policies.rules.list [].conditions.people.users.exclude[]: unrecorded field": "the sandbox's sign-on rules exclude no user, so the recording holds only empty lists",
 	"okta.iam.assignees.list _links: unrecorded field":                                "the sandbox's admins fit one page, so the recording holds no next page's link, which Okta's API reference puts in _links.next.href",
 	"okta.iam.roles.list _links.next: unrecorded field":                               "the sandbox's roles fit one page, so the recording holds no next page's link, which Okta's API reference puts in _links.next.href",
+	"okta.policies.list [].conditions: type":                                          simRoutingUnrecorded,
+	"okta.policies.rules.list [].actions.idp: unrecorded field":                       simRoutingUnrecorded,
+	"okta.policies.rules.list [].conditions.people: missing field":                    simRoutingUnrecorded + "; a routing rule has no people condition",
+	"okta.policies.rules.list [].conditions.userIdentifier: unrecorded field":         simRoutingUnrecorded,
+	"okta.policies.rules.list [].conditions.network.include: unrecorded field":        simRoutingUnrecorded + "; the sandbox's sign-on rules name no zone",
+	"okta.idps.list []: unrecorded field":                                             "the sandbox has no identity provider; each follows the SAML 2.0 provider in Okta's API reference (SamlIdPResponse)",
 }
+
+// simRoutingUnrecorded is why the recording can't vouch for the IdP routing
+// policy and its rules.
+const simRoutingUnrecorded = "the recording was made by a collector that didn't read the IdP routing policy, so its shape follows Okta's API reference (IdpDiscoveryPolicyRule) and its examples"
 
 // simStanding are differences that hold wherever the collector reads the
 // value.
@@ -159,8 +173,57 @@ func simScenarios(t testing.TB) []simulate.Scenario {
 		},
 		simulate.Scenario{Name: "super admin through a group", Roster: validated(t, groupSuperAdmin(first)), Differences: simBaseline},
 		simulate.Scenario{Name: "custom admin role", Roster: validated(t, customAdmin(first)), Differences: simBaseline},
+		simulate.Scenario{
+			Name:        "a member signs in through another identity provider",
+			Roster:      validated(t, elsewhere(classic, simIdP{Name: simPartnerName}, simulate.OnAccount("user_email", throughPartner))),
+			Differences: simApps.With(simStagedSuspended),
+		},
+		simulate.Scenario{
+			Name:        "an admin signs in through another identity provider",
+			Roster:      validated(t, elsewhere(first, simIdP{Name: simPartnerName}, simulate.OnAccount("admin_totp", throughPartner))),
+			Differences: simBaseline,
+		},
+		simulate.Scenario{
+			Name: "a member an identity provider created, with no routing rule",
+			Roster: validated(t, elsewhere(classic, simIdP{Name: simPartnerName}, simulate.OnAccount("user_otp", func(a *roster.Account) {
+				throughPartner(a)
+				simulate.SetExtra(&a.Extra, "provider", "FEDERATION")
+				simulate.SetExtra(&a.Extra, "routed", false)
+			}))),
+			Differences: simApps.With(simStagedSuspended),
+		},
+		simulate.Scenario{
+			Name:        "a routing rule no account matches",
+			Roster:      validated(t, elsewhere(classic, simIdP{Name: simPartnerName, Domains: []string{"partner.example"}})),
+			Differences: simApps.With(simStagedSuspended),
+		},
 	)
 	return out
+}
+
+// simPartner is the identity provider the sign-in variants send accounts
+// to, and simPartnerName its name in Okta.
+const (
+	simPartner     = "partner"
+	simPartnerName = "Partner SAML"
+)
+
+// elsewhere gives a copy of base the partner identity provider, then makes
+// the changes.
+func elsewhere(base *roster.Roster, idp simIdP, changes ...func(*roster.Roster)) *roster.Roster {
+	r := base.Clone()
+	simulate.SetExtra(&r.Extra, "identity_providers", map[string]simIdP{simPartner: idp})
+	for _, change := range changes {
+		change(r)
+	}
+	return r
+}
+
+// throughPartner has an account sign in through the partner identity
+// provider, with a login at its domain.
+func throughPartner(a *roster.Account) {
+	a.SignsInThrough = simPartner
+	simulate.SetExtra(&a.Extra, "login", strings.ReplaceAll(a.Key, "_", ".")+"@partner.example")
 }
 
 // withoutAppSignInPolicies is the sandbox with no app sign-in policy on any
@@ -355,6 +418,9 @@ var simRecordingKnown = map[string]string{
 	"GET acme.okta.com/api/v1/groups/{id}/users?limit=200: count (recorded 19, simulated 21)":                                                  "the recording reads the members of the three groups policies name; the simulator answers for every group, and the ID rewrite joins them",
 	"GET acme.okta.com/api/v1/users/{id}/roles: count (recorded 3, simulated 4)":                                                               "the collector skips the roles of an admin whose account isn't enabled, the suspended one here; the simulator answers for every assignee, and the ID rewrite joins them",
 	"GET acme.okta.com/api/v1/logs?limit=200&since=2026-10-13T01:27:15Z&sortOrder=DESCENDING: count (recorded 200, simulated 0)":               "the simulator's System Log holds no events",
+	"GET acme.okta.com/api/v1/policies/{id}/rules: count (recorded 9, simulated 10)":                                                           simRoutingUnrecorded + "; the ID rewrite joins the routing policy's Default Rule to the other policies' rules",
+	"GET acme.okta.com/api/v1/policies/{id}/rules [].actions.idp: extra (recorded nothing, simulated object)":                                  simRoutingUnrecorded,
+	"GET acme.okta.com/api/v1/policies/{id}/rules [].type: values (recorded nothing, simulated IDP_DISCOVERY)":                                 simRoutingUnrecorded,
 }
 
 // simObjectID is an Okta object ID in a URL's path: a user, group, policy,

@@ -24,6 +24,9 @@ const (
 	PolicyTypeSignOn    = "OKTA_SIGN_ON"
 	PolicyTypeMFAEnroll = "MFA_ENROLL"
 	PolicyTypePassword  = "PASSWORD"
+	// IdP routing rules, which send a sign-in to Okta or to another
+	// identity provider.
+	PolicyTypeIdPDiscovery = "IDP_DISCOVERY"
 )
 
 // Policy scope summaries.

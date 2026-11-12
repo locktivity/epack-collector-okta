@@ -100,12 +100,12 @@ scopes for your level **before** running to collect every surface.
 | `okta.users.read` | trust+ | Users, their factors and groups, posture, privileged access, policy coverage, org settings' `self_service_recovery_enabled` (audit+) |
 | `okta.groups.read` | trust+ | Group resolution, groups surface, policy scope summaries (audit+) |
 | `okta.apps.read` | trust+ | Apps |
-| `okta.policies.read` | trust+ | Policy; org settings' `self_service_recovery_enabled` (audit+) |
+| `okta.policies.read` | trust+ | Policy, IdP routing rules; org settings' `self_service_recovery_enabled` (audit+) |
 | `okta.roles.read` | trust+ | Privileged access (role assignments, custom roles); listing role assignments needs a Super Administrator-level role |
 | `okta.deviceAssurance.read` | trust+ | Device access (requires the Device Assurance feature) |
 | `okta.authenticators.read` | audit+ | Per-factor-type counts |
 | `okta.networkZones.read` | audit+ | Network zones |
-| `okta.idps.read` | audit+ | Identity providers |
+| `okta.idps.read` | audit+ | Identity providers, which name the providers users sign in through |
 | `okta.eventHooks.read` | audit+ | Event hooks |
 | `okta.inlineHooks.read` | audit+ | Inline hooks |
 | `okta.logs.read` | audit+ | System log |

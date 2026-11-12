@@ -240,7 +240,9 @@ func (c *Collector) Collect(ctx context.Context, level componentsdk.Level) (*Org
 	rolesCtx := steps.next("admin_roles", "Admin roles")
 	privilegedMetrics := c.collectPrivilegedMetrics(rolesCtx, userMetrics, level)
 	posture.PrivilegedAccess.CustomRoles = c.collectCustomRoles(rolesCtx, level, privilegedMetrics.rolePermissions)
-	policyMetrics := c.collectPolicyMetrics(steps.next("policies", "Sign-on and MFA policies"), userMetrics, level)
+	policiesCtx := steps.next("policies", "Sign-on and MFA policies")
+	policyMetrics := c.collectPolicyMetrics(policiesCtx, userMetrics, level)
+	posture.elsewhere = c.collectSignInElsewhere(policiesCtx, userMetrics, privilegedMetrics, level)
 	deviceAccessMetrics := c.collectDeviceAccessMetrics(steps.next("device_assurance", "Device assurance"), userMetrics, privilegedMetrics, policyMetrics)
 	steps.end()
 
@@ -328,6 +330,7 @@ func (c *Collector) Artifacts(posture *OrgPosture) []componentsdk.CollectedArtif
 	if normalized == nil {
 		return artifacts
 	}
+	c.markSignInElsewhere(posture.elsewhere, componentsdk.Level(posture.CollectedAtLevel))
 	c.mirrorIDPPostureGaps()
 	c.markIDPPostureLeftOut(componentsdk.Level(posture.CollectedAtLevel))
 	c.markMFARequirementUnread(posture.Policy, componentsdk.Level(posture.CollectedAtLevel))

@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- The collector is built on epack v0.11.0.
+- The collector is built on epack v0.11.1.
+- In `okta.idp-posture.json`, users Okta's IdP routing rules can send to another identity provider sign in through that provider, which decides whether they use MFA. So do users Okta holds no password for, whose credentials provider is `FEDERATION` or `SOCIAL`. When an enabled user does, `user_security.mfa_user_count`, `phishing_resistant_user_count`, `mfa_coverage_pct` and `mfa_phishing_resistant_pct`, and `policy.mfa_required`, `mfa_required_user_count` and `mfa_required_coverage_pct` are left out with an `unsupported` gap that names the providers. When an admin does, `privileged_access.privileged_mfa_user_count`, `privileged_phishing_resistant_user_count`, `privileged_mfa_coverage_pct` and `privileged_phishing_resistant_pct` are left out the same way. Through v0.5.2 such a user with no Okta factor counted as having no MFA. The collector reads the `IDP_DISCOVERY` policy and its rules at every level, with the `okta.policies.read` it already holds, and from the audit level reads `/api/v1/idps` for the providers' names when anyone signs in elsewhere. When the routing rules can't be read, the same values are left out with the read's gap. `okta.details.json` doesn't change.
 - The trace map, `docs/schema/trace-map.json`, gains the calls and gaps behind group descriptions, identity provider protocols, `DYNAMIC_V2` zones, System Log categories and `org_settings.self_service_recovery_enabled`, and one more gap source for the MFA requirement values. The simulated org tests reach them.
 
 ## v0.5.2

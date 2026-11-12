@@ -18,6 +18,12 @@ type User struct {
 	LastUpdated     time.Time   `json:"lastUpdated"`
 	PasswordChanged time.Time   `json:"passwordChanged"`
 	Profile         UserProfile `json:"profile"`
+	Credentials     struct {
+		Provider struct {
+			Type string `json:"type"` // OKTA, ACTIVE_DIRECTORY, LDAP, FEDERATION, SOCIAL, IMPORT
+			Name string `json:"name"`
+		} `json:"provider"`
+	} `json:"credentials"`
 }
 
 // UserProfile contains user profile information.
@@ -293,6 +299,21 @@ type PolicyRuleConditions struct {
 	IdentityProvider *struct {
 		Provider string `json:"provider"` // ANY, OKTA, SPECIFIC_IDP
 	} `json:"identityProvider,omitempty"`
+
+	// Conditions of an IdP routing rule.
+	UserIdentifier *UserIdentifierCondition `json:"userIdentifier,omitempty"`
+	Platform       *struct {
+		Include []RoutingPlatform `json:"include"`
+		Exclude []RoutingPlatform `json:"exclude"`
+	} `json:"platform,omitempty"`
+	App *struct {
+		Include []struct {
+			ID string `json:"id"`
+		} `json:"include"`
+		Exclude []struct {
+			ID string `json:"id"`
+		} `json:"exclude"`
+	} `json:"app,omitempty"`
 	Risk *struct {
 		Behaviors []string `json:"behaviors,omitempty"`
 	} `json:"risk,omitempty"`
@@ -361,6 +382,44 @@ type PolicyRuleActions struct {
 	// Password policy rules.
 	SelfServicePasswordReset *RuleAccess `json:"selfServicePasswordReset,omitempty"`
 	SelfServiceUnlock        *RuleAccess `json:"selfServiceUnlock,omitempty"`
+
+	// IdP routing rules.
+	IDP *RoutingAction `json:"idp,omitempty"`
+}
+
+// RoutingAction is where an IdP routing rule sends the sign-ins it matches.
+type RoutingAction struct {
+	Providers        []RoutingProvider `json:"providers"`
+	IdpSelectionType string            `json:"idpSelectionType"` // SPECIFIC, DYNAMIC
+}
+
+// RoutingProvider is a provider a routing rule sends sign-ins to.
+type RoutingProvider struct {
+	Type string `json:"type"` // OKTA, IWA, AgentlessDSSO, X509, SAML2, OIDC, GOOGLE, ...
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// UserIdentifierCondition limits an IdP routing rule to the users whose
+// login, or a profile attribute, matches one of its patterns.
+type UserIdentifierCondition struct {
+	Type      string                  `json:"type"` // IDENTIFIER, ATTRIBUTE
+	Attribute string                  `json:"attribute"`
+	Patterns  []UserIdentifierPattern `json:"patterns"`
+}
+
+// UserIdentifierPattern is one pattern of a user identifier condition.
+type UserIdentifierPattern struct {
+	MatchType string `json:"matchType"` // EQUALS, STARTS_WITH, CONTAINS, SUFFIX, EXPRESSION (a regular expression)
+	Value     string `json:"value"`
+}
+
+// RoutingPlatform is a platform an IdP routing rule names.
+type RoutingPlatform struct {
+	Type string `json:"type"` // ANY, MOBILE, DESKTOP
+	OS   struct {
+		Type string `json:"type"` // ANY, IOS, ANDROID, WINDOWS, OSX, OTHER
+	} `json:"os"`
 }
 
 // SignonActions for sign-on policy rules.

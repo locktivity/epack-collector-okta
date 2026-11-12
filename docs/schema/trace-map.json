@@ -30,11 +30,11 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:253"
+            "line": "internal/collector/collector.go:255"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:260"
+            "line": "internal/collector/collector.go:262"
           }
         ],
         "gaps": [
@@ -72,8 +72,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:341",
-            "end": 346
+            "line": "internal/collector/collector.go:344",
+            "end": 349
           }
         ],
         "gaps": [
@@ -193,8 +193,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:341",
-            "end": 346
+            "line": "internal/collector/collector.go:344",
+            "end": 349
           }
         ],
         "gaps": [
@@ -462,8 +462,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           }
         ],
         "gaps": [
@@ -505,7 +505,7 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           }
         ],
         "gaps": [
@@ -775,8 +775,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           }
         ],
         "gaps": [
@@ -818,7 +818,7 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           }
         ],
         "gaps": [
@@ -860,7 +860,7 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           }
         ],
         "gaps": [
@@ -894,7 +894,7 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           }
         ],
         "gaps": [
@@ -905,7 +905,7 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/posture.go:139"
+            "line": "internal/collector/posture.go:143"
           }
         ]
       },
@@ -932,7 +932,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "input",
@@ -973,7 +973,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "condition",
@@ -1093,7 +1093,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -1216,8 +1216,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "condition",
@@ -1333,7 +1333,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "condition",
@@ -1464,7 +1464,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -1748,11 +1748,11 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:267"
+            "line": "internal/collector/collector.go:269"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:268"
+            "line": "internal/collector/collector.go:270"
           }
         ]
       },
@@ -1771,15 +1771,15 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:253"
-          },
-          {
-            "role": "input",
             "line": "internal/collector/collector.go:255"
           },
           {
+            "role": "input",
+            "line": "internal/collector/collector.go:257"
+          },
+          {
             "role": "assign",
-            "line": "internal/collector/collector.go:256"
+            "line": "internal/collector/collector.go:258"
           }
         ],
         "gaps": [
@@ -1939,8 +1939,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:341",
-            "end": 346
+            "line": "internal/collector/collector.go:344",
+            "end": 349
           },
           {
             "role": "condition",
@@ -2047,7 +2047,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -2453,7 +2453,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -2511,7 +2511,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -2706,7 +2706,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -2764,7 +2764,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -2916,11 +2916,11 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:253"
+            "line": "internal/collector/collector.go:255"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:259"
+            "line": "internal/collector/collector.go:261"
           },
           {
             "role": "helper",
@@ -3343,11 +3343,11 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:253"
+            "line": "internal/collector/collector.go:255"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:258"
+            "line": "internal/collector/collector.go:260"
           },
           {
             "role": "helper",
@@ -3462,7 +3462,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -3704,7 +3704,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -3777,7 +3777,7 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/posture.go:140"
+            "line": "internal/collector/posture.go:144"
           }
         ]
       },
@@ -3808,12 +3808,16 @@
             "line": "internal/collector/collector.go:243"
           },
           {
+            "role": "input",
+            "line": "internal/collector/collector.go:244"
+          },
+          {
             "role": "condition",
-            "line": "internal/collector/collector.go:253"
+            "line": "internal/collector/collector.go:255"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:263"
+            "line": "internal/collector/collector.go:265"
           },
           {
             "role": "helper",
@@ -4238,7 +4242,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "input",
@@ -4351,7 +4355,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "input",
@@ -4440,8 +4444,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "input",
@@ -4550,7 +4554,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "input",
@@ -4663,7 +4667,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "input",
@@ -4921,23 +4925,23 @@
           },
           {
             "role": "condition",
-            "line": "internal/okta/types.go:319"
+            "line": "internal/okta/types.go:340"
           },
           {
             "role": "input",
-            "line": "internal/okta/types.go:322"
+            "line": "internal/okta/types.go:343"
           },
           {
             "role": "condition",
-            "line": "internal/okta/types.go:323"
+            "line": "internal/okta/types.go:344"
           },
           {
             "role": "condition",
-            "line": "internal/okta/types.go:327"
+            "line": "internal/okta/types.go:348"
           },
           {
             "role": "input",
-            "line": "internal/okta/types.go:330"
+            "line": "internal/okta/types.go:351"
           }
         ],
         "gaps": [
@@ -5283,7 +5287,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "input",
@@ -5452,8 +5456,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "condition",
@@ -5541,7 +5545,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "input",
@@ -5637,7 +5641,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -5705,12 +5709,12 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "input",
-            "line": "internal/collector/constants.go:69"
+            "line": "internal/collector/constants.go:72"
           },
           {
             "role": "condition",
@@ -5798,11 +5802,11 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "input",
-            "line": "internal/collector/constants.go:69"
+            "line": "internal/collector/constants.go:72"
           },
           {
             "role": "condition",
@@ -5888,11 +5892,11 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:253"
+            "line": "internal/collector/collector.go:255"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:254"
+            "line": "internal/collector/collector.go:256"
           },
           {
             "role": "helper",
@@ -6189,8 +6193,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           }
         ],
         "gaps": [
@@ -6346,7 +6350,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -6512,7 +6516,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "condition",
@@ -6596,11 +6600,11 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "input",
-            "line": "internal/collector/constants.go:69"
+            "line": "internal/collector/constants.go:72"
           },
           {
             "role": "condition",
@@ -6683,8 +6687,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:341",
-            "end": 346
+            "line": "internal/collector/collector.go:344",
+            "end": 349
           },
           {
             "role": "condition",
@@ -6779,8 +6783,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "condition",
@@ -6932,7 +6936,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -7080,11 +7084,11 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "input",
-            "line": "internal/collector/constants.go:69"
+            "line": "internal/collector/constants.go:72"
           },
           {
             "role": "condition",
@@ -7232,12 +7236,12 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "input",
-            "line": "internal/collector/constants.go:69"
+            "line": "internal/collector/constants.go:72"
           },
           {
             "role": "condition",
@@ -7388,7 +7392,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -7466,7 +7470,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -7544,7 +7548,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -7624,7 +7628,7 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/posture.go:138"
+            "line": "internal/collector/posture.go:142"
           }
         ]
       },
@@ -7648,11 +7652,11 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/collector.go:253"
+            "line": "internal/collector/collector.go:255"
           },
           {
             "role": "assign",
-            "line": "internal/collector/collector.go:262"
+            "line": "internal/collector/collector.go:264"
           },
           {
             "role": "helper",
@@ -8026,7 +8030,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -8068,8 +8072,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "condition",
@@ -8119,7 +8123,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -8211,8 +8215,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:341",
-            "end": 346
+            "line": "internal/collector/collector.go:344",
+            "end": 349
           },
           {
             "role": "assign",
@@ -8257,8 +8261,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:341",
-            "end": 346
+            "line": "internal/collector/collector.go:344",
+            "end": 349
           },
           {
             "role": "input",
@@ -8416,7 +8420,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "input",
@@ -8500,11 +8504,11 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "input",
-            "line": "internal/collector/constants.go:69"
+            "line": "internal/collector/constants.go:72"
           },
           {
             "role": "input",
@@ -8587,8 +8591,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:341",
-            "end": 346
+            "line": "internal/collector/collector.go:344",
+            "end": 349
           },
           {
             "role": "assign",
@@ -8606,8 +8610,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:341",
-            "end": 346
+            "line": "internal/collector/collector.go:344",
+            "end": 349
           },
           {
             "role": "assign",
@@ -8672,8 +8676,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "condition",
@@ -8727,7 +8731,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -8765,8 +8769,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "condition",
@@ -8820,7 +8824,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -8858,8 +8862,8 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:350",
-            "end": 356
+            "line": "internal/collector/collector.go:353",
+            "end": 359
           },
           {
             "role": "condition",
@@ -8901,7 +8905,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -8939,7 +8943,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:358"
+            "line": "internal/collector/collector.go:361"
           },
           {
             "role": "condition",
@@ -8999,7 +9003,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:152"
+            "line": "internal/collector/normalized.go:157"
           }
         ],
         "gaps": [
@@ -9043,12 +9047,12 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:151"
+            "line": "internal/collector/normalized.go:156"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:369",
-            "end": 374
+            "line": "internal/collector/normalized.go:381",
+            "end": 386
           }
         ],
         "gaps": [
@@ -9063,7 +9067,7 @@
       },
       "/app_security/authorized_third_party_apps_count": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       },
       "/app_security/deprovisioning_app_count": {
@@ -9105,7 +9109,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:155"
+            "line": "internal/collector/normalized.go:160"
           }
         ],
         "gaps": [
@@ -9165,29 +9169,29 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:158"
+            "line": "internal/collector/normalized.go:163"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
+            "line": "internal/collector/normalized.go:244"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:247"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:250"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           }
         ],
         "gaps": [
@@ -9239,7 +9243,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:154"
+            "line": "internal/collector/normalized.go:159"
           }
         ],
         "gaps": [
@@ -9299,29 +9303,29 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:157"
+            "line": "internal/collector/normalized.go:162"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
+            "line": "internal/collector/normalized.go:244"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:247"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:250"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           }
         ],
         "gaps": [
@@ -9373,7 +9377,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:153"
+            "line": "internal/collector/normalized.go:158"
           }
         ],
         "gaps": [
@@ -9433,29 +9437,29 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:156"
+            "line": "internal/collector/normalized.go:161"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
+            "line": "internal/collector/normalized.go:244"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:247"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:250"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           }
         ],
         "gaps": [
@@ -9476,7 +9480,7 @@
           },
           {
             "role": "input",
-            "line": "internal/collector/posture.go:139"
+            "line": "internal/collector/posture.go:143"
           }
         ]
       },
@@ -9490,7 +9494,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "condition",
@@ -9526,11 +9530,11 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:215"
+            "line": "internal/collector/normalized.go:227"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:216"
+            "line": "internal/collector/normalized.go:228"
           },
           {
             "role": "input",
@@ -9624,7 +9628,7 @@
         "code": [
           {
             "role": "helper",
-            "line": "internal/collector/collector.go:360"
+            "line": "internal/collector/collector.go:363"
           },
           {
             "role": "condition",
@@ -9684,15 +9688,15 @@
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:215"
+            "line": "internal/collector/normalized.go:227"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:217"
+            "line": "internal/collector/normalized.go:229"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:218"
+            "line": "internal/collector/normalized.go:230"
           },
           {
             "role": "input",
@@ -9810,7 +9814,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:206"
+            "line": "internal/collector/normalized.go:218"
           },
           {
             "role": "condition",
@@ -9850,12 +9854,12 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:205"
+            "line": "internal/collector/normalized.go:217"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:369",
-            "end": 374
+            "line": "internal/collector/normalized.go:381",
+            "end": 386
           },
           {
             "role": "condition",
@@ -9886,12 +9890,12 @@
       },
       "/lifecycle/archived_account_count": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       },
       "/lifecycle/archived_pct": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       },
       "/lifecycle/suspended_account_count": {
@@ -9905,7 +9909,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:207"
+            "line": "internal/collector/normalized.go:219"
           },
           {
             "role": "condition",
@@ -9953,29 +9957,29 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:208"
+            "line": "internal/collector/normalized.go:220"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
+            "line": "internal/collector/normalized.go:244"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:247"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:250"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           },
           {
             "role": "condition",
@@ -10028,7 +10032,7 @@
           },
           {
             "role": "input",
-            "line": "internal/collector/posture.go:140"
+            "line": "internal/collector/posture.go:144"
           }
         ]
       },
@@ -10040,7 +10044,7 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:191"
+            "line": "internal/collector/normalized.go:200"
           },
           {
             "role": "input",
@@ -10103,7 +10107,7 @@
       },
       "/policy/legacy_auth_blocked": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       },
       "/policy/mfa_required": {
@@ -10116,16 +10120,28 @@
         ],
         "code": [
           {
+            "role": "input",
+            "line": "internal/collector/normalized.go:146"
+          },
+          {
             "role": "assign",
-            "line": "internal/collector/normalized.go:187"
+            "line": "internal/collector/normalized.go:196"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:193"
+            "line": "internal/collector/normalized.go:202"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:194"
+            "line": "internal/collector/normalized.go:203"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:209"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:210"
           },
           {
             "role": "input",
@@ -10196,6 +10212,46 @@
             "line": "internal/collector/policy.go:123"
           },
           {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:64"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
+          },
+          {
             "role": "input",
             "line": "internal/collector/users.go:105"
           },
@@ -10225,9 +10281,10 @@
           }
         ],
         "gaps": [
-          "internal/collector/normalized.go:340",
-          "internal/collector/normalized.go:343",
-          "internal/collector/policy.go:114"
+          "internal/collector/normalized.go:352",
+          "internal/collector/normalized.go:355",
+          "internal/collector/policy.go:114",
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -10250,38 +10307,42 @@
             "line": "internal/collector/normalized.go:132"
           },
           {
-            "role": "assign",
-            "line": "internal/collector/normalized.go:189"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:196"
+            "role": "input",
+            "line": "internal/collector/normalized.go:146"
           },
           {
             "role": "assign",
             "line": "internal/collector/normalized.go:198"
           },
           {
-            "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
-          },
-          {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:205"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:207"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:244"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:247"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:250"
+          },
+          {
+            "role": "helper",
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           },
           {
             "role": "input",
@@ -10294,10 +10355,6 @@
           {
             "role": "input",
             "line": "internal/collector/policy.go:42"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/policy.go:49"
           },
           {
             "role": "condition",
@@ -10342,6 +10399,46 @@
           {
             "role": "input",
             "line": "internal/collector/policy.go:119"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:64"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
           },
           {
             "role": "input",
@@ -10366,24 +10463,13 @@
           {
             "role": "input",
             "line": "internal/collector/users.go:162"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:207"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:213"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:214"
           }
         ],
         "gaps": [
-          "internal/collector/normalized.go:340",
-          "internal/collector/normalized.go:343",
-          "internal/collector/policy.go:114"
+          "internal/collector/normalized.go:352",
+          "internal/collector/normalized.go:355",
+          "internal/collector/policy.go:114",
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -10406,16 +10492,20 @@
             "line": "internal/collector/normalized.go:126"
           },
           {
-            "role": "assign",
-            "line": "internal/collector/normalized.go:188"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:196"
+            "role": "input",
+            "line": "internal/collector/normalized.go:146"
           },
           {
             "role": "assign",
             "line": "internal/collector/normalized.go:197"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:205"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:206"
           },
           {
             "role": "input",
@@ -10478,6 +10568,50 @@
             "line": "internal/collector/policy.go:119"
           },
           {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:53"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:64"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
+          },
+          {
             "role": "input",
             "line": "internal/collector/users.go:105"
           },
@@ -10491,9 +10625,10 @@
           }
         ],
         "gaps": [
-          "internal/collector/normalized.go:340",
-          "internal/collector/normalized.go:343",
-          "internal/collector/policy.go:114"
+          "internal/collector/normalized.go:352",
+          "internal/collector/normalized.go:355",
+          "internal/collector/policy.go:114",
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -10504,7 +10639,7 @@
       },
       "/policy/phishing_resistant_required_for_privileged": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       },
       "/policy/session_lifetime_max_min": {
@@ -10515,7 +10650,7 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:190"
+            "line": "internal/collector/normalized.go:199"
           },
           {
             "role": "input",
@@ -10580,6 +10715,8 @@
         "operations": [
           "okta.iam.assignees.list",
           "okta.iam.roles.permissions.list",
+          "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.factors.list",
           "okta.users.list",
           "okta.users.roles.list"
@@ -10587,29 +10724,37 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:171"
-          },
-          {
-            "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "line": "internal/collector/normalized.go:176"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:181"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:183"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:244"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:247"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:250"
+          },
+          {
+            "role": "helper",
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           },
           {
             "role": "condition",
@@ -10618,18 +10763,6 @@
           {
             "role": "input",
             "line": "internal/collector/privileged.go:47"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/privileged.go:50"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/privileged.go:51"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/privileged.go:55"
           },
           {
             "role": "condition",
@@ -10696,40 +10829,56 @@
             "line": "internal/collector/privileged.go:163"
           },
           {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:65"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:66"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
+          },
+          {
             "role": "input",
             "line": "internal/collector/users.go:95"
           },
           {
-            "role": "input",
-            "line": "internal/collector/users.go:97"
-          },
-          {
             "role": "condition",
             "line": "internal/collector/users.go:303"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:305"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:312"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:317"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:318"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:323"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:324"
           },
           {
             "role": "input",
@@ -10739,7 +10888,8 @@
         "gaps": [
           "internal/collector/privileged.go:146",
           "internal/collector/privileged.go:151",
-          "internal/collector/privileged.go:160"
+          "internal/collector/privileged.go:160",
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -10752,6 +10902,8 @@
         "operations": [
           "okta.iam.assignees.list",
           "okta.iam.roles.permissions.list",
+          "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.factors.list",
           "okta.users.list",
           "okta.users.roles.list"
@@ -10763,7 +10915,15 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:169"
+            "line": "internal/collector/normalized.go:174"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:181"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:182"
           },
           {
             "role": "condition",
@@ -10842,12 +11002,56 @@
             "line": "internal/collector/privileged.go:163"
           },
           {
-            "role": "input",
-            "line": "internal/collector/users.go:95"
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
           },
           {
             "role": "input",
-            "line": "internal/collector/users.go:97"
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:53"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:65"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:66"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/users.go:95"
           },
           {
             "role": "condition",
@@ -10855,23 +11059,7 @@
           },
           {
             "role": "input",
-            "line": "internal/collector/users.go:305"
-          },
-          {
-            "role": "input",
             "line": "internal/collector/users.go:312"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:317"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:318"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:323"
           },
           {
             "role": "input",
@@ -10885,7 +11073,8 @@
         "gaps": [
           "internal/collector/privileged.go:146",
           "internal/collector/privileged.go:151",
-          "internal/collector/privileged.go:160"
+          "internal/collector/privileged.go:160",
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -10898,6 +11087,8 @@
         "operations": [
           "okta.iam.assignees.list",
           "okta.iam.roles.permissions.list",
+          "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.factors.list",
           "okta.users.list",
           "okta.users.roles.list"
@@ -10905,29 +11096,37 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:172"
-          },
-          {
-            "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "line": "internal/collector/normalized.go:177"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:181"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:183"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:244"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:247"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:250"
+          },
+          {
+            "role": "helper",
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           },
           {
             "role": "condition",
@@ -10936,18 +11135,6 @@
           {
             "role": "input",
             "line": "internal/collector/privileged.go:47"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/privileged.go:50"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/privileged.go:51"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/privileged.go:55"
           },
           {
             "role": "condition",
@@ -11014,40 +11201,56 @@
             "line": "internal/collector/privileged.go:165"
           },
           {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:65"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:66"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
+          },
+          {
             "role": "input",
             "line": "internal/collector/users.go:96"
           },
           {
-            "role": "input",
-            "line": "internal/collector/users.go:97"
-          },
-          {
             "role": "condition",
             "line": "internal/collector/users.go:303"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:305"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:313"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:317"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:318"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:326"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:327"
           },
           {
             "role": "input",
@@ -11057,7 +11260,8 @@
         "gaps": [
           "internal/collector/privileged.go:146",
           "internal/collector/privileged.go:151",
-          "internal/collector/privileged.go:160"
+          "internal/collector/privileged.go:160",
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -11070,6 +11274,8 @@
         "operations": [
           "okta.iam.assignees.list",
           "okta.iam.roles.permissions.list",
+          "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.factors.list",
           "okta.users.list",
           "okta.users.roles.list"
@@ -11081,7 +11287,15 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:170"
+            "line": "internal/collector/normalized.go:175"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:181"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:182"
           },
           {
             "role": "condition",
@@ -11160,12 +11374,56 @@
             "line": "internal/collector/privileged.go:165"
           },
           {
-            "role": "input",
-            "line": "internal/collector/users.go:96"
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
           },
           {
             "role": "input",
-            "line": "internal/collector/users.go:97"
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:53"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:65"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:66"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/users.go:96"
           },
           {
             "role": "condition",
@@ -11173,23 +11431,7 @@
           },
           {
             "role": "input",
-            "line": "internal/collector/users.go:305"
-          },
-          {
-            "role": "input",
             "line": "internal/collector/users.go:313"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:317"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:318"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:326"
           },
           {
             "role": "input",
@@ -11203,7 +11445,8 @@
         "gaps": [
           "internal/collector/privileged.go:146",
           "internal/collector/privileged.go:151",
-          "internal/collector/privileged.go:160"
+          "internal/collector/privileged.go:160",
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -11226,7 +11469,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:167"
+            "line": "internal/collector/normalized.go:172"
           },
           {
             "role": "condition",
@@ -11310,12 +11553,12 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:166"
+            "line": "internal/collector/normalized.go:171"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:369",
-            "end": 374
+            "line": "internal/collector/normalized.go:381",
+            "end": 386
           },
           {
             "role": "condition",
@@ -11403,7 +11646,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:174"
+            "line": "internal/collector/normalized.go:179"
           },
           {
             "role": "condition",
@@ -11487,12 +11730,12 @@
         "code": [
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:173"
+            "line": "internal/collector/normalized.go:178"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:369",
-            "end": 374
+            "line": "internal/collector/normalized.go:381",
+            "end": 386
           },
           {
             "role": "condition",
@@ -11580,7 +11823,7 @@
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:168"
+            "line": "internal/collector/normalized.go:173"
           },
           {
             "role": "condition",
@@ -11693,25 +11936,25 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
+            "line": "internal/collector/normalized.go:244"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:247"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:250"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           },
           {
             "role": "condition",
@@ -11831,25 +12074,25 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
+            "line": "internal/collector/normalized.go:244"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:247"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:250"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
           },
           {
             "role": "condition",
@@ -11952,6 +12195,8 @@
       },
       "/user_security/mfa_coverage_pct": {
         "operations": [
+          "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.factors.list",
           "okta.users.list"
         ],
@@ -11965,26 +12210,82 @@
             "line": "internal/collector/normalized.go:141"
           },
           {
-            "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "role": "input",
+            "line": "internal/collector/normalized.go:146"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:147"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:149"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:244"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:247"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:250"
+          },
+          {
+            "role": "helper",
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:53"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:64"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
           },
           {
             "role": "condition",
@@ -12060,6 +12361,7 @@
           }
         ],
         "gaps": [
+          "internal/collector/routing.go:253",
           "internal/collector/users.go:150",
           "internal/collector/users.go:173"
         ],
@@ -12072,13 +12374,15 @@
       },
       "/user_security/mfa_phishing_resistant_pct": {
         "operations": [
+          "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.factors.list",
           "okta.users.list"
         ],
         "code": [
           {
             "role": "input",
-            "line": "internal/collector/constants.go:69"
+            "line": "internal/collector/constants.go:72"
           },
           {
             "role": "input",
@@ -12089,26 +12393,82 @@
             "line": "internal/collector/normalized.go:142"
           },
           {
-            "role": "helper",
-            "line": "internal/collector/normalized.go:231",
-            "end": 239
+            "role": "input",
+            "line": "internal/collector/normalized.go:146"
           },
           {
             "role": "condition",
-            "line": "internal/collector/normalized.go:232"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:235"
+            "line": "internal/collector/normalized.go:147"
           },
           {
             "role": "assign",
-            "line": "internal/collector/normalized.go:238"
+            "line": "internal/collector/normalized.go:149"
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:359",
-            "end": 365
+            "line": "internal/collector/normalized.go:243",
+            "end": 251
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:244"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:247"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:250"
+          },
+          {
+            "role": "helper",
+            "line": "internal/collector/normalized.go:371",
+            "end": 377
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:53"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:64"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
           },
           {
             "role": "condition",
@@ -12184,6 +12544,7 @@
           }
         ],
         "gaps": [
+          "internal/collector/routing.go:253",
           "internal/collector/users.go:150",
           "internal/collector/users.go:173"
         ],
@@ -12196,6 +12557,8 @@
       },
       "/user_security/mfa_user_count": {
         "operations": [
+          "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.factors.list",
           "okta.users.list"
         ],
@@ -12209,6 +12572,62 @@
             "line": "internal/collector/normalized.go:137"
           },
           {
+            "role": "input",
+            "line": "internal/collector/normalized.go:146"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:147"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:148"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:53"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:64"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
+          },
+          {
             "role": "condition",
             "line": "internal/collector/users.go:149"
           },
@@ -12262,6 +12681,7 @@
           }
         ],
         "gaps": [
+          "internal/collector/routing.go:253",
           "internal/collector/users.go:150",
           "internal/collector/users.go:173"
         ],
@@ -12274,23 +12694,25 @@
       },
       "/user_security/password_policy_noncompliant_pct": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       },
       "/user_security/password_policy_noncompliant_user_count": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       },
       "/user_security/phishing_resistant_user_count": {
         "operations": [
+          "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.factors.list",
           "okta.users.list"
         ],
         "code": [
           {
             "role": "input",
-            "line": "internal/collector/constants.go:69"
+            "line": "internal/collector/constants.go:72"
           },
           {
             "role": "input",
@@ -12299,6 +12721,62 @@
           {
             "role": "assign",
             "line": "internal/collector/normalized.go:138"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/normalized.go:146"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/normalized.go:147"
+          },
+          {
+            "role": "assign",
+            "line": "internal/collector/normalized.go:148"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:38"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:41"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:42"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:43"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:53"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:54"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:61"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:62"
+          },
+          {
+            "role": "condition",
+            "line": "internal/collector/routing.go:63"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:64"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/routing.go:70"
           },
           {
             "role": "condition",
@@ -12354,6 +12832,7 @@
           }
         ],
         "gaps": [
+          "internal/collector/routing.go:253",
           "internal/collector/users.go:150",
           "internal/collector/users.go:173"
         ],
@@ -12431,8 +12910,8 @@
           },
           {
             "role": "helper",
-            "line": "internal/collector/normalized.go:369",
-            "end": 374
+            "line": "internal/collector/normalized.go:381",
+            "end": 386
           },
           {
             "role": "condition",
@@ -12471,12 +12950,12 @@
       },
       "/user_security/weak_password_pct": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       },
       "/user_security/weak_password_user_count": {
         "gaps": [
-          "internal/collector/normalized.go:355"
+          "internal/collector/normalized.go:367"
         ]
       }
     }
@@ -12588,34 +13067,35 @@
     "internal/collector/collector.go:238": "\tuserMetrics := c.collectUserMetrics(steps.next(\"people\", \"People and sign-in methods\"), level)",
     "internal/collector/collector.go:240": "\trolesCtx := steps.next(\"admin_roles\", \"Admin roles\")",
     "internal/collector/collector.go:242": "\tposture.PrivilegedAccess.CustomRoles = c.collectCustomRoles(rolesCtx, level, privilegedMetrics.rolePermissions)",
-    "internal/collector/collector.go:243": "\tpolicyMetrics := c.collectPolicyMetrics(steps.next(\"policies\", \"Sign-on and MFA policies\"), userMetrics, level)",
-    "internal/collector/collector.go:253": "\tif level.AtLeast(componentsdk.LevelAudit) {",
-    "internal/collector/collector.go:254": "\t\tposture.Posture.PerFactorType = c.collectAuthenticatorMetrics(steps.next(\"authenticators\", \"Authenticators\"), userMetrics, level)",
-    "internal/collector/collector.go:255": "\t\tgroups, groupsErr := c.collectGroups(steps.next(\"groups\", \"Groups\"), level)",
-    "internal/collector/collector.go:256": "\t\tposture.Groups = groups",
-    "internal/collector/collector.go:258": "\t\tposture.NetworkZones = c.collectNetworkZones(steps.next(\"network_zones\", \"Network zones\"), level)",
-    "internal/collector/collector.go:259": "\t\tposture.IdentityProviders = c.collectIdentityProviders(steps.next(\"identity_providers\", \"Identity providers\"), level)",
-    "internal/collector/collector.go:260": "\t\tposture.APITokens = c.collectAPITokens(steps.next(\"api_tokens\", \"API tokens\"), level, userMetrics)",
-    "internal/collector/collector.go:262": "\t\tposture.SystemLog = c.collectSystemLog(steps.next(\"system_log\", \"Activity log\"), level)",
-    "internal/collector/collector.go:263": "\t\tposture.OrgSettings = c.collectOrgSettings(steps.next(\"org_settings\", \"Org settings\"), level, userMetrics, policyMetrics)",
-    "internal/collector/collector.go:267": "\tif len(c.warnings) \u003e 0 {",
-    "internal/collector/collector.go:268": "\t\tposture.Diagnostics = \u0026Diagnostics{Warnings: c.warnings}",
-    "internal/collector/collector.go:341": "func formatTime(t time.Time) string {",
-    "internal/collector/collector.go:342": "\tif t.IsZero() {",
-    "internal/collector/collector.go:343": "\t\treturn \"\"",
-    "internal/collector/collector.go:344": "\t}",
-    "internal/collector/collector.go:345": "\treturn t.UTC().Format(time.RFC3339)",
-    "internal/collector/collector.go:346": "}",
-    "internal/collector/collector.go:350": "func percent(count, total int) *int {",
-    "internal/collector/collector.go:351": "\tif total == 0 {",
-    "internal/collector/collector.go:352": "\t\treturn nil",
-    "internal/collector/collector.go:353": "\t}",
-    "internal/collector/collector.go:354": "\tp := (count * MaxPercentage) / total",
-    "internal/collector/collector.go:355": "\treturn \u0026p",
-    "internal/collector/collector.go:356": "}",
-    "internal/collector/collector.go:358": "func intPtr(i int) *int { return \u0026i }",
-    "internal/collector/collector.go:360": "func boolPtr(b bool) *bool { return \u0026b }",
-    "internal/collector/constants.go:69": "var phishingResistantFactorTypes = map[string]bool{",
+    "internal/collector/collector.go:243": "\tpoliciesCtx := steps.next(\"policies\", \"Sign-on and MFA policies\")",
+    "internal/collector/collector.go:244": "\tpolicyMetrics := c.collectPolicyMetrics(policiesCtx, userMetrics, level)",
+    "internal/collector/collector.go:255": "\tif level.AtLeast(componentsdk.LevelAudit) {",
+    "internal/collector/collector.go:256": "\t\tposture.Posture.PerFactorType = c.collectAuthenticatorMetrics(steps.next(\"authenticators\", \"Authenticators\"), userMetrics, level)",
+    "internal/collector/collector.go:257": "\t\tgroups, groupsErr := c.collectGroups(steps.next(\"groups\", \"Groups\"), level)",
+    "internal/collector/collector.go:258": "\t\tposture.Groups = groups",
+    "internal/collector/collector.go:260": "\t\tposture.NetworkZones = c.collectNetworkZones(steps.next(\"network_zones\", \"Network zones\"), level)",
+    "internal/collector/collector.go:261": "\t\tposture.IdentityProviders = c.collectIdentityProviders(steps.next(\"identity_providers\", \"Identity providers\"), level)",
+    "internal/collector/collector.go:262": "\t\tposture.APITokens = c.collectAPITokens(steps.next(\"api_tokens\", \"API tokens\"), level, userMetrics)",
+    "internal/collector/collector.go:264": "\t\tposture.SystemLog = c.collectSystemLog(steps.next(\"system_log\", \"Activity log\"), level)",
+    "internal/collector/collector.go:265": "\t\tposture.OrgSettings = c.collectOrgSettings(steps.next(\"org_settings\", \"Org settings\"), level, userMetrics, policyMetrics)",
+    "internal/collector/collector.go:269": "\tif len(c.warnings) \u003e 0 {",
+    "internal/collector/collector.go:270": "\t\tposture.Diagnostics = \u0026Diagnostics{Warnings: c.warnings}",
+    "internal/collector/collector.go:344": "func formatTime(t time.Time) string {",
+    "internal/collector/collector.go:345": "\tif t.IsZero() {",
+    "internal/collector/collector.go:346": "\t\treturn \"\"",
+    "internal/collector/collector.go:347": "\t}",
+    "internal/collector/collector.go:348": "\treturn t.UTC().Format(time.RFC3339)",
+    "internal/collector/collector.go:349": "}",
+    "internal/collector/collector.go:353": "func percent(count, total int) *int {",
+    "internal/collector/collector.go:354": "\tif total == 0 {",
+    "internal/collector/collector.go:355": "\t\treturn nil",
+    "internal/collector/collector.go:356": "\t}",
+    "internal/collector/collector.go:357": "\tp := (count * MaxPercentage) / total",
+    "internal/collector/collector.go:358": "\treturn \u0026p",
+    "internal/collector/collector.go:359": "}",
+    "internal/collector/collector.go:361": "func intPtr(i int) *int { return \u0026i }",
+    "internal/collector/collector.go:363": "func boolPtr(b bool) *bool { return \u0026b }",
+    "internal/collector/constants.go:72": "var phishingResistantFactorTypes = map[string]bool{",
     "internal/collector/device_access.go:21": "func deviceAssurancePolicySummary(dap okta.DeviceAssurancePolicy) DeviceAssurancePolicySummary {",
     "internal/collector/device_access.go:22": "\tsummary := DeviceAssurancePolicySummary{",
     "internal/collector/device_access.go:23": "\t\tName:                dap.Name,",
@@ -12894,66 +13374,75 @@
     "internal/collector/normalized.go:142": "\t\tMFAPhishingResistantPct:    share(o.Posture.MFAPhishingResistantUsersCount, users, componentsdk.RoundDown),",
     "internal/collector/normalized.go:143": "\t\tInactivePct:                share(o.Users.InactiveCount, users, componentsdk.RoundUp),",
     "internal/collector/normalized.go:144": "\t\tLockedOutPct:               share(o.Users.LockedOutCount, users, componentsdk.RoundUp),",
-    "internal/collector/normalized.go:151": "\t\tAppsPresent:              present(apps),",
-    "internal/collector/normalized.go:152": "\t\tAppCount:                 atAudit(apps),",
-    "internal/collector/normalized.go:153": "\t\tSSOAppCount:              atAudit(o.Apps.SSOCount),",
-    "internal/collector/normalized.go:154": "\t\tProvisioningAppCount:     atAudit(o.Apps.ProvisioningEnabledCount),",
-    "internal/collector/normalized.go:155": "\t\tDeprovisioningAppCount:   atAudit(o.Apps.DeprovisioningEnabledCount),",
-    "internal/collector/normalized.go:156": "\t\tSSOCoveragePct:           share(o.Apps.SSOCount, apps, componentsdk.RoundDown),",
-    "internal/collector/normalized.go:157": "\t\tProvisioningEnabledPct:   share(o.Apps.ProvisioningEnabledCount, apps, componentsdk.RoundDown),",
-    "internal/collector/normalized.go:158": "\t\tDeprovisioningEnabledPct: share(o.Apps.DeprovisioningEnabledCount, apps, componentsdk.RoundDown),",
-    "internal/collector/normalized.go:166": "\t\tPrivilegedUsersPresent:               present(pa.PrivilegedUsersCount),",
-    "internal/collector/normalized.go:167": "\t\tPrivilegedUsersCount:                 atAudit(pa.PrivilegedUsersCount),",
-    "internal/collector/normalized.go:168": "\t\tSuperAdminCount:                      atAudit(pa.SuperAdminCount),",
-    "internal/collector/normalized.go:169": "\t\tPrivilegedMFAUserCount:               atAudit(pa.PrivilegedMFAEnrolledCount),",
-    "internal/collector/normalized.go:170": "\t\tPrivilegedPhishingResistantUserCount: atAudit(pa.PrivilegedPhishingResistantCount),",
-    "internal/collector/normalized.go:171": "\t\tPrivilegedMFACoveragePct:             share(pa.PrivilegedMFAEnrolledCount, pa.PrivilegedUsersCount, componentsdk.RoundDown),",
-    "internal/collector/normalized.go:172": "\t\tPrivilegedPhishingResistantPct:       share(pa.PrivilegedPhishingResistantCount, pa.PrivilegedUsersCount, componentsdk.RoundDown),",
-    "internal/collector/normalized.go:173": "\t\tStandingPrivilegedUsersPresent:       present(pa.StandingPrivilegedUsersCount),",
-    "internal/collector/normalized.go:174": "\t\tStandingPrivilegedUsersCount:         atAudit(pa.StandingPrivilegedUsersCount),",
-    "internal/collector/normalized.go:187": "\t\tMFARequired:            o.Policy.MFARequiredExceptExclusions,",
-    "internal/collector/normalized.go:188": "\t\tMFARequiredUserCount:   atAudit(o.Policy.MFARequiredUsersCount),",
-    "internal/collector/normalized.go:189": "\t\tMFARequiredCoveragePct: share(o.Policy.MFARequiredUsersCount, users, componentsdk.RoundDown),",
-    "internal/collector/normalized.go:190": "\t\tSessionLifetimeMaxMin:  o.Policy.SessionLifetimeMaxMinutes,",
-    "internal/collector/normalized.go:191": "\t\tIdleTimeoutMaxMin:      o.Policy.IdleTimeoutMaxMinutes,",
-    "internal/collector/normalized.go:193": "\tif o.Policy.mfaRequirementUnread() {",
-    "internal/collector/normalized.go:194": "\t\tpolicy.MFARequired = nil",
-    "internal/collector/normalized.go:196": "\tif o.Policy.mfaCoverageUnread() {",
-    "internal/collector/normalized.go:197": "\t\tpolicy.MFARequiredUserCount = nil",
-    "internal/collector/normalized.go:198": "\t\tpolicy.MFARequiredCoveragePct = Percentage{}",
-    "internal/collector/normalized.go:205": "\t\tAccountsPresent:       present(accounts),",
-    "internal/collector/normalized.go:206": "\t\tAccountCount:          atAudit(accounts),",
-    "internal/collector/normalized.go:207": "\t\tSuspendedAccountCount: atAudit(o.Users.SuspendedCount),",
-    "internal/collector/normalized.go:208": "\t\tSuspendedPct:          share(o.Users.SuspendedCount, accounts, componentsdk.RoundUp),",
-    "internal/collector/normalized.go:215": "\tif isTrue(o.DeviceAccess.ManagedDeviceRequired) {",
-    "internal/collector/normalized.go:216": "\t\tposture.DeviceAccess = \u0026IDPPostureDeviceAccess{ManagedDeviceRequired: boolPtr(true)}",
-    "internal/collector/normalized.go:217": "\t\tif isTrue(o.DeviceAccess.ManagedDeviceRequiredForAdmins) {",
-    "internal/collector/normalized.go:218": "\t\t\tposture.DeviceAccess.ManagedDeviceRequiredForAdmins = boolPtr(true)",
-    "internal/collector/normalized.go:231": "func share(count, total *int, rounding componentsdk.Rounding) Percentage {",
-    "internal/collector/normalized.go:232": "\tif total != nil \u0026\u0026 *total == 0 {",
-    "internal/collector/normalized.go:233": "\t\treturn Percentage{Read: true}",
-    "internal/collector/normalized.go:234": "\t}",
-    "internal/collector/normalized.go:235": "\tif count == nil || total == nil {",
-    "internal/collector/normalized.go:236": "\t\treturn Percentage{}",
-    "internal/collector/normalized.go:237": "\t}",
-    "internal/collector/normalized.go:238": "\treturn Percentage{Value: floatPtr(componentsdk.Percent(*count, *total, rounding)), Read: true}",
-    "internal/collector/normalized.go:239": "}",
-    "internal/collector/normalized.go:340": "\t\t\tc.gaps.rec.NotCollected(at, p.appsErr, gapOptions(p.appsErr)...)",
-    "internal/collector/normalized.go:343": "\t\tc.gaps.rec.NotCollectedCode(at, componentsdk.CodeNotRead, appSignInMFA)",
-    "internal/collector/normalized.go:355": "\t\tc.gaps.rec.NotCollectedCode(componentsdk.Location{Path: idpPosturePath, Pointer: u.pointer}, u.code, u.reason)",
-    "internal/collector/normalized.go:359": "func floatPtr(v *int) *float64 {",
-    "internal/collector/normalized.go:360": "\tif v == nil {",
-    "internal/collector/normalized.go:361": "\t\treturn nil",
-    "internal/collector/normalized.go:362": "\t}",
-    "internal/collector/normalized.go:363": "\tf := float64(*v)",
-    "internal/collector/normalized.go:364": "\treturn \u0026f",
-    "internal/collector/normalized.go:365": "}",
-    "internal/collector/normalized.go:369": "func present(count *int) *bool {",
-    "internal/collector/normalized.go:370": "\tif count == nil {",
-    "internal/collector/normalized.go:371": "\t\treturn nil",
-    "internal/collector/normalized.go:372": "\t}",
-    "internal/collector/normalized.go:373": "\treturn boolPtr(*count \u003e 0)",
-    "internal/collector/normalized.go:374": "}",
+    "internal/collector/normalized.go:146": "\tusersElsewhere := len(o.elsewhere.users) \u003e 0 || o.elsewhere.err != nil",
+    "internal/collector/normalized.go:147": "\tif usersElsewhere {",
+    "internal/collector/normalized.go:148": "\t\tuserSecurity.MFAUserCount, userSecurity.PhishingResistantUserCount = nil, nil",
+    "internal/collector/normalized.go:149": "\t\tuserSecurity.MFACoveragePct, userSecurity.MFAPhishingResistantPct = Percentage{}, Percentage{}",
+    "internal/collector/normalized.go:156": "\t\tAppsPresent:              present(apps),",
+    "internal/collector/normalized.go:157": "\t\tAppCount:                 atAudit(apps),",
+    "internal/collector/normalized.go:158": "\t\tSSOAppCount:              atAudit(o.Apps.SSOCount),",
+    "internal/collector/normalized.go:159": "\t\tProvisioningAppCount:     atAudit(o.Apps.ProvisioningEnabledCount),",
+    "internal/collector/normalized.go:160": "\t\tDeprovisioningAppCount:   atAudit(o.Apps.DeprovisioningEnabledCount),",
+    "internal/collector/normalized.go:161": "\t\tSSOCoveragePct:           share(o.Apps.SSOCount, apps, componentsdk.RoundDown),",
+    "internal/collector/normalized.go:162": "\t\tProvisioningEnabledPct:   share(o.Apps.ProvisioningEnabledCount, apps, componentsdk.RoundDown),",
+    "internal/collector/normalized.go:163": "\t\tDeprovisioningEnabledPct: share(o.Apps.DeprovisioningEnabledCount, apps, componentsdk.RoundDown),",
+    "internal/collector/normalized.go:171": "\t\tPrivilegedUsersPresent:               present(pa.PrivilegedUsersCount),",
+    "internal/collector/normalized.go:172": "\t\tPrivilegedUsersCount:                 atAudit(pa.PrivilegedUsersCount),",
+    "internal/collector/normalized.go:173": "\t\tSuperAdminCount:                      atAudit(pa.SuperAdminCount),",
+    "internal/collector/normalized.go:174": "\t\tPrivilegedMFAUserCount:               atAudit(pa.PrivilegedMFAEnrolledCount),",
+    "internal/collector/normalized.go:175": "\t\tPrivilegedPhishingResistantUserCount: atAudit(pa.PrivilegedPhishingResistantCount),",
+    "internal/collector/normalized.go:176": "\t\tPrivilegedMFACoveragePct:             share(pa.PrivilegedMFAEnrolledCount, pa.PrivilegedUsersCount, componentsdk.RoundDown),",
+    "internal/collector/normalized.go:177": "\t\tPrivilegedPhishingResistantPct:       share(pa.PrivilegedPhishingResistantCount, pa.PrivilegedUsersCount, componentsdk.RoundDown),",
+    "internal/collector/normalized.go:178": "\t\tStandingPrivilegedUsersPresent:       present(pa.StandingPrivilegedUsersCount),",
+    "internal/collector/normalized.go:179": "\t\tStandingPrivilegedUsersCount:         atAudit(pa.StandingPrivilegedUsersCount),",
+    "internal/collector/normalized.go:181": "\tif len(o.elsewhere.admins) \u003e 0 || o.elsewhere.err != nil {",
+    "internal/collector/normalized.go:182": "\t\tprivileged.PrivilegedMFAUserCount, privileged.PrivilegedPhishingResistantUserCount = nil, nil",
+    "internal/collector/normalized.go:183": "\t\tprivileged.PrivilegedMFACoveragePct, privileged.PrivilegedPhishingResistantPct = Percentage{}, Percentage{}",
+    "internal/collector/normalized.go:196": "\t\tMFARequired:            o.Policy.MFARequiredExceptExclusions,",
+    "internal/collector/normalized.go:197": "\t\tMFARequiredUserCount:   atAudit(o.Policy.MFARequiredUsersCount),",
+    "internal/collector/normalized.go:198": "\t\tMFARequiredCoveragePct: share(o.Policy.MFARequiredUsersCount, users, componentsdk.RoundDown),",
+    "internal/collector/normalized.go:199": "\t\tSessionLifetimeMaxMin:  o.Policy.SessionLifetimeMaxMinutes,",
+    "internal/collector/normalized.go:200": "\t\tIdleTimeoutMaxMin:      o.Policy.IdleTimeoutMaxMinutes,",
+    "internal/collector/normalized.go:202": "\tif o.Policy.mfaRequirementUnread() {",
+    "internal/collector/normalized.go:203": "\t\tpolicy.MFARequired = nil",
+    "internal/collector/normalized.go:205": "\tif o.Policy.mfaCoverageUnread() || usersElsewhere {",
+    "internal/collector/normalized.go:206": "\t\tpolicy.MFARequiredUserCount = nil",
+    "internal/collector/normalized.go:207": "\t\tpolicy.MFARequiredCoveragePct = Percentage{}",
+    "internal/collector/normalized.go:209": "\tif usersElsewhere {",
+    "internal/collector/normalized.go:210": "\t\tpolicy.MFARequired = nil",
+    "internal/collector/normalized.go:217": "\t\tAccountsPresent:       present(accounts),",
+    "internal/collector/normalized.go:218": "\t\tAccountCount:          atAudit(accounts),",
+    "internal/collector/normalized.go:219": "\t\tSuspendedAccountCount: atAudit(o.Users.SuspendedCount),",
+    "internal/collector/normalized.go:220": "\t\tSuspendedPct:          share(o.Users.SuspendedCount, accounts, componentsdk.RoundUp),",
+    "internal/collector/normalized.go:227": "\tif isTrue(o.DeviceAccess.ManagedDeviceRequired) {",
+    "internal/collector/normalized.go:228": "\t\tposture.DeviceAccess = \u0026IDPPostureDeviceAccess{ManagedDeviceRequired: boolPtr(true)}",
+    "internal/collector/normalized.go:229": "\t\tif isTrue(o.DeviceAccess.ManagedDeviceRequiredForAdmins) {",
+    "internal/collector/normalized.go:230": "\t\t\tposture.DeviceAccess.ManagedDeviceRequiredForAdmins = boolPtr(true)",
+    "internal/collector/normalized.go:243": "func share(count, total *int, rounding componentsdk.Rounding) Percentage {",
+    "internal/collector/normalized.go:244": "\tif total != nil \u0026\u0026 *total == 0 {",
+    "internal/collector/normalized.go:245": "\t\treturn Percentage{Read: true}",
+    "internal/collector/normalized.go:246": "\t}",
+    "internal/collector/normalized.go:247": "\tif count == nil || total == nil {",
+    "internal/collector/normalized.go:248": "\t\treturn Percentage{}",
+    "internal/collector/normalized.go:249": "\t}",
+    "internal/collector/normalized.go:250": "\treturn Percentage{Value: floatPtr(componentsdk.Percent(*count, *total, rounding)), Read: true}",
+    "internal/collector/normalized.go:251": "}",
+    "internal/collector/normalized.go:352": "\t\t\tc.gaps.rec.NotCollected(at, p.appsErr, gapOptions(p.appsErr)...)",
+    "internal/collector/normalized.go:355": "\t\tc.gaps.rec.NotCollectedCode(at, componentsdk.CodeNotRead, appSignInMFA)",
+    "internal/collector/normalized.go:367": "\t\tc.gaps.rec.NotCollectedCode(componentsdk.Location{Path: idpPosturePath, Pointer: u.pointer}, u.code, u.reason)",
+    "internal/collector/normalized.go:371": "func floatPtr(v *int) *float64 {",
+    "internal/collector/normalized.go:372": "\tif v == nil {",
+    "internal/collector/normalized.go:373": "\t\treturn nil",
+    "internal/collector/normalized.go:374": "\t}",
+    "internal/collector/normalized.go:375": "\tf := float64(*v)",
+    "internal/collector/normalized.go:376": "\treturn \u0026f",
+    "internal/collector/normalized.go:377": "}",
+    "internal/collector/normalized.go:381": "func present(count *int) *bool {",
+    "internal/collector/normalized.go:382": "\tif count == nil {",
+    "internal/collector/normalized.go:383": "\t\treturn nil",
+    "internal/collector/normalized.go:384": "\t}",
+    "internal/collector/normalized.go:385": "\treturn boolPtr(*count \u003e 0)",
+    "internal/collector/normalized.go:386": "}",
     "internal/collector/org_settings.go:34": "func (c *Collector) collectOrgSettings(ctx context.Context, level componentsdk.Level, users *userMetricsCollector, policyMetrics *policyMetricsCollector) *OrgSettings {",
     "internal/collector/org_settings.go:35": "\tif !level.AtLeast(componentsdk.LevelAudit) {",
     "internal/collector/org_settings.go:36": "\t\treturn nil",
@@ -13098,9 +13587,9 @@
     "internal/collector/policy.go:341": "\tif mm.max == nil || value \u003e *mm.max {",
     "internal/collector/policy.go:342": "\t\tv := value",
     "internal/collector/policy.go:343": "\t\tmm.max = \u0026v",
-    "internal/collector/posture.go:138": "\t\tSchemaVersion: SchemaVersion,",
-    "internal/collector/posture.go:139": "\t\tCollectedAt:   now.UTC().Format(time.RFC3339),",
-    "internal/collector/posture.go:140": "\t\tOrgDomain:     orgDomain,",
+    "internal/collector/posture.go:142": "\t\tSchemaVersion: SchemaVersion,",
+    "internal/collector/posture.go:143": "\t\tCollectedAt:   now.UTC().Format(time.RFC3339),",
+    "internal/collector/posture.go:144": "\t\tOrgDomain:     orgDomain,",
     "internal/collector/privileged.go:35": "\t\tprivilegedUserIDs: make(map[string]struct{}),",
     "internal/collector/privileged.go:36": "\t\trolePermissions:   rolePermissions{},",
     "internal/collector/privileged.go:38": "\tif userMetrics.err != nil {",
@@ -13218,6 +13707,20 @@
     "internal/collector/privileged.go:374": "\t}",
     "internal/collector/privileged.go:375": "\treturn result",
     "internal/collector/privileged.go:376": "}",
+    "internal/collector/routing.go:38": "\tif users.err != nil {",
+    "internal/collector/routing.go:41": "\tpolicies, err := c.fetchActivePoliciesWithRules(ctx, PolicyTypeIdPDiscovery)",
+    "internal/collector/routing.go:42": "\tif err != nil {",
+    "internal/collector/routing.go:43": "\t\treturn signInElsewhere{err: c.warnSurface(\"IdP routing rules\", \"okta.policies.read\", err)}",
+    "internal/collector/routing.go:53": "\tenabled := users.enabled()",
+    "internal/collector/routing.go:54": "\tif !slices.ContainsFunc(r.rules, func(rule okta.PolicyRule) bool { return len(r.routedTo(rule)) \u003e 0 }) \u0026\u0026",
+    "internal/collector/routing.go:61": "\tfound, admins := map[string]bool{}, map[string]bool{}",
+    "internal/collector/routing.go:62": "\tfor _, u := range enabled {",
+    "internal/collector/routing.go:63": "\t\tfor _, name := range r.elsewhere(u) {",
+    "internal/collector/routing.go:64": "\t\t\tfound[name] = true",
+    "internal/collector/routing.go:65": "\t\t\tif _, ok := privileged.privilegedUserIDs[u.ID]; ok {",
+    "internal/collector/routing.go:66": "\t\t\t\tadmins[name] = true",
+    "internal/collector/routing.go:70": "\treturn signInElsewhere{users: slices.Sorted(maps.Keys(found)), admins: slices.Sorted(maps.Keys(admins))}",
+    "internal/collector/routing.go:253": "\t\t\t\tc.gaps.rec.NotCollected(at, e.err, gapOptions(e.err)...)",
     "internal/collector/system_log.go:134": "func eventTypeCategory(eventType string) string {",
     "internal/collector/system_log.go:135": "\tfor category, types := range securityRelevantEventTypes {",
     "internal/collector/system_log.go:136": "\t\tfor _, t := range types {",
@@ -13443,10 +13946,10 @@
     "internal/okta/surfaces_client.go:88": "\t\tif err != nil {",
     "internal/okta/surfaces_client.go:91": "\t\tif contact.UserID == \"\" {",
     "internal/okta/surfaces_client.go:94": "\t\tcontacts = append(contacts, OrgContact{Type: contactType, UserID: contact.UserID})",
-    "internal/okta/types.go:319": "\tif err := json.Unmarshal(data, \u0026raw); err != nil {",
-    "internal/okta/types.go:322": "\tmanaged, err := boolText(raw.Managed)",
-    "internal/okta/types.go:323": "\tif err != nil {",
-    "internal/okta/types.go:327": "\tif err != nil {",
-    "internal/okta/types.go:330": "\t*d = DeviceCondition{Managed: managed, Registered: registered, Assurance: raw.Assurance}"
+    "internal/okta/types.go:340": "\tif err := json.Unmarshal(data, \u0026raw); err != nil {",
+    "internal/okta/types.go:343": "\tmanaged, err := boolText(raw.Managed)",
+    "internal/okta/types.go:344": "\tif err != nil {",
+    "internal/okta/types.go:348": "\tif err != nil {",
+    "internal/okta/types.go:351": "\t*d = DeviceCondition{Managed: managed, Registered: registered, Assurance: raw.Assurance}"
   }
 }
