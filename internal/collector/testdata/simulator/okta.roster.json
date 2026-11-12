@@ -1,0 +1,589 @@
+{
+  "accounts": {
+    "admin_readonly": {
+      "case": "Read-Only Administrator through a group, with no factor, in the password-only group; signs in every night",
+      "enabled": true,
+      "kind": "member",
+      "login": "admin.readonly@example.com",
+      "signed_in_days_ago": 0,
+      "state": "ACTIVE"
+    },
+    "admin_suspended": {
+      "case": "Suspended Read-Only Administrator through a group, with no factor; never signs in",
+      "enabled": false,
+      "kind": "member",
+      "login": "admin.suspended@example.com",
+      "state": "SUSPENDED"
+    },
+    "admin_totp": {
+      "case": "Super Administrator with a TOTP factor, in the MFA-required group; signs in every night",
+      "enabled": true,
+      "kind": "member",
+      "login": "admin.totp@example.com",
+      "mfa": [
+        "token:software:totp"
+      ],
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "signed_in_days_ago": 0,
+      "state": "ACTIVE"
+    },
+    "owner": {
+      "case": "The org owner, who signed up for the org (checklist step 1): Super Administrator with an email factor from its verified address and a WebAuthn factor from checklist step 9; signs in by hand, so it may be inactive",
+      "enabled": true,
+      "kind": "member",
+      "login": "owner@example.com",
+      "mfa": [
+        "email",
+        "webauthn"
+      ],
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "signed_in_days_ago": 1,
+      "state": "ACTIVE"
+    },
+    "svc_staged": {
+      "case": "Staged service account, never activated, with no factor; never signs in",
+      "enabled": false,
+      "kind": "member",
+      "login": "svc.staged@example.com",
+      "state": "STAGED",
+      "user_type": "Service account"
+    },
+    "user_email": {
+      "case": "Email factor only, in the password-only group; signs in every night",
+      "enabled": true,
+      "kind": "member",
+      "login": "user.email@example.com",
+      "mfa": [
+        "email"
+      ],
+      "signed_in_days_ago": 0,
+      "state": "ACTIVE"
+    },
+    "user_expired": {
+      "case": "Expired password and no factor, in the MFA-required group; never signs in",
+      "enabled": true,
+      "kind": "member",
+      "login": "user.expired@example.com",
+      "state": "PASSWORD_EXPIRED"
+    },
+    "user_locked": {
+      "case": "Locked out by wrong passwords, with no factor, in the password-only group; never signs in",
+      "enabled": true,
+      "kind": "member",
+      "login": "user.locked@example.com",
+      "state": "LOCKED_OUT"
+    },
+    "user_otp": {
+      "case": "TOTP factor in the password-only group, so MFA is enrolled but never asked for; signs in every night",
+      "enabled": true,
+      "kind": "member",
+      "login": "user.otp@example.com",
+      "mfa": [
+        "token:software:totp"
+      ],
+      "signed_in_days_ago": 0,
+      "state": "ACTIVE"
+    },
+    "user_totp": {
+      "case": "TOTP factor, plus a WebAuthn factor from checklist step 9, in the MFA-required group; signs in every night",
+      "enabled": true,
+      "kind": "member",
+      "login": "user.totp@example.com",
+      "mfa": [
+        "token:software:totp",
+        "webauthn"
+      ],
+      "signed_in_days_ago": 0,
+      "state": "ACTIVE"
+    }
+  },
+  "apps": {
+    "access_reviews": {
+      "built_in": true,
+      "label": "Okta Access Certification Reviews",
+      "name": "okta_iga_reviewer",
+      "publisher": "okta",
+      "sso_mode": "OPENID_CONNECT"
+    },
+    "admin_console": {
+      "built_in": true,
+      "label": "Okta Admin Console",
+      "name": "saasure",
+      "publisher": "okta",
+      "sso_mode": "OPENID_CONNECT"
+    },
+    "automation": {
+      "case": "Checklist step 4",
+      "grant_types": [
+        "client_credentials"
+      ],
+      "label": "Automation service app",
+      "name": "oidc_client",
+      "sso_mode": "OPENID_CONNECT"
+    },
+    "browser_plugin": {
+      "built_in": true,
+      "label": "Okta Browser Plugin",
+      "name": "okta_browser_plugin",
+      "publisher": "okta",
+      "sso_mode": "OPENID_CONNECT"
+    },
+    "collector": {
+      "case": "Checklist step 5; terraform/apps.tf grants its scopes and role",
+      "grant_types": [
+        "client_credentials"
+      ],
+      "label": "Collector service app",
+      "name": "oidc_client",
+      "roles": [
+        "SUPER_ADMIN"
+      ],
+      "scopes": [
+        "okta.apiTokens.read",
+        "okta.apps.read",
+        "okta.authenticators.read",
+        "okta.deviceAssurance.read",
+        "okta.eventHooks.read",
+        "okta.groups.read",
+        "okta.idps.read",
+        "okta.inlineHooks.read",
+        "okta.logs.read",
+        "okta.networkZones.read",
+        "okta.orgs.read",
+        "okta.policies.read",
+        "okta.roles.read",
+        "okta.users.read"
+      ],
+      "sso_mode": "OPENID_CONNECT"
+    },
+    "dashboard": {
+      "built_in": true,
+      "label": "Okta Dashboard",
+      "name": "okta_enduser",
+      "publisher": "okta",
+      "sso_mode": "OPENID_CONNECT"
+    },
+    "no_sso": {
+      "label": "Bookmark without SSO",
+      "name": "bookmark",
+      "sso_mode": "BOOKMARK"
+    },
+    "oin_tester": {
+      "built_in": true,
+      "label": "Okta OIN Submission Tester",
+      "name": "okta_oin_submission_tester_app",
+      "publisher": "okta",
+      "sso_mode": "OPENID_CONNECT"
+    },
+    "saml": {
+      "label": "Example SAML app",
+      "name": "example_saml",
+      "sso_mode": "SAML_2_0"
+    },
+    "workflows": {
+      "built_in": true,
+      "label": "Okta Workflows",
+      "name": "okta_flow_sso",
+      "provisioning": [
+        "IMPORT_PROFILE_UPDATES",
+        "PUSH_NEW_USERS",
+        "PUSH_USER_DEACTIVATION",
+        "SCIM_PROVISIONING",
+        "GROUP_PUSH",
+        "REACTIVATE_USERS",
+        "IMPORT_NEW_USERS",
+        "PUSH_PROFILE_UPDATES"
+      ],
+      "publisher": "okta",
+      "sso_mode": "OPENID_CONNECT"
+    },
+    "workflows_oauth": {
+      "built_in": true,
+      "label": "Okta Workflows OAuth",
+      "name": "flow",
+      "publisher": "okta",
+      "sso_mode": "OPENID_CONNECT"
+    }
+  },
+  "authenticators": {
+    "okta_email": {
+      "type": "email",
+      "name": "Email",
+      "status": "ACTIVE"
+    },
+    "google_otp": {
+      "type": "app",
+      "name": "Google Authenticator",
+      "status": "ACTIVE"
+    },
+    "okta_verify": {
+      "type": "app",
+      "name": "Okta Verify",
+      "status": "ACTIVE"
+    },
+    "webauthn": {
+      "type": "security_key",
+      "name": "Passkeys",
+      "status": "ACTIVE"
+    },
+    "okta_password": {
+      "type": "password",
+      "name": "Password",
+      "status": "ACTIVE"
+    },
+    "phone_number": {
+      "type": "phone",
+      "name": "Phone",
+      "status": "INACTIVE"
+    },
+    "security_question": {
+      "type": "security_question",
+      "name": "Security Question",
+      "status": "INACTIVE"
+    }
+  },
+  "directory": {
+    "domain": "acme.okta.com"
+  },
+  "enrollment_policies": {
+    "password_only": {
+      "name": "Sandbox password only enrollment",
+      "priority": 1,
+      "groups": [
+        "password_only"
+      ],
+      "authenticators": {
+        "okta_email": "OPTIONAL",
+        "google_otp": "OPTIONAL",
+        "okta_verify": "NOT_ALLOWED",
+        "webauthn": "OPTIONAL",
+        "okta_password": "REQUIRED"
+      },
+      "rules": {
+        "never": {
+          "name": "Never prompt",
+          "priority": 1,
+          "enroll": "NEVER"
+        }
+      }
+    },
+    "mfa_required": {
+      "name": "Sandbox MFA enrollment",
+      "priority": 2,
+      "groups": [
+        "mfa_required"
+      ],
+      "authenticators": {
+        "okta_email": "OPTIONAL",
+        "google_otp": "REQUIRED",
+        "okta_verify": "NOT_ALLOWED",
+        "webauthn": "OPTIONAL",
+        "okta_password": "REQUIRED"
+      },
+      "rules": {
+        "challenge": {
+          "name": "Enroll during sign-in",
+          "priority": 1,
+          "enroll": "CHALLENGE"
+        }
+      }
+    },
+    "default": {
+      "name": "Default Policy",
+      "priority": 3,
+      "system": true,
+      "groups": [
+        "everyone"
+      ],
+      "authenticators": {
+        "okta_email": "REQUIRED",
+        "okta_password": "REQUIRED"
+      },
+      "rules": {
+        "default": {
+          "name": "Default Rule",
+          "priority": 1,
+          "system": true,
+          "enroll": "CHALLENGE"
+        }
+      }
+    }
+  },
+  "groups": {
+    "mfa_required": {
+      "members": [
+        "admin_totp",
+        "user_totp",
+        "user_expired"
+      ],
+      "name": "Sandbox MFA Required"
+    },
+    "password_only": {
+      "members": [
+        "admin_readonly",
+        "user_otp",
+        "user_email",
+        "user_locked",
+        "admin_suspended",
+        "svc_staged"
+      ],
+      "name": "Sandbox Password Only"
+    },
+    "readonly_admins": {
+      "members": [
+        "admin_readonly",
+        "admin_suspended"
+      ],
+      "name": "Sandbox Read-Only Admins",
+      "roles": [
+        "READ_ONLY_ADMIN"
+      ]
+    }
+  },
+  "network_zones": {
+    "office": {
+      "name": "Sandbox office",
+      "usage": "POLICY",
+      "gateways": [
+        "192.0.2.0/24"
+      ],
+      "proxies": [
+        "198.51.100.10/32"
+      ]
+    },
+    "blocklist": {
+      "name": "Sandbox blocklist",
+      "usage": "BLOCKLIST",
+      "gateways": [
+        "203.0.113.0/24"
+      ]
+    }
+  },
+  "org": {
+    "company_name": "Example",
+    "domain": "acme.okta.com",
+    "subdomain": "acme"
+  },
+  "password_policies": {
+    "sandbox": {
+      "name": "Sandbox passwords",
+      "priority": 1,
+      "groups": [
+        "mfa_required",
+        "password_only"
+      ],
+      "rules": {
+        "sandbox": {
+          "name": "Sandbox password rule",
+          "priority": 1,
+          "reset": "DENY",
+          "unlock": "DENY"
+        }
+      }
+    },
+    "default": {
+      "name": "Default Policy",
+      "priority": 2,
+      "system": true,
+      "groups": [
+        "everyone"
+      ],
+      "rules": {
+        "default": {
+          "name": "Default Rule",
+          "priority": 1,
+          "system": true,
+          "reset": "ALLOW",
+          "unlock": "DENY"
+        }
+      }
+    }
+  },
+  "providers": {
+    "idp-posture": "okta"
+  },
+  "sign_in_policies": {
+    "default/default": {
+      "first_match": "global_session",
+      "idle_timeout_minutes": 120,
+      "include": "all",
+      "policy": "default",
+      "priority": 401,
+      "rule": {
+        "name": "Default Rule",
+        "primary_factor": "PASSWORD_IDP_ANY_FACTOR",
+        "priority": 1,
+        "require_factor": false,
+        "system": true
+      },
+      "session_lifetime_minutes": 1440,
+      "state": "ACTIVE"
+    },
+    "everyone_else/everyone_else": {
+      "first_match": "global_session",
+      "idle_timeout_minutes": 120,
+      "include": "all",
+      "policy": "everyone_else",
+      "priority": 301,
+      "requires": "mfa",
+      "rule": {
+        "name": "Require MFA",
+        "primary_factor": "PASSWORD_IDP",
+        "priority": 1,
+        "prompt": "ALWAYS",
+        "require_factor": true
+      },
+      "session_lifetime_minutes": 720,
+      "state": "ACTIVE"
+    },
+    "mfa_required/mfa_required": {
+      "first_match": "global_session",
+      "idle_timeout_minutes": 15,
+      "include": {
+        "groups": [
+          "mfa_required"
+        ]
+      },
+      "policy": "mfa_required",
+      "priority": 101,
+      "requires": "mfa",
+      "rule": {
+        "name": "Require MFA at every sign-in",
+        "primary_factor": "PASSWORD_IDP",
+        "priority": 1,
+        "prompt": "ALWAYS",
+        "require_factor": true
+      },
+      "session_lifetime_minutes": 60,
+      "state": "ACTIVE"
+    },
+    "password_only/password_only": {
+      "first_match": "global_session",
+      "idle_timeout_minutes": 720,
+      "include": {
+        "groups": [
+          "password_only"
+        ]
+      },
+      "policy": "password_only",
+      "priority": 201,
+      "rule": {
+        "name": "Password only",
+        "primary_factor": "PASSWORD_IDP",
+        "priority": 1,
+        "require_factor": false
+      },
+      "session_lifetime_minutes": 10080,
+      "state": "ACTIVE"
+    }
+  },
+  "sign_on_policies": {
+    "default": {
+      "name": "Default Policy",
+      "priority": 4,
+      "system": true
+    },
+    "everyone_else": {
+      "name": "Sandbox everyone else",
+      "priority": 3,
+      "system": false
+    },
+    "mfa_required": {
+      "name": "Sandbox MFA required",
+      "priority": 1,
+      "system": false
+    },
+    "password_only": {
+      "name": "Sandbox password only",
+      "priority": 2,
+      "system": false
+    }
+  },
+  "source": "roster.json in the epack-collector-sandboxes sandbox, converted by cmd/derive",
+  "terms": {
+    "account_kinds": {
+      "member": "member"
+    },
+    "mfa_methods": {
+      "email": "mfa",
+      "token:software:totp": "mfa",
+      "push": "mfa",
+      "sms": "mfa",
+      "call": "mfa",
+      "question": "none",
+      "webauthn": "phishing_resistant",
+      "u2f": "phishing_resistant",
+      "signed_nonce": "phishing_resistant"
+    },
+    "roles": {
+      "SUPER_ADMIN": "super_admin",
+      "ORG_ADMIN": "admin",
+      "APP_ADMIN": "admin",
+      "USER_ADMIN": "admin",
+      "HELP_DESK_ADMIN": "admin",
+      "GROUP_MEMBERSHIP_ADMIN": "admin",
+      "API_ACCESS_MANAGEMENT_ADMIN": "admin",
+      "MOBILE_ADMIN": "admin",
+      "REPORT_ADMIN": "none",
+      "READ_ONLY_ADMIN": "none"
+    },
+    "policy_states": {
+      "ACTIVE": "enforced",
+      "INACTIVE": "off"
+    },
+    "requirements": {
+      "mfa": "mfa"
+    },
+    "blocks": {
+      "deny": "all"
+    },
+    "sso_modes": {
+      "SAML_2_0": "sso",
+      "SAML_1_1": "sso",
+      "OPENID_CONNECT": "sso",
+      "WS_FEDERATION": "sso",
+      "BOOKMARK": "none",
+      "BROWSER_PLUGIN": "none",
+      "AUTO_LOGIN": "none",
+      "BASIC_AUTH": "none",
+      "SECURE_PASSWORD_STORE": "none"
+    },
+    "account_states": {
+      "ACTIVE": "other",
+      "PASSWORD_EXPIRED": "other",
+      "LOCKED_OUT": "locked_out",
+      "RECOVERY": "other",
+      "SUSPENDED": "other",
+      "STAGED": "other",
+      "PROVISIONED": "other",
+      "DEPROVISIONED": "archived"
+    },
+    "app_publishers": {
+      "okta": "provider"
+    },
+    "provisioning_features": {
+      "PUSH_NEW_USERS": "create",
+      "PUSH_USER_DEACTIVATION": "deactivate",
+      "PUSH_PROFILE_UPDATES": "other",
+      "PUSH_PASSWORD_UPDATES": "other",
+      "REACTIVATE_USERS": "other",
+      "GROUP_PUSH": "other",
+      "IMPORT_NEW_USERS": "other",
+      "IMPORT_PROFILE_UPDATES": "other",
+      "IMPORT_USER_SCHEMA": "other",
+      "PROFILE_MASTERING": "other",
+      "SCIM_PROVISIONING": "other"
+    }
+  },
+  "unsettled": {
+    "owner": [
+      "signed_in"
+    ]
+  },
+  "vendor": "okta",
+  "version": 1
+}
