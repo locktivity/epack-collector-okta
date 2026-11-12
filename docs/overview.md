@@ -184,6 +184,14 @@ insufficient admin role), the run still succeeds. The values are left out rather
 than reported as zero, the collector result artifact records a gap for each, and
 a top-level `diagnostics.warnings` array says what to grant.
 
+## Not Collected
+
+Okta offers the following through its APIs, and the collector does not read them.
+
+- **Devices.** The devices users enroll in Okta Verify, with each device's OS version and disk encryption. The collector writes no `endpoint-posture` file.
+- **Service app credentials.** The client secrets and public keys of apps that call the Okta API with OAuth 2.0, and the Okta scopes granted to each app. From the `audit` level the collector reads API tokens only. It writes no `access-posture` file.
+- **Access reviews.** Access certification campaigns and their reviews in Okta Identity Governance. The Identity Governance APIs require an Okta Identity Governance subscription.
+
 ## Use Cases
 
 - **Security Baseline Assessment**: Get a quick snapshot of your Okta security posture
