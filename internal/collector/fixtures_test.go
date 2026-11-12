@@ -81,7 +81,7 @@ func kitTenant() *mockOktaClient {
 	t.userGroupIDs = map[string][]string{"u1": {"g1", "g3"}, "u2": {"g1", "g3"}, "u3": {"g3"}, "u4": {"g2", "g3"}, "u5": {"g3"}, "u6": {"g2", "g3"}}
 
 	t.roleAssignees = []okta.RoleAssignedUser{{ID: "u1"}, {ID: "u2"}, {ID: "u4"}, {ID: "u5"}}
-	t.userRoles["u2"] = []okta.RoleAssignment{{ID: "r2", Type: "CUSTOM", Label: "Billing Admin", AssignmentType: "GROUP"}}
+	t.userRoles["u2"] = []okta.RoleAssignment{{ID: "r2", Type: "CUSTOM", Role: "cr1", Label: "Billing Admin", AssignmentType: "GROUP"}}
 	t.userRoles["u4"] = []okta.RoleAssignment{{ID: "r3", Type: "READ_ONLY_ADMIN", AssignmentType: "USER"}}
 	t.userRoles["u5"] = []okta.RoleAssignment{{ID: "r4", Type: "ORG_ADMIN", AssignmentType: "USER"}}
 	t.iamRoles = []okta.IAMRole{{ID: "cr1", Label: "Billing Admin", Description: "Manages billing"}, {ID: "cr2", Label: "Help Desk"}}
@@ -108,18 +108,18 @@ func kitTenant() *mockOktaClient {
 	t.policies = map[string][]okta.Policy{
 		PolicyTypeSignOn: {
 			{ID: "p1", Name: "Admins", Type: PolicyTypeSignOn, Status: "ACTIVE", Priority: 1, Conditions: okta.PolicyConditions{People: groupScope("g1")}},
-			{ID: "p2", Name: "Default", Type: PolicyTypeSignOn, Status: "ACTIVE", Priority: 2},
+			{ID: "p2", Name: "Default", Type: PolicyTypeSignOn, Status: "ACTIVE", Priority: 2, Conditions: okta.PolicyConditions{People: groupScope("g3")}},
 		},
 		PolicyTypeMFAEnroll: {
 			{ID: "p3", Name: "Engineering enrollment", Type: PolicyTypeMFAEnroll, Status: "ACTIVE", Priority: 1, Conditions: okta.PolicyConditions{People: groupScope("g2")}},
 		},
 	}
 	t.policyRules = map[string][]okta.PolicyRule{
-		"p1": {{ID: "r1", Name: "Admins on managed devices", Status: "ACTIVE", Priority: 1,
+		"p1": {{ID: "r1", Name: "Admins on managed devices", Status: "ACTIVE", Priority: intPtr(1),
 			Conditions: okta.PolicyRuleConditions{Device: &okta.DeviceCondition{Managed: "true"}},
 			Actions:    okta.PolicyRuleActions{Signon: signon(true, 60, 15)}}},
-		"p2": {{ID: "r2", Name: "Default", Status: "ACTIVE", Priority: 1, Actions: okta.PolicyRuleActions{Signon: signon(false, 720, 60)}}},
-		"p3": {{ID: "r3", Name: "Challenge", Status: "ACTIVE", Priority: 1, Actions: okta.PolicyRuleActions{Enroll: &okta.EnrollActions{Self: "CHALLENGE"}}}},
+		"p2": {{ID: "r2", Name: "Default", Status: "ACTIVE", Priority: intPtr(1), Actions: okta.PolicyRuleActions{Signon: signon(false, 720, 60)}}},
+		"p3": {{ID: "r3", Name: "Challenge", Status: "ACTIVE", Priority: intPtr(1), Actions: okta.PolicyRuleActions{Enroll: &okta.EnrollActions{Self: "CHALLENGE"}}}},
 	}
 
 	t.groups = []okta.Group{
@@ -281,8 +281,9 @@ func kitLargeOrg() *mockOktaClient {
 	}
 	t.groups[0].Embedded, t.groups[1].Embedded, t.groups[2].Embedded = stats(23), stats(50), stats(1192)
 	t.groupUsers = map[string][]okta.User{"g1": t.users[:23], "g2": t.users[100:150], "g3": t.users[:1192]}
-	t.policies[PolicyTypePassword] = []okta.Policy{{ID: "pw1", Name: "Default", Type: PolicyTypePassword, Status: "ACTIVE", Priority: 1}}
-	t.policyRules["pw1"] = []okta.PolicyRule{{ID: "pwr1", Name: "Default Rule", Status: "ACTIVE", Priority: 1,
+	t.policies[PolicyTypePassword] = []okta.Policy{{ID: "pw1", Name: "Default", Type: PolicyTypePassword, Status: "ACTIVE", Priority: 1,
+		Conditions: okta.PolicyConditions{People: everyoneGroup("g3")}}}
+	t.policyRules["pw1"] = []okta.PolicyRule{{ID: "pwr1", Name: "Default Rule", Status: "ACTIVE", Priority: intPtr(1),
 		Actions: okta.PolicyRuleActions{SelfServicePasswordReset: &okta.RuleAccess{Access: "ALLOW"}}}}
 	return t
 }

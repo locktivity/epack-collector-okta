@@ -59,27 +59,63 @@ func collectGroupIDsFromPeopleCondition(people *okta.PolicyPeopleCondition, grou
 	}
 }
 
-func userCoveredByMFARequirement(
-	userID string,
-	signOnPolicies []scopedPolicy,
-	mfaEnrollPolicies []scopedPolicy,
-	groupMembers groupMembership,
-) bool {
-	return signOnPolicyRequiresMFA(userID, signOnPolicies, groupMembers) ||
-		mfaEnrollmentPolicyRequiresMFA(userID, mfaEnrollPolicies, groupMembers)
+// userCoveredByMFARequirement reports whether every sign-in of the user
+// must use MFA or is blocked. With exclusions false, the walk ignores the
+// users and groups that policies and rules exclude by name, which is how
+// mfa_required treats named exceptions.
+func userCoveredByMFARequirement(userID string, signOnPolicies []scopedPolicy, groupMembers groupMembership, exclusions bool) bool {
+	return everySignInSettled(userID, signOnPolicies, groupMembers, exclusions, anyRule, ruleRequiresMFAOrBlocks)
 }
 
-// signOnPolicyRequiresMFA, mfaEnrollmentPolicyRequiresMFA and
-// userCoveredByManagedDeviceRequirement follow Okta's evaluation order.
-// Policies that apply to the user are evaluated in priority order, and so are
-// the rules of each policy. The first rule whose conditions are all met
-// applies. When no rule of a policy applies, the next policy is evaluated.
-func signOnPolicyRequiresMFA(userID string, policies []scopedPolicy, groupMembers groupMembership) bool {
-	return firstMatchingRuleDecides(userID, policies, groupMembers, ruleHasSignonAction, signonRuleMFADecision)
+// userCoveredByManagedDeviceRequirement reports whether the user can sign in
+// from a managed device and every sign-in of theirs from another device is
+// blocked. A rule limited to managed devices never sees the other sign-ins,
+// and the walk notes whether one lets the user in before the others are all
+// blocked. A user blocked everywhere is not required to use a managed
+// device, since no device lets them in.
+func userCoveredByManagedDeviceRequirement(userID string, signOnPolicies []scopedPolicy, groupMembers groupMembership) bool {
+	managedLetIn := false
+	sees := func(r okta.PolicyRule) bool {
+		if limitedToManagedDevices(r) {
+			managedLetIn = managedLetIn || !ruleBlocks(r)
+			return false
+		}
+		return true
+	}
+	return everySignInSettled(userID, signOnPolicies, groupMembers, true, sees, ruleBlocks) && managedLetIn
 }
 
-func mfaEnrollmentPolicyRequiresMFA(userID string, policies []scopedPolicy, groupMembers groupMembership) bool {
-	return firstMatchingRuleDecides(userID, policies, groupMembers, ruleHasEnrollAction, alwaysDecides(enrollRuleRequiresFactor))
+// everySignInSettled follows Okta's evaluation order for sign-on policies.
+// Policies that apply to the user are evaluated in priority order, and so
+// are the active rules of each. A rule applies to the sign-ins that meet
+// its conditions, and settled says whether it settles them, such as by
+// requiring MFA. The sign-ins it does not apply to go on to the next rule,
+// and past a policy's last rule to the next policy. The result is true once
+// the settled rules together apply to every sign-in, and false at the first
+// rule that lets some sign-ins in unsettled, or when the rules run out.
+// sees picks the rules that can apply to the sign-ins in question.
+func everySignInSettled(userID string, policies []scopedPolicy, groupMembers groupMembership, exclusions bool, sees, settled func(okta.PolicyRule) bool) bool {
+	var settledSoFar signIns
+	for _, sp := range policies {
+		if !matchesPeople(userID, sp.policy.Conditions.People, groupMembers, exclusions) {
+			continue
+		}
+		for _, rule := range sp.rules {
+			if rule.Status != StatusActive || rule.Actions.Signon == nil {
+				continue
+			}
+			if !matchesPeople(userID, rule.Conditions.People, groupMembers, exclusions) || !sees(rule) {
+				continue
+			}
+			if !settled(rule) {
+				return false
+			}
+			if settledSoFar.add(rule.Conditions); settledSoFar.all() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ruleDecision gives the result for a rule that matches the user. decided is
@@ -87,17 +123,11 @@ func mfaEnrollmentPolicyRequiresMFA(userID string, policies []scopedPolicy, grou
 // matching rule settles the others.
 type ruleDecision func(okta.PolicyRule) (covered, decided bool)
 
-// alwaysDecides is the ruleDecision of a rule that settles every sign-in.
-func alwaysDecides(predicate func(okta.PolicyRule) bool) ruleDecision {
-	return func(r okta.PolicyRule) (bool, bool) { return predicate(r), true }
-}
-
 // firstMatchingRuleDecides walks the policies whose people condition matches
 // the user, in order, and their active in-scope rules whose people condition
 // matches the user. The first rule that decides gives the result. A policy
 // with no such rule leaves the user to the next policy, and the result is
-// false when no rule decides. inScope picks the rules that take part, such
-// as only sign-on rules.
+// false when no rule decides. inScope picks the rules that take part.
 func firstMatchingRuleDecides(userID string, policies []scopedPolicy, groupMembers groupMembership, inScope func(okta.PolicyRule) bool, decide ruleDecision) bool {
 	for _, sp := range policies {
 		if !matchesPeopleCondition(userID, sp.policy.Conditions.People, groupMembers) {
@@ -118,30 +148,28 @@ func firstMatchingRuleDecides(userID string, policies []scopedPolicy, groupMembe
 	return false
 }
 
-// Rule scope filters passed to firstMatchingRuleDecides.
-func ruleHasSignonAction(r okta.PolicyRule) bool { return r.Actions.Signon != nil }
-func ruleHasEnrollAction(r okta.PolicyRule) bool { return r.Actions.Enroll != nil }
-func anyRule(okta.PolicyRule) bool               { return true }
+func anyRule(okta.PolicyRule) bool { return true }
 
-// signonRuleMFADecision gives the MFA result for a sign-on rule that matches
-// the user. A rule with a condition on how the person signs in, such as a
-// network zone, applies to only some of their sign-ins. When those sign-ins
-// get in without MFA, the user is not covered. When they must use MFA or are
-// denied, the user's other sign-ins go on to the next matching rule.
-func signonRuleMFADecision(r okta.PolicyRule) (covered, decided bool) {
-	signon := r.Actions.Signon
-	if !limitedToSomeSignIns(r.Conditions) {
-		return signon.RequireFactor, true
-	}
-	if signon.RequireFactor || strings.EqualFold(signon.Access, AccessDeny) {
-		return false, false
-	}
-	return false, true
+// ruleRequiresMFAOrBlocks reports whether a sign-on rule settles its
+// sign-ins for MFA: it requires a factor, or denies access, since a blocked
+// sign-in cannot skip MFA.
+func ruleRequiresMFAOrBlocks(r okta.PolicyRule) bool {
+	return r.Actions.Signon.RequireFactor || ruleBlocks(r)
 }
 
-// limitedToSomeSignIns reports whether a sign-on rule sets a condition on how
-// the person signs in. These are the conditions Okta documents for sign-on
-// rules, each with the value that matches every sign-in.
+func ruleBlocks(r okta.PolicyRule) bool {
+	return strings.EqualFold(r.Actions.Signon.Access, AccessDeny)
+}
+
+func limitedToManagedDevices(r okta.PolicyRule) bool {
+	d := r.Conditions.Device
+	return d != nil && strings.EqualFold(d.Managed, "true")
+}
+
+// limitedToSomeSignIns reports whether a rule sets a condition on how the
+// person signs in. These are the conditions Okta documents for sign-on
+// rules, each with the value that matches every sign-in, and the device
+// condition of a Classic Engine sign-on rule.
 func limitedToSomeSignIns(c okta.PolicyRuleConditions) bool {
 	narrows := func(value, matchesAll string) bool {
 		return value != "" && !strings.EqualFold(value, matchesAll)
@@ -150,18 +178,101 @@ func limitedToSomeSignIns(c okta.PolicyRuleConditions) bool {
 		(c.AuthContext != nil && narrows(c.AuthContext.AuthType, "ANY")) ||
 		(c.IdentityProvider != nil && narrows(c.IdentityProvider.Provider, "ANY")) ||
 		(c.RiskScore != nil && narrows(c.RiskScore.Level, "ANY")) ||
-		(c.Risk != nil && len(c.Risk.Behaviors) > 0)
+		(c.Risk != nil && len(c.Risk.Behaviors) > 0) ||
+		(c.Device != nil && (strings.EqualFold(c.Device.Managed, "true") || strings.EqualFold(c.Device.Registered, "true") ||
+			(c.Device.Assurance != nil && len(c.Device.Assurance.Include) > 0)))
 }
 
-// enrollRuleRequiresFactor reports whether an enrollment rule is set to
-// LOGIN, where users enroll when they sign in. Under a rule set to CHALLENGE,
-// users enroll the next time a sign-on rule requires MFA. That rule adds no
-// requirement of its own.
-func enrollRuleRequiresFactor(r okta.PolicyRule) bool {
-	return strings.EqualFold(r.Actions.Enroll.Self, MFAActionLogin)
+// onNetwork stands for the sign-ins Okta's ON_NETWORK connection matches,
+// as if it were a zone. OFF_NETWORK matches the rest.
+const onNetwork = "ON_NETWORK"
+
+// signIns tracks the sign-ins that settled rules apply to. A rule limited
+// by its network location alone adds the sign-ins from the zones it
+// includes, or from outside the zones it excludes. A rule limited in any
+// other way adds none, since which of its sign-ins other rules also reach
+// is not tracked.
+type signIns struct {
+	everywhere bool
+	inside     map[string]bool // zones whose sign-ins are settled
+	excluded   map[string]bool // zones in every exclude list added; sign-ins outside them are settled
+	excludes   bool            // whether any exclude list was added
+}
+
+func (s *signIns) add(c okta.PolicyRuleConditions) {
+	if !limitedToSomeSignIns(c) {
+		s.everywhere = true
+		return
+	}
+	network := c.Network
+	c.Network = nil
+	if network == nil || limitedToSomeSignIns(c) {
+		return
+	}
+	switch strings.ToUpper(network.Connection) {
+	case "ON_NETWORK":
+		s.addInside(onNetwork)
+	case "OFF_NETWORK":
+		s.addOutside(onNetwork)
+	case "ZONE":
+		switch {
+		case len(network.Include) > 0 && len(network.Exclude) == 0:
+			s.addInside(network.Include...)
+		case len(network.Exclude) > 0 && len(network.Include) == 0:
+			s.addOutside(network.Exclude...)
+		}
+	}
+}
+
+func (s *signIns) addInside(zones ...string) {
+	if s.inside == nil {
+		s.inside = map[string]bool{}
+	}
+	for _, z := range zones {
+		s.inside[z] = true
+	}
+}
+
+// addOutside adds the sign-ins from outside zones. Those from outside every
+// exclude list added are the sign-ins from outside the zones all the lists
+// name.
+func (s *signIns) addOutside(zones ...string) {
+	names := make(map[string]bool, len(zones))
+	for _, z := range zones {
+		names[z] = !s.excludes || s.excluded[z]
+	}
+	s.excluded = map[string]bool{}
+	for z, inAll := range names {
+		if inAll {
+			s.excluded[z] = true
+		}
+	}
+	s.excludes = true
+}
+
+// all reports whether the settled rules apply to every sign-in.
+func (s *signIns) all() bool {
+	if s.everywhere {
+		return true
+	}
+	if !s.excludes {
+		return false
+	}
+	for z := range s.excluded {
+		if !s.inside[z] {
+			return false
+		}
+	}
+	return true
 }
 
 func matchesPeopleCondition(userID string, people *okta.PolicyPeopleCondition, groupMembers groupMembership) bool {
+	return matchesPeople(userID, people, groupMembers, true)
+}
+
+// matchesPeople reports whether a people condition matches the user. With
+// exclusions false, the users and groups it excludes are ignored.
+func matchesPeople(userID string, people *okta.PolicyPeopleCondition, groupMembers groupMembership, exclusions bool) bool {
 	if people == nil {
 		return true
 	}
@@ -175,6 +286,9 @@ func matchesPeopleCondition(userID string, people *okta.PolicyPeopleCondition, g
 	}
 	if !included {
 		return false
+	}
+	if !exclusions {
+		return true
 	}
 
 	if people.Users != nil && containsString(people.Users.Exclude, userID) {
@@ -204,34 +318,4 @@ func containsString(values []string, target string) bool {
 	}
 
 	return false
-}
-
-// anySignOnRuleRequiresManagedDevice checks if any active sign-on rule has a managed device requirement.
-func anySignOnRuleRequiresManagedDevice(policies []scopedPolicy) bool {
-	for _, sp := range policies {
-		for _, rule := range sp.rules {
-			if rule.Status != StatusActive {
-				continue
-			}
-			if ruleRequiresManagedDevice(rule) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// userCoveredByManagedDeviceRequirement reports whether the first sign-on
-// rule that matches the user, of any action type, has a managed-device
-// condition.
-func userCoveredByManagedDeviceRequirement(userID string, signOnPolicies []scopedPolicy, groupMembers groupMembership) bool {
-	return firstMatchingRuleDecides(userID, signOnPolicies, groupMembers, anyRule, alwaysDecides(ruleRequiresManagedDevice))
-}
-
-// ruleRequiresManagedDevice checks if a policy rule has a managed device condition.
-func ruleRequiresManagedDevice(rule okta.PolicyRule) bool {
-	if rule.Conditions.Device == nil {
-		return false
-	}
-	return strings.EqualFold(rule.Conditions.Device.Managed, "true")
 }

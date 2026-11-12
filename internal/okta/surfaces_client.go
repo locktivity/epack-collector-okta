@@ -48,6 +48,7 @@ func (c *Client) ListSystemLog(ctx context.Context, filter string, since time.Ti
 	path := "/api/v1/logs?" + q.Encode()
 
 	events := []LogEvent{}
+	pages := readPages{}
 	for path != "" && len(events) < max {
 		var page *[]LogEvent
 		resp, err := c.get(ctx, op, path, &page)
@@ -63,7 +64,9 @@ func (c *Client) ListSystemLog(ctx context.Context, filter string, since time.Ti
 			break
 		}
 		events = append(events, *page...)
-		path = getNextLink(resp)
+		if path, err = pages.next(resp, op, path, getNextLink(resp)); err != nil {
+			return nil, err
+		}
 	}
 
 	if len(events) > max {

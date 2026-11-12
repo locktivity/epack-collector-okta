@@ -239,7 +239,7 @@ func (c *Collector) Collect(ctx context.Context, level componentsdk.Level) (*Org
 	appMetrics := c.collectAppMetrics(steps.next("apps", "Apps"), level)
 	rolesCtx := steps.next("admin_roles", "Admin roles")
 	privilegedMetrics := c.collectPrivilegedMetrics(rolesCtx, userMetrics, level)
-	posture.PrivilegedAccess.CustomRoles = c.collectCustomRoles(rolesCtx, level)
+	posture.PrivilegedAccess.CustomRoles = c.collectCustomRoles(rolesCtx, level, privilegedMetrics.rolePermissions)
 	policyMetrics := c.collectPolicyMetrics(steps.next("policies", "Sign-on and MFA policies"), userMetrics, level)
 	deviceAccessMetrics := c.collectDeviceAccessMetrics(steps.next("device_assurance", "Device assurance"), userMetrics, privilegedMetrics, policyMetrics)
 	steps.end()

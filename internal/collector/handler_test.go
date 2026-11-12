@@ -154,7 +154,8 @@ func TestATrustRunWritesNoOktaIDs(t *testing.T) {
 	tenant := kitTenant()
 	tenant.users = append(tenant.users, okta.User{ID: failingUser, Status: "ACTIVE", Created: kitNow, LastLogin: kitNow, Profile: okta.UserProfile{Login: "grace@acme.com"}})
 	tenant.roleAssignees = append(tenant.roleAssignees, okta.RoleAssignedUser{ID: failingUser}, okta.RoleAssignedUser{ID: missingUser})
-	tenant.policies[PolicyTypeMFAEnroll] = append(tenant.policies[PolicyTypeMFAEnroll], okta.Policy{ID: policy, Name: "Contractors", Type: PolicyTypeMFAEnroll, Status: "ACTIVE", Priority: 2})
+	tenant.policies[PolicyTypeMFAEnroll] = append(tenant.policies[PolicyTypeMFAEnroll], okta.Policy{ID: policy, Name: "Contractors", Type: PolicyTypeMFAEnroll, Status: "ACTIVE", Priority: 2,
+		Conditions: okta.PolicyConditions{People: everyoneGroup("g3")}})
 	tenant.policies[PolicyTypeSignOn] = append(tenant.policies[PolicyTypeSignOn], okta.Policy{ID: "p4", Name: "Contractors", Type: PolicyTypeSignOn, Status: "ACTIVE", Priority: 3,
 		Conditions: okta.PolicyConditions{People: &okta.PolicyPeopleCondition{Groups: &struct {
 			Include []string `json:"include,omitempty"`

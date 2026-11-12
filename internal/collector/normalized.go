@@ -94,9 +94,9 @@ type IDPPosturePolicy struct {
 }
 
 // IDPPostureLifecycle contains account lifecycle posture metrics. Its
-// accounts are the users other than deprovisioned ones. Okta has no archived
-// account state, so the archived values are left out with an unsupported
-// gap.
+// accounts are the users other than deprovisioned ones, in every other
+// state. Okta has no archived account state, so the archived values are
+// left out with an unsupported gap.
 type IDPPostureLifecycle struct {
 	AccountsPresent       *bool      `json:"accounts_present,omitempty"`
 	AccountCount          *int       `json:"account_count,omitempty"`
@@ -129,7 +129,7 @@ func (o *OrgPosture) ToIDPPosture() *IDPPosture {
 		}
 		return nil
 	}
-	users, apps := o.Users.TotalCount, o.Apps.TotalCount
+	users, accounts, apps := o.Users.EnabledCount, o.Users.TotalCount, o.Apps.TotalCount
 
 	userSecurity := IDPPostureUserSecurity{
 		UsersPresent:               present(users),
@@ -177,12 +177,14 @@ func (o *OrgPosture) ToIDPPosture() *IDPPosture {
 		posture.PrivilegedAccess = &privileged
 	}
 
-	// mfa_required means every user is covered, which mfa_required_all
-	// already says. App sign-in policies can require MFA of the people the
-	// sign-on and enrollment policies leave out, and their rules are not read.
-	// When an app has one, the three MFA requirement values are left out.
+	// mfa_required means every user is covered, setting aside the users
+	// and groups policies exclude by name, as mfa_required_except_exclusions
+	// says. The excluded users count as not covered. App sign-in policies
+	// can require MFA of the people the sign-on policies leave out, and their
+	// rules are not read. When an app has one, the MFA requirement values
+	// they could change are left out.
 	policy := IDPPosturePolicy{
-		MFARequired:            o.Policy.MFARequiredAll,
+		MFARequired:            o.Policy.MFARequiredExceptExclusions,
 		MFARequiredUserCount:   atAudit(o.Policy.MFARequiredUsersCount),
 		MFARequiredCoveragePct: share(o.Policy.MFARequiredUsersCount, users, componentsdk.RoundDown),
 		SessionLifetimeMaxMin:  o.Policy.SessionLifetimeMaxMinutes,
@@ -190,6 +192,8 @@ func (o *OrgPosture) ToIDPPosture() *IDPPosture {
 	}
 	if o.Policy.mfaRequirementUnread() {
 		policy.MFARequired = nil
+	}
+	if o.Policy.mfaCoverageUnread() {
 		policy.MFARequiredUserCount = nil
 		policy.MFARequiredCoveragePct = Percentage{}
 	}
@@ -198,10 +202,10 @@ func (o *OrgPosture) ToIDPPosture() *IDPPosture {
 	}
 
 	lifecycle := IDPPostureLifecycle{
-		AccountsPresent:       present(users),
-		AccountCount:          atAudit(users),
+		AccountsPresent:       present(accounts),
+		AccountCount:          atAudit(accounts),
 		SuspendedAccountCount: atAudit(o.Users.SuspendedCount),
-		SuspendedPct:          share(o.Users.SuspendedCount, users, componentsdk.RoundUp),
+		SuspendedPct:          share(o.Users.SuspendedCount, accounts, componentsdk.RoundUp),
 	}
 	if lifecycle != (IDPPostureLifecycle{}) {
 		posture.Lifecycle = &lifecycle
@@ -237,8 +241,8 @@ func share(count, total *int, rounding componentsdk.Rounding) Percentage {
 // idpPostureSources maps each normalized value to the detailed value it
 // copies, so a gap on the detailed value carries over.
 var idpPostureSources = []struct{ normalized, detailed string }{
-	{"/user_security/users_present", "/users/total_count"},
-	{"/user_security/user_count", "/users/total_count"},
+	{"/user_security/users_present", "/users/enabled_count"},
+	{"/user_security/user_count", "/users/enabled_count"},
 	{"/user_security/mfa_user_count", "/posture/mfa_enrolled_users_count"},
 	{"/user_security/phishing_resistant_user_count", "/posture/mfa_phishing_resistant_users_count"},
 	{"/user_security/inactive_user_count", "/users/inactive_count"},
@@ -264,7 +268,7 @@ var idpPostureSources = []struct{ normalized, detailed string }{
 	{"/privileged_access/privileged_phishing_resistant_pct", "/privileged_access/privileged_phishing_resistant_pct"},
 	{"/privileged_access/standing_privileged_users_present", "/privileged_access/standing_privileged_users_count"},
 	{"/privileged_access/standing_privileged_users_count", "/privileged_access/standing_privileged_users_count"},
-	{"/policy/mfa_required", "/policy/mfa_required_all"},
+	{"/policy/mfa_required", "/policy/mfa_required_except_exclusions"},
 	{"/policy/mfa_required_user_count", "/policy/mfa_required_users_count"},
 	{"/policy/mfa_required_coverage_pct", "/policy/mfa_required_coverage_pct"},
 	{"/policy/session_lifetime_max_min", "/policy/session_lifetime_max_minutes"},
@@ -297,6 +301,7 @@ var idpPostureLeftOut = []struct {
 	{"/app_security/authorized_third_party_apps_count", componentsdk.CodeNotRead, userGrants, true},
 	{"/lifecycle/archived_account_count", componentsdk.CodeUnsupported, archivedAccounts, true},
 	{"/lifecycle/archived_pct", componentsdk.CodeUnsupported, archivedAccounts, false},
+	{"/policy/legacy_auth_blocked", componentsdk.CodeNotRead, legacyAuth, false},
 	{"/policy/phishing_resistant_required_for_privileged", componentsdk.CodeNotRead, accessPolicies, false},
 	{"/user_security/password_policy_noncompliant_pct", componentsdk.CodeUnsupported, policyCompliance, false},
 	{"/user_security/password_policy_noncompliant_user_count", componentsdk.CodeUnsupported, policyCompliance, true},
@@ -311,6 +316,7 @@ const (
 	userGrants       = "Okta's user grants API reports the apps each user has granted access to, which this collector does not read."
 	accessPolicies   = "Okta's policies API reports each authentication policy's phishing-resistant requirement in its ACCESS_POLICY rules, which this collector does not read."
 	appSignInMFA     = "Okta's policies API reports the MFA each app sign-in policy requires in its ACCESS_POLICY rules, which this collector does not read."
+	legacyAuth       = "Okta sets which clients may sign in to each app, legacy authentication clients among them, in the app's sign-in policy, which this collector does not read."
 )
 
 // markMFARequirementUnread gives the normalized MFA requirement values a gap
@@ -318,12 +324,15 @@ const (
 // not_read when an app has one, and the app list's own gap when the list
 // could not be read. The count gets one only at the audit level and above.
 func (c *Collector) markMFARequirementUnread(p PolicyConfig, level componentsdk.Level) {
-	if !p.mfaRequirementUnread() {
-		return
+	var pointers []string
+	if p.mfaRequirementUnread() {
+		pointers = append(pointers, "/policy/mfa_required")
 	}
-	pointers := []string{"/policy/mfa_required", "/policy/mfa_required_coverage_pct"}
-	if level.AtLeast(componentsdk.LevelAudit) {
-		pointers = append(pointers, "/policy/mfa_required_user_count")
+	if p.mfaCoverageUnread() {
+		pointers = append(pointers, "/policy/mfa_required_coverage_pct")
+		if level.AtLeast(componentsdk.LevelAudit) {
+			pointers = append(pointers, "/policy/mfa_required_user_count")
+		}
 	}
 	for _, pointer := range pointers {
 		at := componentsdk.Location{Path: idpPosturePath, Pointer: pointer}

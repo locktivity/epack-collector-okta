@@ -302,20 +302,23 @@ func TestCollect_WithUsers(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// 3 users with MFA (user1, user2, user4) out of 5
-	// MFA coverage = 60%
-	assertInt(t, "Posture.MFACoverage", posture.Posture.MFACoverage, 60)
+	// Five accounts, four of them enabled: user6 is suspended.
+	assertInt(t, "Users.TotalCount", posture.Users.TotalCount, 5)
+	assertInt(t, "Users.EnabledCount", posture.Users.EnabledCount, 4)
 
-	// Only user4 has phishing-resistant MFA (webauthn) = 20%
-	assertInt(t, "Posture.MFAPhishingResistant", posture.Posture.MFAPhishingResistant, 20)
+	// 3 enabled users with MFA (user1, user2, user4) out of 4
+	assertInt(t, "Posture.MFACoverage", posture.Posture.MFACoverage, 75)
 
-	// 1 user locked out = 20%
-	assertInt(t, "Users.LockedOut", posture.Users.LockedOut, 20)
+	// Only user4 has phishing-resistant MFA (webauthn) = 25%
+	assertInt(t, "Posture.MFAPhishingResistant", posture.Posture.MFAPhishingResistant, 25)
 
-	// 1 user inactive (user3) = 20%
-	assertInt(t, "Users.Inactive", posture.Users.Inactive, 20)
+	// 1 user locked out = 25%
+	assertInt(t, "Users.LockedOut", posture.Users.LockedOut, 25)
 
-	// 1 user suspended (user6) = 20%
+	// 1 user inactive (user3) = 25%
+	assertInt(t, "Users.Inactive", posture.Users.Inactive, 25)
+
+	// 1 account suspended (user6) of 5 = 20%
 	assertInt(t, "Users.Suspended", posture.Users.Suspended, 20)
 
 	// Each percentage's numerator.
@@ -624,7 +627,7 @@ func TestCollect_WithMultiplePolicies(t *testing.T) {
 				{
 					ID:       "rule2",
 					Status:   "ACTIVE",
-					Priority: 1,
+					Priority: intPtr(1),
 					Actions: okta.PolicyRuleActions{
 						Signon: &okta.SignonActions{
 							RequireFactor: true, // MFA required
@@ -644,7 +647,7 @@ func TestCollect_WithMultiplePolicies(t *testing.T) {
 				{
 					ID:       "rule1",
 					Status:   "ACTIVE",
-					Priority: 1,
+					Priority: intPtr(1),
 					Actions: okta.PolicyRuleActions{
 						Signon: &okta.SignonActions{
 							RequireFactor: false, // No MFA required
@@ -1281,7 +1284,7 @@ func TestCollect_InternalDetails(t *testing.T) {
 		},
 		policyRules: map[string][]okta.PolicyRule{
 			"p1": {{
-				ID: "rule1", Name: "Require MFA", Status: "ACTIVE", Priority: 1,
+				ID: "rule1", Name: "Require MFA", Status: "ACTIVE", Priority: intPtr(1),
 				Actions: okta.PolicyRuleActions{Signon: &okta.SignonActions{Access: "ALLOW", RequireFactor: true}},
 			}},
 		},
@@ -1727,7 +1730,8 @@ func TestToIDPPosture(t *testing.T) {
 			SSOCoverage:                    intPtr(85),
 		},
 		Users: UserMetrics{
-			TotalCount:      intPtr(100),
+			TotalCount:      intPtr(107),
+			EnabledCount:    intPtr(100),
 			PasswordExpired: intPtr(5),
 			LockedOut:       intPtr(2),
 			LockedOutCount:  intPtr(2),
@@ -1754,15 +1758,16 @@ func TestToIDPPosture(t *testing.T) {
 			PrivilegedPhishingResistantCount: intPtr(1),
 		},
 		Policy: PolicyConfig{
-			PolicyCount:               intPtr(3),
-			MFARequiredAll:            boolPtr(false),
-			MFARequiredAny:            boolPtr(true),
-			MFARequiredCoveragePct:    intPtr(66),
-			MFARequiredUsersCount:     intPtr(66),
-			SessionLifetimeMinMinutes: intPtr(15),
-			SessionLifetimeMaxMinutes: intPtr(1440),
-			IdleTimeoutMinMinutes:     intPtr(5),
-			IdleTimeoutMaxMinutes:     intPtr(120),
+			PolicyCount:                 intPtr(3),
+			MFARequiredAll:              boolPtr(false),
+			MFARequiredExceptExclusions: boolPtr(false),
+			MFARequiredAny:              boolPtr(true),
+			MFARequiredCoveragePct:      intPtr(66),
+			MFARequiredUsersCount:       intPtr(66),
+			SessionLifetimeMinMinutes:   intPtr(15),
+			SessionLifetimeMaxMinutes:   intPtr(1440),
+			IdleTimeoutMinMinutes:       intPtr(5),
+			IdleTimeoutMaxMinutes:       intPtr(120),
 		},
 	}
 
@@ -1799,9 +1804,10 @@ func TestToIDPPosture(t *testing.T) {
 	if idpPosture.Lifecycle == nil {
 		t.Fatal("Lifecycle = nil, want non-nil")
 	}
+	// Lifecycle counts every account, suspended ones included: 7 of 107.
 	assertFloat(t, "Lifecycle.SuspendedPct", idpPosture.Lifecycle.SuspendedPct.Value, 7)
 	assertBool(t, "Lifecycle.AccountsPresent", idpPosture.Lifecycle.AccountsPresent, true)
-	assertInt(t, "Lifecycle.AccountCount", idpPosture.Lifecycle.AccountCount, 100)
+	assertInt(t, "Lifecycle.AccountCount", idpPosture.Lifecycle.AccountCount, 107)
 	assertInt(t, "Lifecycle.SuspendedAccountCount", idpPosture.Lifecycle.SuspendedAccountCount, 7)
 	if idpPosture.PrivilegedAccess == nil {
 		t.Fatal("PrivilegedAccess = nil, want non-nil")
@@ -1905,8 +1911,8 @@ func TestToIDPPostureRoundsAsTheSchemaSays(t *testing.T) {
 		OrgDomain:        "test.okta.com",
 		Posture:          Posture{MFACoverage: intPtr(33), MFAEnrolledUsersCount: one},
 		Users: UserMetrics{
-			TotalCount: intPtr(3),
-			Inactive:   intPtr(33), InactiveCount: one,
+			TotalCount: intPtr(3), EnabledCount: intPtr(3),
+			Inactive: intPtr(33), InactiveCount: one,
 			LockedOut: intPtr(33), LockedOutCount: one,
 			Suspended: intPtr(33), SuspendedCount: one,
 		},
@@ -1925,7 +1931,7 @@ func TestToIDPPostureCountsByLevel(t *testing.T) {
 		CollectedAtLevel: "trust",
 		OrgDomain:        "test.okta.com",
 		Posture:          Posture{MFACoverage: intPtr(50), MFAEnrolledUsersCount: intPtr(1), SSOCoverage: intPtr(100)},
-		Users:            UserMetrics{TotalCount: intPtr(2), Suspended: intPtr(0), SuspendedCount: intPtr(0)},
+		Users:            UserMetrics{TotalCount: intPtr(2), EnabledCount: intPtr(2), Suspended: intPtr(0), SuspendedCount: intPtr(0)},
 		Apps:             AppMetrics{TotalCount: intPtr(1), SSOCount: intPtr(1)},
 		Policy:           PolicyConfig{MFARequiredCoveragePct: intPtr(50), MFARequiredUsersCount: intPtr(1)},
 	}
@@ -1959,7 +1965,7 @@ func TestToIDPPostureEmptyOrg(t *testing.T) {
 		CollectedAtLevel: "audit",
 		OrgDomain:        "test.okta.com",
 		Posture:          Posture{MFAEnrolledUsersCount: zero, MFAPhishingResistantUsersCount: zero},
-		Users:            UserMetrics{TotalCount: zero, InactiveCount: zero, LockedOutCount: zero, SuspendedCount: zero},
+		Users:            UserMetrics{TotalCount: zero, EnabledCount: zero, InactiveCount: zero, LockedOutCount: zero, SuspendedCount: zero},
 		Apps:             AppMetrics{TotalCount: zero, SSOCount: zero, ProvisioningEnabledCount: zero, DeprovisioningEnabledCount: zero},
 		Policy:           PolicyConfig{MFARequiredUsersCount: zero},
 	}
@@ -1988,7 +1994,7 @@ func TestToIDPPostureLeavesOutUnreadPercentages(t *testing.T) {
 	orgPosture := &OrgPosture{
 		CollectedAtLevel: "audit",
 		OrgDomain:        "test.okta.com",
-		Users:            UserMetrics{TotalCount: intPtr(5), InactiveCount: intPtr(1), Inactive: intPtr(20)},
+		Users:            UserMetrics{TotalCount: intPtr(5), EnabledCount: intPtr(5), InactiveCount: intPtr(1), Inactive: intPtr(20)},
 	}
 	data := idpPostureSections(t, orgPosture.ToIDPPosture())
 	for _, field := range []string{"mfa_coverage_pct", "mfa_user_count", "weak_password_pct"} {
@@ -2026,12 +2032,13 @@ func TestToIDPPosture_MFARequiredAll(t *testing.T) {
 	// Test that MFARequired is true when MFARequiredAll is true
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
-		Users:     UserMetrics{TotalCount: intPtr(4)},
+		Users:     UserMetrics{TotalCount: intPtr(4), EnabledCount: intPtr(4)},
 		Policy: PolicyConfig{
-			MFARequiredAll:         boolPtr(true),
-			MFARequiredAny:         boolPtr(true),
-			MFARequiredCoveragePct: intPtr(100),
-			MFARequiredUsersCount:  intPtr(4),
+			MFARequiredAll:              boolPtr(true),
+			MFARequiredExceptExclusions: boolPtr(true),
+			MFARequiredAny:              boolPtr(true),
+			MFARequiredCoveragePct:      intPtr(100),
+			MFARequiredUsersCount:       intPtr(4),
 		},
 	}
 
@@ -2045,12 +2052,13 @@ func TestToIDPPosture_NoMFARequired(t *testing.T) {
 	// Test that MFARequired is false when neither MFARequiredAll nor MFARequiredAny
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
-		Users:     UserMetrics{TotalCount: intPtr(4)},
+		Users:     UserMetrics{TotalCount: intPtr(4), EnabledCount: intPtr(4)},
 		Policy: PolicyConfig{
-			MFARequiredAll:         boolPtr(false),
-			MFARequiredAny:         boolPtr(false),
-			MFARequiredCoveragePct: intPtr(0),
-			MFARequiredUsersCount:  intPtr(0),
+			MFARequiredAll:              boolPtr(false),
+			MFARequiredExceptExclusions: boolPtr(false),
+			MFARequiredAny:              boolPtr(false),
+			MFARequiredCoveragePct:      intPtr(0),
+			MFARequiredUsersCount:       intPtr(0),
 		},
 	}
 
@@ -2103,6 +2111,7 @@ func TestIDPPostureJSONStructure(t *testing.T) {
 		},
 		Users: UserMetrics{
 			TotalCount:     intPtr(20),
+			EnabledCount:   intPtr(20),
 			LockedOut:      intPtr(5),
 			LockedOutCount: intPtr(1),
 			Inactive:       intPtr(25),
@@ -2128,12 +2137,13 @@ func TestIDPPostureJSONStructure(t *testing.T) {
 			PrivilegedPhishingResistantCount: intPtr(1),
 		},
 		Policy: PolicyConfig{
-			MFARequiredAll:            boolPtr(false),
-			MFARequiredAny:            boolPtr(true),
-			MFARequiredCoveragePct:    intPtr(50),
-			MFARequiredUsersCount:     intPtr(10),
-			SessionLifetimeMaxMinutes: intPtr(480),
-			IdleTimeoutMaxMinutes:     intPtr(30),
+			MFARequiredAll:              boolPtr(false),
+			MFARequiredExceptExclusions: boolPtr(false),
+			MFARequiredAny:              boolPtr(true),
+			MFARequiredCoveragePct:      intPtr(50),
+			MFARequiredUsersCount:       intPtr(10),
+			SessionLifetimeMaxMinutes:   intPtr(480),
+			IdleTimeoutMaxMinutes:       intPtr(30),
 		},
 	}
 
@@ -2275,7 +2285,7 @@ func TestCollect_WithDeviceAccessRequired(t *testing.T) {
 				{
 					ID:       "rule1",
 					Status:   "ACTIVE",
-					Priority: 1,
+					Priority: intPtr(1),
 					Conditions: okta.PolicyRuleConditions{
 						Device: &okta.DeviceCondition{
 							Managed: "true",
@@ -2285,12 +2295,20 @@ func TestCollect_WithDeviceAccessRequired(t *testing.T) {
 						Signon: &okta.SignonActions{RequireFactor: true},
 					},
 				},
+				{
+					ID:       "rule1-other-devices",
+					Status:   "ACTIVE",
+					Priority: intPtr(2),
+					Actions: okta.PolicyRuleActions{
+						Signon: &okta.SignonActions{Access: AccessDeny},
+					},
+				},
 			},
 			"default-policy": {
 				{
 					ID:       "rule2",
 					Status:   "ACTIVE",
-					Priority: 1,
+					Priority: intPtr(1),
 					Actions: okta.PolicyRuleActions{
 						Signon: &okta.SignonActions{RequireFactor: false},
 					},
@@ -2310,7 +2328,9 @@ func TestCollect_WithDeviceAccessRequired(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	assertBool(t, "DeviceAccess.ManagedDeviceRequired", posture.DeviceAccess.ManagedDeviceRequired, true)
+	// Only admin1's sign-ins from other devices are blocked, so a managed
+	// device is not required of everyone.
+	assertBool(t, "DeviceAccess.ManagedDeviceRequired", posture.DeviceAccess.ManagedDeviceRequired, false)
 
 	// Only admin1 is covered by managed device requirement (1 out of 3 = 33%)
 	assertInt(t, "DeviceAccess.ManagedDeviceRequiredCoveragePct", posture.DeviceAccess.ManagedDeviceRequiredCoveragePct, 33)
@@ -2377,7 +2397,7 @@ func TestToIDPPosture_WithDeviceAccess(t *testing.T) {
 func TestToIDPPosture_WithoutDeviceAccess(t *testing.T) {
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
-		Users:     UserMetrics{TotalCount: intPtr(1), Suspended: intPtr(0)},
+		Users:     UserMetrics{TotalCount: intPtr(1), EnabledCount: intPtr(1), Suspended: intPtr(0)},
 		DeviceAccess: DeviceAccessMetrics{
 			ManagedDeviceRequired:            boolPtr(false),
 			ManagedDeviceRequiredCoveragePct: intPtr(0),
@@ -2405,6 +2425,7 @@ func TestLeftOutIDPPostureValuesGetTheirCodes(t *testing.T) {
 			"/policy/phishing_resistant_required_for_privileged": componentsdk.CodeNotRead,
 			"/user_security/password_policy_noncompliant_pct":    componentsdk.CodeUnsupported,
 			"/user_security/weak_password_pct":                   componentsdk.CodeUnsupported,
+			"/policy/legacy_auth_blocked":                        componentsdk.CodeNotRead,
 		},
 		"audit": {
 			"/app_security/authorized_third_party_apps_count":        componentsdk.CodeNotRead,
@@ -2415,12 +2436,13 @@ func TestLeftOutIDPPostureValuesGetTheirCodes(t *testing.T) {
 			"/user_security/password_policy_noncompliant_user_count": componentsdk.CodeUnsupported,
 			"/user_security/weak_password_pct":                       componentsdk.CodeUnsupported,
 			"/user_security/weak_password_user_count":                componentsdk.CodeUnsupported,
+			"/policy/legacy_auth_blocked":                            componentsdk.CodeNotRead,
 		},
 	}
 	for level, codes := range want {
 		rec := &componentsdk.Recorder{}
 		c := NewWithClient(Config{Recorder: rec}, nil)
-		c.Artifacts(&OrgPosture{CollectedAtLevel: level, Users: UserMetrics{TotalCount: intPtr(3)}})
+		c.Artifacts(&OrgPosture{CollectedAtLevel: level, Users: UserMetrics{TotalCount: intPtr(3), EnabledCount: intPtr(3)}})
 		got := map[string]componentsdk.Code{}
 		for _, g := range rec.Gaps() {
 			if g.Path == idpPosturePath {
@@ -2445,7 +2467,7 @@ func appSignInOrg(requireFactor bool, apps ...okta.Application) *mockOktaClient 
 		apps:     apps,
 		policies: map[string][]okta.Policy{PolicyTypeSignOn: {{ID: "gsp", Type: PolicyTypeSignOn, Status: "ACTIVE", Priority: 1}}},
 		policyRules: map[string][]okta.PolicyRule{
-			"gsp": {{ID: "r1", Status: "ACTIVE", Priority: 1, Actions: okta.PolicyRuleActions{Signon: signon}}},
+			"gsp": {{ID: "r1", Status: "ACTIVE", Priority: intPtr(1), Actions: okta.PolicyRuleActions{Signon: signon}}},
 		},
 	}
 }

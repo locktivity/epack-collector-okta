@@ -7,6 +7,7 @@ const (
 	StatusPasswordExpired = "PASSWORD_EXPIRED"
 	StatusLockedOut       = "LOCKED_OUT"
 	StatusSuspended       = "SUSPENDED"
+	StatusRecovery        = "RECOVERY"
 )
 
 // App status of a deactivated app.
@@ -59,6 +60,9 @@ const (
 	FactorTypeFastPass = "signed_nonce" // Okta FastPass (device-bound key)
 )
 
+// FactorTypeQuestion is a security question, which is not MFA.
+const FactorTypeQuestion = "question"
+
 // phishingResistantFactorTypes is the set of factor types Okta considers
 // phishing-resistant. FastPass (signed_nonce) is included because it binds to a
 // device-held key, like WebAuthn/U2F.
@@ -70,9 +74,6 @@ var phishingResistantFactorTypes = map[string]bool{
 
 // Role types.
 const RoleTypeSuperAdmin = "SUPER_ADMIN"
-
-// MFA enrollment action that has users enroll when they sign in.
-const MFAActionLogin = "LOGIN"
 
 // Percentage constants.
 const MaxPercentage = 100

@@ -1,9 +1,12 @@
 package collector
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/locktivity/epack-collector-okta/internal/okta"
@@ -24,11 +27,13 @@ type privilegedMetricsCollector struct {
 	privilegedPhishingFactorCount int
 	privilegedUserIDs             map[string]struct{} // Set of privileged user IDs for reuse
 	inventory                     []PrivilegedUser    // Audit-level per-privileged-user rows
+	rolePermissions               rolePermissions     // custom roles' permissions, read once each
 }
 
 func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *userMetricsCollector, level componentsdk.Level) *privilegedMetricsCollector {
 	metrics := &privilegedMetricsCollector{
 		privilegedUserIDs: make(map[string]struct{}),
+		rolePermissions:   rolePermissions{},
 	}
 	if userMetrics.err != nil {
 		// Role assignments name users by ID; without the user list their
@@ -69,20 +74,26 @@ func (c *Collector) collectPrivilegedMetrics(ctx context.Context, userMetrics *u
 			c.warn("privileged access: %s missing from user inventory; skipping", c.item("role-assigned user", userID))
 			continue
 		}
-		if user.Status == StatusDeprovisioned || user.Status == StatusSuspended {
+		if !isEnabled(user.Status) {
 			continue
 		}
 
 		roles, err := c.client.FetchUserRoleAssignments(ctx, userID)
 		if err != nil {
 			err = c.warnSurface("privileged access: failed to fetch roles for "+c.item("user", userID), "okta.roles.read", err)
+		}
+		privileged := false
+		if err == nil {
+			privileged, err = c.holdsPrivilegedRole(ctx, roles, metrics.rolePermissions)
+		}
+		if err != nil {
 			metrics.rolesFailed++
 			if metrics.firstRolesErr == nil {
 				metrics.firstRolesErr = err
 			}
 			continue
 		}
-		if len(roles) == 0 {
+		if !privileged {
 			continue
 		}
 
@@ -223,6 +234,103 @@ func roleAssignmentSource(roles []okta.RoleAssignment) string {
 	}
 }
 
+// readOnlyRoles are the built-in admin roles that can only read.
+var readOnlyRoles = map[string]bool{"READ_ONLY_ADMIN": true, "REPORT_ADMIN": true}
+
+// privilegedPermissionAreas are the areas a custom role's permission must
+// write to for the role to count as privileged: users with their
+// credentials and factors, groups, app assignments, authenticators,
+// policies, identity providers, and authorization servers. Okta names each
+// permission by its area and what it allows, such as
+// okta.users.credentials.resetFactors, and each permission that only reads
+// ends in .read.
+var privilegedPermissionAreas = []string{
+	"okta.users.", "okta.groups.", "okta.apps.assignment.", "okta.authenticators.", "okta.policies.",
+	"okta.identityProviders.", "okta.authzServers.",
+}
+
+// writesAccess reports whether a custom role permission can change who has
+// access, a user's credentials, or sign-in settings. okta.apps.manage
+// includes managing who is assigned to each app.
+func writesAccess(permission string) bool {
+	if strings.HasSuffix(permission, ".read") {
+		return false
+	}
+	if permission == "okta.apps.manage" {
+		return true
+	}
+	for _, area := range privilegedPermissionAreas {
+		if strings.HasPrefix(permission, area) {
+			return true
+		}
+	}
+	return false
+}
+
+// holdsPrivilegedRole reports whether any of a user's roles can change who
+// has access, reset another user's credentials, or change sign-in settings:
+// a built-in role other than those that can only read, or a custom role
+// with a permission that writes access. It reads each custom role's
+// permissions once, and fails when it needs those of a role it cannot read.
+func (c *Collector) holdsPrivilegedRole(ctx context.Context, roles []okta.RoleAssignment, permissions rolePermissions) (bool, error) {
+	var custom []okta.RoleAssignment
+	for _, r := range roles {
+		switch {
+		case strings.EqualFold(r.Type, "CUSTOM"):
+			custom = append(custom, r)
+		case !readOnlyRoles[strings.ToUpper(r.Type)]:
+			return true, nil
+		}
+	}
+	var firstErr error
+	for _, r := range custom {
+		labels, err := c.customRolePermissions(ctx, permissions, r.Role, r.Label)
+		if err != nil {
+			firstErr = cmp.Or(firstErr, err)
+			continue
+		}
+		if slices.ContainsFunc(labels, writesAccess) {
+			return true, nil
+		}
+	}
+	return false, firstErr
+}
+
+// rolePermissions holds the permissions of each custom role read, or the
+// error that kept them from being read, by the role's ID.
+type rolePermissions map[string]permissionsRead
+
+type permissionsRead struct {
+	labels []string
+	err    error
+}
+
+// customRolePermissions returns the permissions of the custom role roleID,
+// labeled label, reading them the first time they are asked for.
+func (c *Collector) customRolePermissions(ctx context.Context, read rolePermissions, roleID, label string) ([]string, error) {
+	if r, ok := read[roleID]; ok {
+		return r.labels, r.err
+	}
+	var r permissionsRead
+	if roleID == "" {
+		r.err = componentsdk.CodeError(componentsdk.CodeInvalidResponse, errors.New("a custom role assignment names no role"))
+		r.err = failed(r.err, c.warn("privileged access: %s", r.err), "")
+	} else if r.labels, r.err = c.client.ListRolePermissions(ctx, roleID); r.err != nil {
+		r.err = c.warnSurface(c.customRoleName(label)+": failed to fetch permissions", "okta.roles.read", r.err)
+	}
+	read[roleID] = r
+	return r.labels, r.err
+}
+
+// customRoleName names a custom admin role in a diagnostic: by its label
+// from the audit level, and as "a custom admin role" below it.
+func (c *Collector) customRoleName(label string) string {
+	if c.level.AtLeast(componentsdk.LevelAudit) {
+		return "custom admin role " + label
+	}
+	return "a custom admin role"
+}
+
 // workflowsAdminRole is Okta's built-in Workflows Administrator role. Okta
 // lists it with the custom roles because it is scoped to the built-in
 // Workflows resource set.
@@ -232,8 +340,9 @@ const workflowsAdminRole = "WORKFLOWS_ADMIN"
 // feature). A 404 means the feature is not licensed; any other failure leaves
 // the inventory out with a gap. Standard built-in roles are surfaced via the
 // per-user inventory. Returns nil below audit level, and an empty list for an
-// org with no custom roles.
-func (c *Collector) collectCustomRoles(ctx context.Context, level componentsdk.Level) []CustomRole {
+// org with no custom roles. The permissions of the roles in read were read
+// for the privileged counts, and are not read again.
+func (c *Collector) collectCustomRoles(ctx context.Context, level componentsdk.Level, read rolePermissions) []CustomRole {
 	if !level.AtLeast(componentsdk.LevelAudit) {
 		return nil
 	}
@@ -256,8 +365,7 @@ func (c *Collector) collectCustomRoles(ctx context.Context, level componentsdk.L
 			continue
 		}
 		row := CustomRole{Name: r.ID, Label: r.Label, Description: r.Description}
-		if permissions, err := c.client.ListRolePermissions(ctx, r.ID); err != nil {
-			err = c.warnSurface(fmt.Sprintf("custom admin role %s: failed to fetch permissions", r.Label), "okta.roles.read", err)
+		if permissions, err := c.customRolePermissions(ctx, read, r.ID, r.Label); err != nil {
 			c.gaps.notCollected(err, rowPointer("/privileged_access/custom_roles", len(result), "permission_count"))
 		} else {
 			row.PermissionCount = intPtr(len(permissions))

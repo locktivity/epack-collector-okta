@@ -60,7 +60,7 @@ epack collect
     "collected_at_level": "trust",
     "org_domain": "company.okta.com",
     "posture": {
-      "mfa_coverage": 85,
+      "mfa_coverage": 87,
       "mfa_enrolled_users_count": 351,
       "mfa_phishing_resistant": 20,
       "mfa_phishing_resistant_users_count": 83,
@@ -68,6 +68,7 @@ epack collect
     },
     "users": {
       "total_count": 412,
+      "enabled_count": 399,
       "password_expired": 2,
       "password_expired_count": 9,
       "locked_out": 0,
@@ -97,8 +98,9 @@ epack collect
     "policy": {
       "policy_count": 2,
       "mfa_required_all": false,
+      "mfa_required_except_exclusions": false,
       "mfa_required_any": true,
-      "mfa_required_coverage_pct": 33,
+      "mfa_required_coverage_pct": 34,
       "mfa_required_users_count": 136,
       "session_lifetime_min_minutes": 15,
       "session_lifetime_max_minutes": 1440,
