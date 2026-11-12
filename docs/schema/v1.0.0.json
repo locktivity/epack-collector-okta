@@ -45,45 +45,45 @@
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
-          "x-epack-denominator": "/users/total_count",
+          "x-epack-denominator": "/users/enabled_count",
           "x-epack-numerator": "mfa_enrolled_users_count",
           "x-epack-rounding": "floor",
-          "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_active_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "pct"},
-          "description": "Percentage of users with any MFA factor enrolled",
+          "x-epack-rollup": {"rows": "/users/inventory", "among": [{"where": "/status", "not_equals": "STAGED"}, {"where": "/status", "not_equals": "PROVISIONED"}, {"where": "/status", "not_equals": "SUSPENDED"}], "where": "/has_active_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "pct"},
+          "description": "Percentage of enabled users with any MFA factor enrolled",
           "x-epack-label": "MFA adoption",
-          "x-epack-summary": "Share of people with at least one active MFA method. Deprovisioned accounts are not counted.",
-          "x-epack-method": "Reads each user's factors and divides the users with an active factor by the users other than deprovisioned ones."
+          "x-epack-summary": "Share of people with an enabled account who have at least one active MFA method. A security question does not count.",
+          "x-epack-method": "Reads each user's factors and divides the enabled users with an active factor other than a security question by the enabled users."
         },
         "mfa_enrolled_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_active_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "count"},
-          "description": "People other than deprovisioned ones with at least one active factor",
+          "x-epack-rollup": {"rows": "/users/inventory", "among": [{"where": "/status", "not_equals": "STAGED"}, {"where": "/status", "not_equals": "PROVISIONED"}, {"where": "/status", "not_equals": "SUSPENDED"}], "where": "/has_active_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "count"},
+          "description": "Enabled users with at least one active factor other than a security question",
           "x-epack-label": "People with MFA",
-          "x-epack-summary": "Number of people with at least one active MFA method, not counting deprovisioned accounts. MFA adoption is this number as a share of total people.",
-          "x-epack-method": "Reads each user's factors and counts the users other than deprovisioned ones with at least one active factor."
+          "x-epack-summary": "Number of people with an enabled account and at least one active MFA method. A security question does not count. MFA adoption is this number as a share of people with an enabled account.",
+          "x-epack-method": "Reads each user's factors and counts the enabled users with at least one active factor other than a security question."
         },
         "mfa_phishing_resistant": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
-          "x-epack-denominator": "/users/total_count",
+          "x-epack-denominator": "/users/enabled_count",
           "x-epack-numerator": "mfa_phishing_resistant_users_count",
           "x-epack-rounding": "floor",
-          "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "pct"},
-          "description": "Percentage of users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)",
+          "x-epack-rollup": {"rows": "/users/inventory", "among": [{"where": "/status", "not_equals": "STAGED"}, {"where": "/status", "not_equals": "PROVISIONED"}, {"where": "/status", "not_equals": "SUSPENDED"}], "where": "/has_phishing_resistant_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "pct"},
+          "description": "Percentage of enabled users with phishing-resistant MFA (WebAuthn/FIDO2, U2F, or Okta FastPass)",
           "x-epack-label": "Phishing-resistant MFA adoption",
-          "x-epack-summary": "Share of people with an active passkey, security key or Okta FastPass. Deprovisioned accounts are not counted.",
-          "x-epack-method": "Reads each user's factors and divides the users with an active WebAuthn, U2F or FastPass factor by the users other than deprovisioned ones."
+          "x-epack-summary": "Share of people with an enabled account who have an active passkey, security key or Okta FastPass.",
+          "x-epack-method": "Reads each user's factors and divides the enabled users with an active WebAuthn, U2F or FastPass factor by the enabled users."
         },
         "mfa_phishing_resistant_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "x-epack-rollup": {"rows": "/users/inventory", "where": "/has_phishing_resistant_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "count"},
-          "description": "People with an active WebAuthn, U2F or FastPass factor",
+          "x-epack-rollup": {"rows": "/users/inventory", "among": [{"where": "/status", "not_equals": "STAGED"}, {"where": "/status", "not_equals": "PROVISIONED"}, {"where": "/status", "not_equals": "SUSPENDED"}], "where": "/has_phishing_resistant_mfa", "equals": true, "truncated": "/users/inventory_truncated", "as": "count"},
+          "description": "Enabled users with an active WebAuthn, U2F or FastPass factor",
           "x-epack-label": "People with phishing-resistant MFA",
-          "x-epack-summary": "Number of people with an active passkey, security key or Okta FastPass. Phishing-resistant MFA adoption is this number as a share of total people.",
-          "x-epack-method": "Reads each user's factors and counts the users with an active WebAuthn, U2F or FastPass factor."
+          "x-epack-summary": "Number of people with an enabled account and an active passkey, security key or Okta FastPass. Phishing-resistant MFA adoption is this number as a share of people with an enabled account.",
+          "x-epack-method": "Reads each user's factors and counts the enabled users with an active WebAuthn, U2F or FastPass factor."
         },
         "sso_coverage": {
           "x-epack-rollup": {"rows": "/apps/inventory", "among": [{"where": "/status", "not_equals": "INACTIVE"}, {"where": "/type", "not_equals": "SERVICE"}, {"where": "/label", "not_equals": "Okta Admin Console"}, {"where": "/label", "not_equals": "Okta Dashboard"}, {"where": "/label", "not_equals": "Okta Browser Plugin"}], "where": "/sso_configured", "equals": true, "truncated": "/apps/inventory_truncated", "as": "pct"},
@@ -127,9 +127,9 @@
           "type": "integer",
           "minimum": 0,
           "x-epack-level": "audit",
-          "description": "Count of non-deprovisioned users with no active MFA",
+          "description": "Count of enabled users with no active MFA factor. A security question does not count",
           "x-epack-label": "People without MFA",
-          "x-epack-summary": "Number of people with no active MFA method. Deprovisioned accounts are not counted."
+          "x-epack-summary": "Number of people with an enabled account and no active MFA method. A security question does not count."
         }
       }
     },
@@ -144,23 +144,32 @@
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "truncated": "inventory_truncated", "as": "count"},
-          "description": "Users other than deprovisioned ones: the population of every user percentage",
+          "description": "Users other than deprovisioned ones, in any other status: the population of the suspended percentage",
           "x-epack-label": "Total people",
-          "x-epack-summary": "Number of people in the directory, not counting deprovisioned accounts. The account-health and MFA adoption percentages are shares of this number.",
+          "x-epack-summary": "Number of people in the directory, not counting deprovisioned accounts. The Suspended accounts percentage is a share of this number.",
           "x-epack-method": "Lists the org's users and counts each one whose status is not DEPROVISIONED."
+        },
+        "enabled_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "x-epack-rollup": {"rows": "inventory", "among": [{"where": "/status", "not_equals": "STAGED"}, {"where": "/status", "not_equals": "PROVISIONED"}, {"where": "/status", "not_equals": "SUSPENDED"}], "truncated": "inventory_truncated", "as": "count"},
+          "description": "Users whose account is enabled, with the status ACTIVE, PASSWORD_EXPIRED, LOCKED_OUT or RECOVERY: the population of every user percentage but suspended",
+          "x-epack-label": "People with enabled accounts",
+          "x-epack-summary": "Number of people whose account is enabled, including those who are locked out or whose password has expired. Staged, provisioned, suspended and deprovisioned accounts are not counted. The account-health and MFA adoption percentages are shares of this number.",
+          "x-epack-method": "Lists the org's users and counts each one whose status is ACTIVE, PASSWORD_EXPIRED, LOCKED_OUT or RECOVERY."
         },
         "password_expired": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
-          "x-epack-denominator": "total_count",
+          "x-epack-denominator": "enabled_count",
           "x-epack-numerator": "password_expired_count",
           "x-epack-rounding": "floor",
-          "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "PASSWORD_EXPIRED", "truncated": "inventory_truncated", "as": "pct"},
-          "description": "Percentage of users with expired passwords",
+          "x-epack-rollup": {"rows": "inventory", "among": [{"where": "/status", "not_equals": "STAGED"}, {"where": "/status", "not_equals": "PROVISIONED"}, {"where": "/status", "not_equals": "SUSPENDED"}], "where": "/status", "equals": "PASSWORD_EXPIRED", "truncated": "inventory_truncated", "as": "pct"},
+          "description": "Percentage of enabled users with expired passwords",
           "x-epack-label": "Expired passwords",
-          "x-epack-summary": "Share of people whose password has expired. Deprovisioned accounts are not counted.",
-          "x-epack-method": "Divides the users with the PASSWORD_EXPIRED status by the users other than deprovisioned ones."
+          "x-epack-summary": "Share of people with an enabled account whose password has expired.",
+          "x-epack-method": "Divides the users with the PASSWORD_EXPIRED status by the enabled users."
         },
         "password_expired_count": {
           "type": ["integer", "null"],
@@ -168,21 +177,21 @@
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "PASSWORD_EXPIRED", "truncated": "inventory_truncated", "as": "count"},
           "description": "People whose password has expired",
           "x-epack-label": "People with expired passwords",
-          "x-epack-summary": "Number of people whose password has expired. The Expired passwords percentage is this number as a share of total people.",
+          "x-epack-summary": "Number of people whose password has expired. The Expired passwords percentage is this number as a share of people with an enabled account.",
           "x-epack-method": "Counts the listed users with the PASSWORD_EXPIRED status."
         },
         "locked_out": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
-          "x-epack-denominator": "total_count",
+          "x-epack-denominator": "enabled_count",
           "x-epack-numerator": "locked_out_count",
           "x-epack-rounding": "floor",
-          "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "LOCKED_OUT", "truncated": "inventory_truncated", "as": "pct"},
-          "description": "Percentage of users currently locked out",
+          "x-epack-rollup": {"rows": "inventory", "among": [{"where": "/status", "not_equals": "STAGED"}, {"where": "/status", "not_equals": "PROVISIONED"}, {"where": "/status", "not_equals": "SUSPENDED"}], "where": "/status", "equals": "LOCKED_OUT", "truncated": "inventory_truncated", "as": "pct"},
+          "description": "Percentage of enabled users currently locked out",
           "x-epack-label": "Locked-out accounts",
-          "x-epack-summary": "Share of people who are locked out, usually after repeated failed sign-ins. Deprovisioned accounts are not counted.",
-          "x-epack-method": "Divides the users with the LOCKED_OUT status by the users other than deprovisioned ones."
+          "x-epack-summary": "Share of people with an enabled account who are locked out, usually after repeated failed sign-ins.",
+          "x-epack-method": "Divides the users with the LOCKED_OUT status by the enabled users."
         },
         "locked_out_count": {
           "type": ["integer", "null"],
@@ -190,28 +199,28 @@
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "LOCKED_OUT", "truncated": "inventory_truncated", "as": "count"},
           "description": "People who are locked out",
           "x-epack-label": "Locked-out people",
-          "x-epack-summary": "Number of people who are locked out. The Locked-out accounts percentage is this number as a share of total people.",
+          "x-epack-summary": "Number of people who are locked out. The Locked-out accounts percentage is this number as a share of people with an enabled account.",
           "x-epack-method": "Counts the listed users with the LOCKED_OUT status."
         },
         "inactive": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
-          "x-epack-denominator": "total_count",
+          "x-epack-denominator": "enabled_count",
           "x-epack-numerator": "inactive_count",
           "x-epack-rounding": "floor",
-          "description": "Percentage of users inactive for 90+ days",
+          "description": "Percentage of enabled users inactive for 90+ days",
           "x-epack-label": "Dormant accounts",
-          "x-epack-summary": "Share of people who have not signed in for 90 days or have never signed in. Deprovisioned accounts are not counted.",
-          "x-epack-method": "Divides the users with no sign-in in the 90 days before the run by the users other than deprovisioned ones."
+          "x-epack-summary": "Share of people with an enabled account who have not signed in for 90 days or have never signed in.",
+          "x-epack-method": "Divides the enabled users with no sign-in in the 90 days before the run by the enabled users."
         },
         "inactive_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "People who haven't signed in for 90 days, or ever",
+          "description": "Enabled users who haven't signed in for 90 days, or ever",
           "x-epack-label": "People with dormant accounts",
-          "x-epack-summary": "Number of people who have not signed in for 90 days or have never signed in. The Dormant accounts percentage is this number as a share of total people.",
-          "x-epack-method": "Counts the users other than deprovisioned ones whose last sign-in is more than 90 days before the run or who have never signed in."
+          "x-epack-summary": "Number of people with an enabled account who have not signed in for 90 days or have never signed in. The Dormant accounts percentage is this number as a share of people with an enabled account.",
+          "x-epack-method": "Counts the enabled users whose last sign-in is more than 90 days before the run or who have never signed in."
         },
         "suspended": {
           "type": ["integer", "null"],
@@ -221,9 +230,9 @@
           "x-epack-numerator": "suspended_count",
           "x-epack-rounding": "floor",
           "x-epack-rollup": {"rows": "inventory", "where": "/status", "equals": "SUSPENDED", "truncated": "inventory_truncated", "as": "pct"},
-          "description": "Percentage of users currently suspended",
+          "description": "Percentage of accounts currently suspended",
           "x-epack-label": "Suspended accounts",
-          "x-epack-summary": "Share of people whose account is suspended. Deprovisioned accounts are not counted.",
+          "x-epack-summary": "Share of accounts that are suspended. Deprovisioned accounts are not counted.",
           "x-epack-method": "Divides the users with the SUSPENDED status by the users other than deprovisioned ones."
         },
         "suspended_count": {
@@ -512,23 +521,23 @@
           "type": ["integer", "null"],
           "minimum": 0,
           "x-epack-rollup": {"rows": "inventory", "as": "count"},
-          "description": "Count of active users with any effective Okta admin role",
+          "description": "Count of enabled users with an Okta admin role that can change access, credentials or sign-in settings",
           "x-epack-label": "Admins",
-          "x-epack-summary": "Number of people with any Okta admin role. Suspended and deprovisioned accounts are not counted.",
-          "x-epack-method": "Reads the roles of each user with an admin role assignment and counts those who hold a role and are not suspended or deprovisioned."
+          "x-epack-summary": "Number of people with an enabled account and an Okta admin role that can change who has access, reset credentials, or change sign-in settings. Read-Only and Report Administrators, and custom roles that can only read, are not counted.",
+          "x-epack-method": "Reads the roles of each enabled user with an admin role assignment and counts those who hold a built-in role other than READ_ONLY_ADMIN and REPORT_ADMIN, or a custom role with a permission, read from the role, that writes users, groups, app assignments, authenticators, policies, identity providers or authorization servers."
         },
         "super_admin_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Count of active users with the SUPER_ADMIN role",
+          "description": "Count of enabled users with the SUPER_ADMIN role",
           "x-epack-label": "Super admins",
-          "x-epack-summary": "Number of people with the Super Administrator role, which can do every admin task. Suspended and deprovisioned accounts are not counted.",
+          "x-epack-summary": "Number of people with an enabled account and the Super Administrator role, which can do every admin task.",
           "x-epack-method": "Counts the admins whose role assignments include SUPER_ADMIN."
         },
         "standing_privileged_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Count of active users with standing privileged access",
+          "description": "Count of enabled users with standing privileged access",
           "x-epack-label": "Always-on admins",
           "x-epack-summary": "Number of admins whose access is always on. Every Okta admin role assignment is counted as standing.",
           "x-epack-method": "Counts every admin, since each Okta admin role assignment is treated as standing access."
@@ -689,16 +698,24 @@
         },
         "mfa_required_all": {
           "type": ["boolean", "null"],
-          "x-epack-denominator": "/users/total_count",
+          "x-epack-denominator": "/users/enabled_count",
           "x-epack-numerator": "mfa_required_users_count",
-          "description": "Whether MFA is required for all non-deprovisioned users after evaluating active policies and rules",
+          "description": "Whether MFA is required for every enabled user after evaluating active policies and rules",
           "x-epack-label": "MFA required for everyone",
-          "x-epack-summary": "Whether the active policies require MFA for every person. Deprovisioned accounts are not counted.",
-          "x-epack-method": "Checks whether the MFA requirement covers every user other than deprovisioned ones."
+          "x-epack-summary": "Whether the active sign-on policies require MFA, or block sign-in, for every person with an enabled account.",
+          "x-epack-method": "Checks whether the MFA requirement covers every enabled user."
+        },
+        "mfa_required_except_exclusions": {
+          "type": ["boolean", "null"],
+          "x-epack-null": "The org has no enabled users",
+          "description": "Whether MFA is required for every enabled user once the users and groups that policies and rules exclude by name are set aside",
+          "x-epack-label": "MFA required apart from exceptions",
+          "x-epack-summary": "Whether the active sign-on policies require MFA, or block sign-in, for every person with an enabled account, apart from the people and groups a policy or rule names as exceptions, such as break-glass accounts.",
+          "x-epack-method": "Checks whether the MFA requirement would cover every enabled user if no policy or rule excluded a user or group. The excluded users still count as not covered in mfa_required_users_count."
         },
         "mfa_required_any": {
           "type": ["boolean", "null"],
-          "description": "Whether MFA is required for at least one non-deprovisioned user after evaluating active policies and rules",
+          "description": "Whether MFA is required for at least one enabled user after evaluating active policies and rules",
           "x-epack-label": "MFA required for some",
           "x-epack-summary": "Whether the active policies require MFA for at least one person.",
           "x-epack-method": "Checks whether the MFA requirement covers at least one user."
@@ -707,21 +724,21 @@
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
-          "x-epack-denominator": "/users/total_count",
+          "x-epack-denominator": "/users/enabled_count",
           "x-epack-numerator": "mfa_required_users_count",
           "x-epack-rounding": "floor",
-          "description": "Percentage of non-deprovisioned users covered by an MFA requirement",
+          "description": "Percentage of enabled users covered by an MFA requirement",
           "x-epack-label": "MFA requirement coverage",
-          "x-epack-summary": "Share of people that the active policies require to use MFA. Deprovisioned accounts are not counted.",
-          "x-epack-method": "Divides the users an MFA requirement covers by the users other than deprovisioned ones."
+          "x-epack-summary": "Share of people with an enabled account that the active sign-on policies require to use MFA, or block.",
+          "x-epack-method": "Divides the users an MFA requirement covers by the enabled users."
         },
         "mfa_required_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "description": "People covered by an MFA requirement",
           "x-epack-label": "People required to use MFA",
-          "x-epack-summary": "Number of people that the active policies require to use MFA. MFA requirement coverage is this number as a share of total people.",
-          "x-epack-method": "Counts the users who must use a factor at every sign-in their sign-on rules allow, or whose first matching enrollment rule is set to LOGIN. Policies and rules are read in Okta's priority order, and a policy with no rule for the user leaves them to the next policy. A rule with a network zone or another sign-in condition covers only the sign-ins that meet it."
+          "x-epack-summary": "Number of people with an enabled account that the active sign-on policies require to use MFA, or block. MFA requirement coverage is this number as a share of people with an enabled account.",
+          "x-epack-method": "Counts the enabled users whose every sign-in must use a factor or is denied by their sign-on rules. Policies and rules are read in Okta's priority order, and a policy with no rule for the user leaves them to the next policy. A rule with a network zone, a managed-device condition or another sign-in condition covers only the sign-ins that meet it, and rules for the network and for outside it can together cover every sign-in. MFA enrollment rules are not counted, since people enroll once."
         },
         "session_lifetime_min_minutes": {
           "type": ["integer", "null"],
@@ -823,9 +840,9 @@
                     },
                     "priority": {
                       "type": "integer",
-                      "description": "The rule's priority within its policy. Okta evaluates lower numbers first.",
+                      "description": "The rule's priority within its policy. Okta evaluates lower numbers first. Absent when Okta sends no priority, and such a rule is evaluated last.",
                       "x-epack-label": "Rule priority",
-                      "x-epack-summary": "The rule's order within its policy. Lower numbers are evaluated first."
+                      "x-epack-summary": "The rule's order within its policy. Lower numbers are evaluated first. Left out when Okta gives the rule no priority, and the rule is evaluated last."
                     },
                     "status": {
                       "type": "string",
@@ -932,30 +949,32 @@
       "properties": {
         "managed_device_required": {
           "type": ["boolean", "null"],
-          "description": "Whether any sign-on policy rule requires managed devices",
+          "x-epack-denominator": "/users/enabled_count",
+          "x-epack-numerator": "managed_device_required_users_count",
+          "description": "Whether every enabled user is covered by a managed device requirement",
           "x-epack-label": "Managed device required",
-          "x-epack-summary": "Whether any active sign-on rule requires a managed device.",
-          "x-epack-method": "Checks whether any active rule of an active sign-on policy has a managed-device condition."
+          "x-epack-summary": "Whether the active sign-on rules block every sign-in from a device that is not managed, for every person with an enabled account.",
+          "x-epack-method": "Checks whether a managed-device requirement covers every enabled user."
         },
         "managed_device_required_coverage_pct": {
           "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 100,
-          "x-epack-denominator": "/users/total_count",
+          "x-epack-denominator": "/users/enabled_count",
           "x-epack-numerator": "managed_device_required_users_count",
           "x-epack-rounding": "floor",
-          "description": "Percentage of users covered by a managed device requirement",
+          "description": "Percentage of enabled users covered by a managed device requirement",
           "x-epack-label": "Managed device coverage",
-          "x-epack-summary": "Share of people covered by a managed-device requirement. Deprovisioned accounts are not counted.",
-          "x-epack-method": "Divides the users a managed-device requirement covers by the users other than deprovisioned ones."
+          "x-epack-summary": "Share of people with an enabled account covered by a managed-device requirement.",
+          "x-epack-method": "Divides the users a managed-device requirement covers by the enabled users."
         },
         "managed_device_required_users_count": {
           "type": ["integer", "null"],
           "minimum": 0,
           "description": "People covered by a managed device requirement",
           "x-epack-label": "People required to use a managed device",
-          "x-epack-summary": "Number of people covered by a managed-device requirement. Managed device coverage is this number as a share of total people.",
-          "x-epack-method": "Counts the users other than deprovisioned ones whose first matching active sign-on rule has a managed-device condition."
+          "x-epack-summary": "Number of people with an enabled account whose sign-ins from a device that is not managed are blocked. Managed device coverage is this number as a share of people with an enabled account.",
+          "x-epack-method": "Counts the enabled users whose sign-on rules deny every sign-in from a device that is not managed. A rule with a managed-device condition applies only to managed devices, so other devices go on to the next rule. Policies and rules are read in Okta's priority order."
         },
         "managed_device_required_for_admins": {
           "type": ["boolean", "null"],
@@ -972,7 +991,7 @@
           "description": "Admins covered by a managed device requirement",
           "x-epack-label": "Admins required to use a managed device",
           "x-epack-summary": "Number of admins covered by a managed-device requirement. Managed device for admins is true when this equals the number of admins.",
-          "x-epack-method": "Counts the admins whose first matching active sign-on rule has a managed-device condition."
+          "x-epack-method": "Counts the admins whose sign-on rules deny every sign-in from a device that is not managed."
         },
         "device_assurance_policies_count": {
           "type": ["integer", "null"],

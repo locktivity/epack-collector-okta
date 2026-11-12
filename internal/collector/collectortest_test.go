@@ -191,8 +191,11 @@ func kitLargeOrgScenario() collectortest.Scenario {
 		return map[string]any{"call": call, "operation": factors, "step": "people", "attempt": 2, "start_ms": 0, "waited_ms": waited, "status": 200}
 	}
 	pins := newKitPins().appSignIn(kitAuditScopes, granted)
+	// Three of the people with a factor are suspended, so 1,118 of the 1,189
+	// with an enabled account have MFA.
 	pins.detailed["/users/total_count"] = 1192
-	pins.detailed["/posture/mfa_enrolled_users_count"] = 1121
+	pins.detailed["/users/enabled_count"] = 1189
+	pins.detailed["/posture/mfa_enrolled_users_count"] = 1118
 	pins.detailed["/posture/mfa_coverage"] = 94
 	pins.detailed["/system_log"] = collectortest.Absent
 	pins.result["/steps/1"] = map[string]any{

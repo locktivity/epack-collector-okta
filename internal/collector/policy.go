@@ -16,8 +16,11 @@ type policyMetricsCollector struct {
 	groupsErr        error // a policy group's members could not be read
 	policyCount      int
 	mfaRequiredUsers int
-	sessionLifetime  minMax
-	idleTimeout      minMax
+	// mfaRequiredExceptExclusions counts the users the MFA requirement
+	// covers when no policy or rule excludes anyone by name.
+	mfaRequiredExceptExclusions int
+	sessionLifetime             minMax
+	idleTimeout                 minMax
 	// Shared data for device access metrics
 	signOnPolicies []scopedPolicy
 	groupMembers   groupMembership
@@ -60,30 +63,29 @@ func (c *Collector) collectPolicyMetrics(ctx context.Context, userMetrics *userM
 	}
 
 	// Group members only serve the per-user coverage, which needs the users
-	// and the sign-on policies.
+	// and the sign-on policies. Enrollment policies have people enroll once,
+	// and do not require MFA at sign-in.
 	if userMetrics.err != nil || metrics.signOnErr != nil {
 		return metrics
 	}
 	c.status("Resolving policy group memberships...")
-	groupMembers, err := c.fetchGroupMembersForPolicies(ctx, allPolicies, nil)
+	groupMembers, err := c.fetchGroupMembersForPolicies(ctx, signOnPolicies, nil)
 	if err != nil {
 		metrics.groupsErr = c.warnSurface("policy group memberships", "okta.groups.read", err)
 	}
 	metrics.groupMembers = groupMembers
 
-	if firstError(metrics.signOnErr, metrics.enrollErr, metrics.groupsErr) != nil {
+	if metrics.groupsErr != nil {
 		return metrics
 	}
-	total := int64(len(userMetrics.users))
-	for i, user := range userMetrics.users {
-		c.progress(int64(i+1), total, fmt.Sprintf("Evaluating MFA policy coverage for user %d of %d", i+1, len(userMetrics.users)))
-
-		if user.Status == StatusDeprovisioned {
-			continue
-		}
-
-		if userCoveredByMFARequirement(user.ID, signOnPolicies, mfaEnrollPolicies, groupMembers) {
+	users := userMetrics.enabled()
+	for i, user := range users {
+		c.progress(int64(i+1), int64(len(users)), fmt.Sprintf("Evaluating MFA policy coverage for user %d of %d", i+1, len(users)))
+		if userCoveredByMFARequirement(user.ID, signOnPolicies, groupMembers, true) {
 			metrics.mfaRequiredUsers++
+		}
+		if userCoveredByMFARequirement(user.ID, signOnPolicies, groupMembers, false) {
+			metrics.mfaRequiredExceptExclusions++
 		}
 	}
 
@@ -108,15 +110,17 @@ func (c *Collector) fillPolicy(p *OrgPosture, users *userMetricsCollector, apps 
 		p.Policy.IdleTimeoutMaxMinutes = m.idleTimeout.max
 	}
 
-	if err := firstError(users.err, m.signOnErr, m.enrollErr, m.groupsErr); err != nil {
-		c.gaps.notCollected(err, "/policy/mfa_required_all", "/policy/mfa_required_any", "/policy/mfa_required_coverage_pct", "/policy/mfa_required_users_count")
+	if err := firstError(users.err, m.signOnErr, m.groupsErr); err != nil {
+		c.gaps.notCollected(err, "/policy/mfa_required_all", "/policy/mfa_required_except_exclusions", "/policy/mfa_required_any",
+			"/policy/mfa_required_coverage_pct", "/policy/mfa_required_users_count")
 	} else {
-		total := users.totalUsers
+		total := users.enabledUsers
 		p.Policy.MFARequiredCoveragePct = percent(m.mfaRequiredUsers, total)
 		p.Policy.MFARequiredUsersCount = intPtr(m.mfaRequiredUsers)
 		p.Policy.MFARequiredAny = boolPtr(m.mfaRequiredUsers > 0)
 		if total > 0 {
 			p.Policy.MFARequiredAll = boolPtr(m.mfaRequiredUsers == total)
+			p.Policy.MFARequiredExceptExclusions = boolPtr(m.mfaRequiredExceptExclusions == total)
 		}
 	}
 
@@ -148,12 +152,12 @@ func (m *policyMetricsCollector) updateSignOnTimeouts(policies []scopedPolicy) {
 // internal level it also attaches per-rule condition / action details.
 func policySummary(sp scopedPolicy, level componentsdk.Level) PolicySummary {
 	summary := PolicySummary{
-		Name:         sp.policy.Name,
-		Type:         sp.policy.Type,
-		Status:       sp.policy.Status,
-		Priority:     sp.policy.Priority,
-		RuleCount:    len(sp.rules),
-		people:       sp.policy.Conditions.People,
+		Name:      sp.policy.Name,
+		Type:      sp.policy.Type,
+		Status:    sp.policy.Status,
+		Priority:  sp.policy.Priority,
+		RuleCount: len(sp.rules),
+		people:    sp.policy.Conditions.People,
 	}
 	if level.AtLeast(componentsdk.LevelInternal) {
 		summary.Rules = make([]PolicyRuleDetail, 0, len(sp.rules))
@@ -262,8 +266,8 @@ func (c *Collector) fetchActivePoliciesWithRules(ctx context.Context, policyType
 			return nil, err
 		}
 
-		sort.Slice(rules, func(i, j int) bool {
-			return rules[i].Priority < rules[j].Priority
+		sort.SliceStable(rules, func(i, j int) bool {
+			return rulePriorityBefore(rules[i].Priority, rules[j].Priority)
 		})
 
 		result = append(result, scopedPolicy{
@@ -273,6 +277,15 @@ func (c *Collector) fetchActivePoliciesWithRules(ctx context.Context, policyType
 	}
 
 	return result, nil
+}
+
+// rulePriorityBefore reports whether a rule of priority a is evaluated
+// before one of priority b. Okta evaluates a rule with no priority last.
+func rulePriorityBefore(a, b *int) bool {
+	if a == nil || b == nil {
+		return a != nil
+	}
+	return *a < *b
 }
 
 // fetchGroupMembersForPolicies reads the members of each group the policies
@@ -332,18 +345,20 @@ func (mm *minMax) observe(value int) {
 }
 
 // PolicyConfig contains aggregated policy settings across all active policies.
-// A value is null when a policy read it needs failed; mfa_required_all and
-// mfa_required_coverage_pct are also null when the org has no users.
+// A value is null when a policy read it needs failed; mfa_required_all,
+// mfa_required_except_exclusions and mfa_required_coverage_pct are also null
+// when the org has no enabled users.
 type PolicyConfig struct {
-	PolicyCount               *int  `json:"policy_count"`                 // Number of active sign-on policies
-	MFARequiredAll            *bool `json:"mfa_required_all"`             // MFA is required for all non-deprovisioned users
-	MFARequiredAny            *bool `json:"mfa_required_any"`             // MFA is required for at least one non-deprovisioned user
-	MFARequiredCoveragePct    *int  `json:"mfa_required_coverage_pct"`    // % of non-deprovisioned users covered by an MFA requirement
-	MFARequiredUsersCount     *int  `json:"mfa_required_users_count"`     // Non-deprovisioned users covered by an MFA requirement
-	SessionLifetimeMinMinutes *int  `json:"session_lifetime_min_minutes"` // Shortest session lifetime across active sign-on rules
-	SessionLifetimeMaxMinutes *int  `json:"session_lifetime_max_minutes"` // Longest session lifetime across active sign-on rules
-	IdleTimeoutMinMinutes     *int  `json:"idle_timeout_min_minutes"`     // Shortest idle timeout across active sign-on rules
-	IdleTimeoutMaxMinutes     *int  `json:"idle_timeout_max_minutes"`     // Longest idle timeout across active sign-on rules
+	PolicyCount                 *int  `json:"policy_count"`                   // Number of active sign-on policies
+	MFARequiredAll              *bool `json:"mfa_required_all"`               // MFA is required for every enabled user
+	MFARequiredExceptExclusions *bool `json:"mfa_required_except_exclusions"` // MFA is required for every enabled user once named exclusions are set aside
+	MFARequiredAny              *bool `json:"mfa_required_any"`               // MFA is required for at least one enabled user
+	MFARequiredCoveragePct      *int  `json:"mfa_required_coverage_pct"`      // % of enabled users covered by an MFA requirement
+	MFARequiredUsersCount       *int  `json:"mfa_required_users_count"`       // Enabled users covered by an MFA requirement
+	SessionLifetimeMinMinutes   *int  `json:"session_lifetime_min_minutes"`   // Shortest session lifetime across active sign-on rules
+	SessionLifetimeMaxMinutes   *int  `json:"session_lifetime_max_minutes"`   // Longest session lifetime across active sign-on rules
+	IdleTimeoutMinMinutes       *int  `json:"idle_timeout_min_minutes"`       // Shortest idle timeout across active sign-on rules
+	IdleTimeoutMaxMinutes       *int  `json:"idle_timeout_max_minutes"`       // Longest idle timeout across active sign-on rules
 
 	// Audit-level field.
 	Policies []PolicySummary `json:"policies,omitempty"`
@@ -355,12 +370,23 @@ type PolicyConfig struct {
 	appsErr           error
 }
 
-// mfaRequirementUnread returns whether app sign-in policies may require MFA
-// of people the sign-on and enrollment policies leave out. It is true when
-// those policies leave someone out and an active app has an app sign-in
-// policy, or the app list could not be read.
+// mfaRequirementUnread returns whether app sign-in policies may make
+// mfa_required true where the sign-on policies leave it false. It is true
+// when those policies leave out someone they do not exclude by name and an
+// active app has an app sign-in policy, or the app list could not be read.
 func (p PolicyConfig) mfaRequirementUnread() bool {
-	if p.MFARequiredAll == nil || *p.MFARequiredAll {
+	return p.mayRequireMore(p.MFARequiredExceptExclusions)
+}
+
+// mfaCoverageUnread returns whether app sign-in policies may require MFA of
+// people the sign-on policies leave out, excluded people among them, and so
+// raise mfa_required_users_count.
+func (p PolicyConfig) mfaCoverageUnread() bool {
+	return p.mayRequireMore(p.MFARequiredAll)
+}
+
+func (p PolicyConfig) mayRequireMore(required *bool) bool {
+	if required == nil || *required {
 		return false
 	}
 	return p.appSignInPolicies || p.appsErr != nil
@@ -384,7 +410,7 @@ type PolicySummary struct {
 // PolicyRuleDetail captures a policy rule's conditions and actions (internal).
 type PolicyRuleDetail struct {
 	Name     string `json:"name"`
-	Priority int    `json:"priority"`
+	Priority *int   `json:"priority,omitempty"` // absent when Okta sends none
 	Status   string `json:"status"`
 
 	// Conditions.

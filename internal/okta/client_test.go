@@ -325,7 +325,10 @@ func TestFetchApplications(t *testing.T) {
 
 func TestFetchPolicies(t *testing.T) {
 	policies := []Policy{
-		{ID: "policy1", Status: "ACTIVE", Type: "OKTA_SIGN_ON"},
+		{ID: "policy1", Status: "ACTIVE", Type: "OKTA_SIGN_ON", Conditions: PolicyConditions{People: &PolicyPeopleCondition{Groups: &struct {
+			Include []string `json:"include,omitempty"`
+			Exclude []string `json:"exclude,omitempty"`
+		}{Include: []string{"00g-everyone"}}}}},
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

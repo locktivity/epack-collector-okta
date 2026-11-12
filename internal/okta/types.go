@@ -50,6 +50,7 @@ type RoleAssignment struct {
 	ID             string `json:"id"`
 	Label          string `json:"label"`
 	Type           string `json:"type"`
+	Role           string `json:"role"` // the custom role's ID, for type CUSTOM
 	Status         string `json:"status"`
 	AssignmentType string `json:"assignmentType"` // USER or GROUP
 }
@@ -163,6 +164,11 @@ type PolicyPeopleCondition struct {
 	} `json:"users,omitempty"`
 }
 
+// includesGroups reports whether the condition includes any group.
+func (p *PolicyPeopleCondition) includesGroups() bool {
+	return p != nil && p.Groups != nil && len(p.Groups.Include) > 0
+}
+
 // PolicySettings contains policy settings.
 type PolicySettings struct {
 	// Password policy settings
@@ -262,8 +268,8 @@ type DelegationSettings struct {
 type PolicyRule struct {
 	ID         string               `json:"id"`
 	Name       string               `json:"name"`
-	Status     string               `json:"status"` // ACTIVE, INACTIVE
-	Priority   int                  `json:"priority"`
+	Status     string               `json:"status"`   // ACTIVE, INACTIVE
+	Priority   *int                 `json:"priority"` // nil when Okta sends none, which it evaluates last
 	System     bool                 `json:"system"`
 	Type       string               `json:"type"`
 	Conditions PolicyRuleConditions `json:"conditions"`

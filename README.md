@@ -134,10 +134,11 @@ See [docs/schema/v1.0.0.json](docs/schema/v1.0.0.json) for the full JSON schema.
 
 Each percentage sits beside the count it is computed from, such as
 `posture.mfa_enrolled_users_count` for `posture.mfa_coverage`, and is rounded
-down: 85 is `floor(100 × 351 ÷ 412)`. The schema names each percentage's count
+down: 87 is `floor(100 × 351 ÷ 399)`. The schema names each percentage's count
 and population, and the SDK checks the arithmetic every time the collector
-emits. `mfa_required_all` and `managed_device_required_for_admins` name their
-counts too, and are true when the count is the whole population.
+emits. `mfa_required_all`, `managed_device_required` and
+`managed_device_required_for_admins` name their counts too, and are true when
+the count is the whole population.
 
 ### Partial collection and exit codes
 
@@ -163,8 +164,8 @@ a code such as `permission_denied`, `rate_limited`, or `not_licensed`, along wit
 the API operations the collector called and the identity it signed in as. The
 `diagnostics.warnings` entries remain. A percentage is also `null` when its
 population is empty, such as `mfa_coverage` in an org with no users;
-`users.total_count` and `apps.total_count` give those populations, and the
-percentage's count is 0.
+`users.enabled_count`, `users.total_count` and `apps.total_count` give those
+populations, and the percentage's count is 0.
 
 Each gap names the call that failed, by operation and call number, and the line
 of the collector that recorded it. A `permission_denied` gap names the scope to
@@ -181,12 +182,14 @@ In `artifacts/okta.idp-posture.json`, a value Okta does not report at all, such
 as `weak_password_pct`, is left out with an `unsupported` gap. A value Okta
 reports that is not read yet is left out with a `not_read` gap. These are
 `policy.phishing_resistant_required_for_privileged`, which Okta reports in
-`ACCESS_POLICY` rules, and `app_security.authorized_third_party_apps_count`,
-which Okta reports as each user's app grants. `policy.mfa_required`,
-`mfa_required_coverage_pct` and `mfa_required_user_count` get a `not_read` gap
-too when the sign-on and enrollment policies leave someone out and an active
-app has an app sign-in policy. That policy can require MFA in its
-`ACCESS_POLICY` rules. A `not_read` gap does not make a run partial.
+`ACCESS_POLICY` rules, `policy.legacy_auth_blocked`, which Okta sets in each
+app's sign-in policy, and `app_security.authorized_third_party_apps_count`,
+which Okta reports as each user's app grants. `policy.mfa_required_coverage_pct`
+and `mfa_required_user_count` get a `not_read` gap too when the sign-on policies
+leave someone out and an active app has an app sign-in policy. That policy can
+require MFA in its `ACCESS_POLICY` rules. `policy.mfa_required` gets one when
+someone they leave out is not excluded by name. A `not_read` gap does not make
+a run partial.
 
 The collector result also lists the run's steps, from `sign_in` to
 `org_settings`, with the calls each one made; a trust run has the first six. It

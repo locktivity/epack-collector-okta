@@ -14,7 +14,8 @@ import (
 // userMetricsCollector holds intermediate user collection state.
 type userMetricsCollector struct {
 	err                  error // the user list could not be read
-	totalUsers           int
+	totalUsers           int   // users other than deprovisioned ones
+	enabledUsers         int   // users whose account is enabled; see isEnabled
 	mfaEnrolledCount     int
 	mfaPhishingResistant int
 	passwordExpired      int
@@ -37,6 +38,46 @@ type userMetricsCollector struct {
 // factorFailures counts the users whose factors could not be read.
 func (m *userMetricsCollector) factorFailures() int {
 	return len(m.factorErrs)
+}
+
+// enabledFactorFailures counts the enabled users whose factors could not be
+// read, and returns the first such failure.
+func (m *userMetricsCollector) enabledFactorFailures() (int, error) {
+	failed, first := 0, error(nil)
+	for _, u := range m.users {
+		err, ok := m.factorErrs[u.ID]
+		if !ok || !isEnabled(u.Status) {
+			continue
+		}
+		failed++
+		if first == nil {
+			first = err
+		}
+	}
+	return failed, first
+}
+
+// enabled returns the users whose account is enabled, in list order.
+func (m *userMetricsCollector) enabled() []okta.User {
+	var users []okta.User
+	for _, u := range m.users {
+		if isEnabled(u.Status) {
+			users = append(users, u)
+		}
+	}
+	return users
+}
+
+// isEnabled reports whether a user's account is enabled: the person can
+// sign in, or could once they unlock their account or reset their
+// password. Staged and provisioned users have not finished activating, and
+// suspended and deprovisioned users cannot sign in.
+func isEnabled(status string) bool {
+	switch status {
+	case StatusActive, StatusPasswordExpired, StatusLockedOut, StatusRecovery:
+		return true
+	}
+	return false
 }
 
 // loginByID maps each listed user's ID to their login.
@@ -107,7 +148,7 @@ func (c *Collector) fillUsers(p *OrgPosture, m *userMetricsCollector, level comp
 	audit := level.AtLeast(componentsdk.LevelAudit)
 	if m.err != nil {
 		c.gaps.notCollected(m.err,
-			"/users/total_count", "/users/password_expired", "/users/password_expired_count", "/users/locked_out", "/users/locked_out_count",
+			"/users/total_count", "/users/enabled_count", "/users/password_expired", "/users/password_expired_count", "/users/locked_out", "/users/locked_out_count",
 			"/users/inactive", "/users/inactive_count", "/users/suspended", "/users/suspended_count",
 			"/posture/mfa_coverage", "/posture/mfa_enrolled_users_count", "/posture/mfa_phishing_resistant", "/posture/mfa_phishing_resistant_users_count")
 		if audit {
@@ -116,22 +157,23 @@ func (c *Collector) fillUsers(p *OrgPosture, m *userMetricsCollector, level comp
 		return
 	}
 
-	total := m.totalUsers
-	p.Users.TotalCount = intPtr(total)
+	total := m.enabledUsers
+	p.Users.TotalCount = intPtr(m.totalUsers)
+	p.Users.EnabledCount = intPtr(total)
 	p.Users.PasswordExpired = percent(m.passwordExpired, total)
 	p.Users.PasswordExpiredCount = intPtr(m.passwordExpired)
 	p.Users.LockedOut = percent(m.lockedOut, total)
 	p.Users.LockedOutCount = intPtr(m.lockedOut)
 	p.Users.Inactive = percent(m.inactive, total)
 	p.Users.InactiveCount = intPtr(m.inactive)
-	p.Users.Suspended = percent(m.suspended, total)
+	p.Users.Suspended = percent(m.suspended, m.totalUsers)
 	p.Users.SuspendedCount = intPtr(m.suspended)
 
-	if failed := m.factorFailures(); failed > 0 {
-		c.gaps.partial(failed, m.firstFactorErr,
+	if failed, firstErr := m.enabledFactorFailures(); failed > 0 {
+		c.gaps.partial(failed, firstErr,
 			"/posture/mfa_coverage", "/posture/mfa_enrolled_users_count", "/posture/mfa_phishing_resistant", "/posture/mfa_phishing_resistant_users_count")
 		if audit {
-			c.gaps.partial(failed, m.firstFactorErr, "/posture/mfa_disabled_users_count")
+			c.gaps.partial(failed, firstErr, "/posture/mfa_disabled_users_count")
 		}
 	} else {
 		p.Posture.MFACoverage = percent(m.mfaEnrolledCount, total)
@@ -167,9 +209,12 @@ func (c *Collector) processUser(ctx context.Context, user okta.User, inactiveThr
 	}
 
 	metrics.totalUsers++
-
-	if user.LastLogin.IsZero() || user.LastLogin.Before(inactiveThreshold) {
-		metrics.inactive++
+	enabled := isEnabled(user.Status)
+	if enabled {
+		metrics.enabledUsers++
+		if user.LastLogin.IsZero() || user.LastLogin.Before(inactiveThreshold) {
+			metrics.inactive++
+		}
 	}
 
 	switch user.Status {
@@ -181,7 +226,7 @@ func (c *Collector) processUser(ctx context.Context, user okta.User, inactiveThr
 		metrics.suspended++
 	}
 
-	factors, factorsErr := c.processUserFactors(ctx, user.ID, metrics, level)
+	factors, factorsErr := c.processUserFactors(ctx, user.ID, enabled, metrics, level)
 
 	if level.AtLeast(componentsdk.LevelAudit) {
 		row := userInventoryRow(user)
@@ -247,11 +292,13 @@ func classifyUserType(user okta.User) string {
 	return "Human"
 }
 
-// processUserFactors checks MFA factors for a user, updating aggregate metrics.
-// At internal level it returns the user's active factors as inventory rows. A
-// user whose factors could not be read is counted as unmeasured, never as
-// unenrolled.
-func (c *Collector) processUserFactors(ctx context.Context, userID string, metrics *userMetricsCollector, level componentsdk.Level) ([]UserFactor, error) {
+// processUserFactors checks MFA factors for a user, updating aggregate
+// metrics, and counts an enabled user among the users with MFA. At internal
+// level it returns the user's active factors as inventory rows. A user whose
+// factors could not be read is counted as unmeasured, never as unenrolled.
+// A security question is a factor but not MFA, since it is something the
+// person knows, as a password is.
+func (c *Collector) processUserFactors(ctx context.Context, userID string, enabled bool, metrics *userMetricsCollector, level componentsdk.Level) ([]UserFactor, error) {
 	factors, err := c.client.FetchUserFactors(ctx, userID)
 	if err != nil {
 		err = c.warnSurface(c.item("user", userID)+": failed to fetch MFA factors", "okta.users.read", err)
@@ -272,9 +319,10 @@ func (c *Collector) processUserFactors(ctx context.Context, userID string, metri
 			continue
 		}
 
-		hasMFA = true
-
 		factorType := strings.ToLower(factor.FactorType)
+		if factorType != FactorTypeQuestion {
+			hasMFA = true
+		}
 		if phishingResistantFactorTypes[factorType] {
 			hasPhishingResistant = true
 		}
@@ -295,10 +343,10 @@ func (c *Collector) processUserFactors(ctx context.Context, userID string, metri
 		}
 	}
 
-	if hasMFA {
+	if enabled && hasMFA {
 		metrics.mfaEnrolledCount++
 	}
-	if hasPhishingResistant {
+	if enabled && hasPhishingResistant {
 		metrics.mfaPhishingResistant++
 	}
 
@@ -382,7 +430,8 @@ func (c *Collector) collectAuthenticatorMetrics(ctx context.Context, userMetrics
 // Audit adds the per-user inventory (login + status + type + created-at). Internal
 // adds per-user activity timestamps, factor lists, and group membership.
 type UserMetrics struct {
-	TotalCount           *int `json:"total_count"`            // Users other than deprovisioned ones; the population of the user percentages
+	TotalCount           *int `json:"total_count"`            // Users other than deprovisioned ones; the population of the suspended percentage
+	EnabledCount         *int `json:"enabled_count"`          // Users whose account is enabled; the population of the other user percentages
 	PasswordExpired      *int `json:"password_expired"`       // % users with expired passwords
 	PasswordExpiredCount *int `json:"password_expired_count"` // Users with expired passwords
 	LockedOut            *int `json:"locked_out"`             // % users currently locked out

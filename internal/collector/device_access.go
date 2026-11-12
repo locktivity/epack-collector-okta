@@ -72,10 +72,7 @@ func (c *Collector) collectDeviceAccessMetrics(
 
 	// Evaluate per-user coverage
 	c.status("Evaluating device access coverage...")
-	for _, user := range userMetrics.users {
-		if user.Status == StatusDeprovisioned {
-			continue
-		}
+	for _, user := range userMetrics.enabled() {
 		if userCoveredByManagedDeviceRequirement(user.ID, policy.signOnPolicies, policy.groupMembers) {
 			metrics.managedDeviceRequiredUsers++
 
@@ -107,18 +104,16 @@ func (c *Collector) fillDeviceAccess(p *OrgPosture, users *userMetricsCollector,
 		}
 	}
 
-	if policy.signOnErr != nil {
-		c.gaps.notCollected(policy.signOnErr, "/device_access/managed_device_required")
-	} else {
-		p.DeviceAccess.ManagedDeviceRequired = boolPtr(anySignOnRuleRequiresManagedDevice(policy.signOnPolicies))
-	}
-
 	coverageErr := firstError(users.err, policy.signOnErr, policy.groupsErr)
 	if coverageErr != nil {
-		c.gaps.notCollected(coverageErr, "/device_access/managed_device_required_coverage_pct", "/device_access/managed_device_required_users_count")
+		c.gaps.notCollected(coverageErr, "/device_access/managed_device_required", "/device_access/managed_device_required_coverage_pct",
+			"/device_access/managed_device_required_users_count")
 	} else {
-		p.DeviceAccess.ManagedDeviceRequiredCoveragePct = percent(m.managedDeviceRequiredUsers, users.totalUsers)
+		p.DeviceAccess.ManagedDeviceRequiredCoveragePct = percent(m.managedDeviceRequiredUsers, users.enabledUsers)
 		p.DeviceAccess.ManagedDeviceRequiredUsersCount = intPtr(m.managedDeviceRequiredUsers)
+		if users.enabledUsers > 0 {
+			p.DeviceAccess.ManagedDeviceRequired = boolPtr(m.managedDeviceRequiredUsers == users.enabledUsers)
+		}
 	}
 
 	forAdmins := []string{"/device_access/managed_device_required_for_admins", "/device_access/managed_device_required_admins_count"}
@@ -138,13 +133,13 @@ func (c *Collector) fillDeviceAccess(p *OrgPosture, users *userMetricsCollector,
 }
 
 // DeviceAccessMetrics contains device access enforcement posture. A value is
-// null when a read it needs failed; managed_device_required_coverage_pct is
-// also null when the org has no users, and managed_device_required_for_admins
-// when it has no privileged users.
+// null when a read it needs failed; managed_device_required and its
+// coverage are also null when the org has no enabled users, and
+// managed_device_required_for_admins when it has no privileged users.
 //
 // Audit adds the per-device-assurance-policy summary.
 type DeviceAccessMetrics struct {
-	ManagedDeviceRequired            *bool `json:"managed_device_required"`              // Whether any sign-on policy rule requires managed devices
+	ManagedDeviceRequired            *bool `json:"managed_device_required"`              // Whether every enabled user is covered by a managed device requirement
 	ManagedDeviceRequiredCoveragePct *int  `json:"managed_device_required_coverage_pct"` // % of users covered by a managed device requirement
 	ManagedDeviceRequiredUsersCount  *int  `json:"managed_device_required_users_count"`  // Users covered by a managed device requirement
 	ManagedDeviceRequiredForAdmins   *bool `json:"managed_device_required_for_admins"`   // Whether all privileged users are covered by a managed device requirement

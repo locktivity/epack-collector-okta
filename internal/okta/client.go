@@ -190,6 +190,13 @@ func (c *Client) get(ctx context.Context, op, path string, dest any) (*http.Resp
 // and hands each page to each. A response that carries no list fails the
 // read, so a missing list never reads as an empty one.
 func listPages[T any](ctx context.Context, c *Client, op, path string, each func([]T) error) error {
+	return listResponses(ctx, c, op, path, func(_ *http.Response, page []T) error { return each(page) })
+}
+
+// listResponses is listPages for a reader that checks each page against
+// the response that carried it.
+func listResponses[T any](ctx context.Context, c *Client, op, path string, each func(*http.Response, []T) error) error {
+	pages := readPages{}
 	for path != "" {
 		var page *[]T
 		resp, err := c.get(ctx, op, path, &page)
@@ -199,12 +206,28 @@ func listPages[T any](ctx context.Context, c *Client, op, path string, each func
 		if page == nil {
 			return invalidResponse(resp, op, "has no list")
 		}
-		if err := each(*page); err != nil {
+		if err := each(resp, *page); err != nil {
 			return err
 		}
-		path = getNextLink(resp)
+		if path, err = pages.next(resp, op, path, getNextLink(resp)); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// readPages holds the pages a list read has requested, so a next link back
+// to one of them fails the read rather than looping.
+type readPages map[string]bool
+
+// next returns the page to read after path, which resp answered, or an
+// error when next names a page already read.
+func (p readPages) next(resp *http.Response, op, path, next string) (string, error) {
+	p[path] = true
+	if p[next] {
+		return "", invalidResponse(resp, op, "links to a page already read")
+	}
+	return next, nil
 }
 
 // listAll reads every page of a list endpoint into one slice.
@@ -248,6 +271,7 @@ func (c *Client) FetchUsersWithRoleAssignments(ctx context.Context, callback fun
 	const op = "okta.iam.assignees.list"
 	path := fmt.Sprintf("/api/v1/iam/assignees/users?limit=%d", paginationLimit)
 
+	pages := readPages{}
 	for path != "" {
 		var page RoleAssignedUsersResponse
 		resp, err := c.get(ctx, op, path, &page)
@@ -261,9 +285,12 @@ func (c *Client) FetchUsersWithRoleAssignments(ctx context.Context, callback fun
 			return err
 		}
 
-		path = ""
+		next := ""
 		if page.Links.Next != nil && page.Links.Next.Href != "" {
-			path = getPathAndQuery(page.Links.Next.Href)
+			next = getPathAndQuery(page.Links.Next.Href)
+		}
+		if path, err = pages.next(resp, op, path, next); err != nil {
+			return err
 		}
 	}
 
@@ -293,9 +320,26 @@ func (c *Client) FetchApplications(ctx context.Context, callback func([]Applicat
 	return listPages(ctx, c, "okta.apps.list", fmt.Sprintf("/api/v1/apps?limit=%d", paginationLimit), callback)
 }
 
-// FetchPolicies fetches all policies of a given type.
+// FetchPolicies fetches all policies of a given type. Okta scopes each
+// sign-on, MFA enrollment and password policy to the groups it includes,
+// and the default policy includes the Everyone group. An active policy that
+// includes no group fails the read, since who it applies to is unknown.
 func (c *Client) FetchPolicies(ctx context.Context, policyType string) ([]Policy, error) {
-	return listAll[Policy](ctx, c, "okta.policies.list", "/api/v1/policies?type="+url.QueryEscape(policyType))
+	const op = "okta.policies.list"
+	policies := []Policy{}
+	err := listResponses(ctx, c, op, "/api/v1/policies?type="+url.QueryEscape(policyType), func(resp *http.Response, page []Policy) error {
+		for _, p := range page {
+			if p.Status == "ACTIVE" && !p.Conditions.People.includesGroups() {
+				return invalidResponse(resp, op, "has an active policy that includes no group")
+			}
+		}
+		policies = append(policies, page...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return policies, nil
 }
 
 // FetchPolicyRules fetches all rules for a policy.
@@ -398,6 +442,7 @@ func (c *Client) ListIAMRoles(ctx context.Context) ([]IAMRole, error) {
 	path := fmt.Sprintf("/api/v1/iam/roles?limit=%d", paginationLimit)
 	roles := []IAMRole{}
 
+	pages := readPages{}
 	for path != "" {
 		var page IAMRolesResponse
 		resp, err := c.get(ctx, op, path, &page)
@@ -409,9 +454,12 @@ func (c *Client) ListIAMRoles(ctx context.Context) ([]IAMRole, error) {
 		}
 		roles = append(roles, *page.Roles...)
 
-		path = ""
+		next := ""
 		if page.Links.Next != nil && page.Links.Next.Href != "" {
-			path = getPathAndQuery(page.Links.Next.Href)
+			next = getPathAndQuery(page.Links.Next.Href)
+		}
+		if path, err = pages.next(resp, op, path, next); err != nil {
+			return nil, err
 		}
 	}
 

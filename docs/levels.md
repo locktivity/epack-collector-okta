@@ -145,10 +145,11 @@ an empty list when the org has no custom admin roles.
 
 Every percentage is `floor(100 × count ÷ population)`, with its count beside it,
 so its arithmetic can be redone from the artifact: `mfa_coverage` is
-`mfa_enrolled_users_count` of `users.total_count`. A count left out with a gap
+`mfa_enrolled_users_count` of `users.enabled_count`. A count left out with a gap
 leaves its percentage out with the same gap. Over a population of 0, the count
 is 0 and the percentage is `null`. At audit and internal, the status-based
-user counts and `users.total_count` also match the rows of the user inventory,
+user counts, `users.total_count` and `users.enabled_count` also match the rows
+of the user inventory,
 unless the inventory was cut short (see Truncation); the MFA counts match the
 rows' MFA flags at internal. Inactive apps, API service apps and Okta's own
 default apps are left out of the app counts and listed in the app inventory.
