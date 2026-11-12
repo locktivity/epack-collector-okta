@@ -312,7 +312,7 @@ func kitSurfaceResponses(t *mockOktaClient) []collectortest.Response {
 	}
 
 	responses = append(responses, collectortest.Response{URL: listed("/api/v1/apps"), Body: kitList(t.apps)})
-	for _, policyType := range []string{PolicyTypeSignOn, PolicyTypeMFAEnroll, PolicyTypePassword} {
+	for _, policyType := range []string{PolicyTypeSignOn, PolicyTypeMFAEnroll, PolicyTypePassword, PolicyTypeIdPDiscovery} {
 		responses = append(responses, collectortest.Response{URL: kitBase + "/api/v1/policies?type=" + policyType, Body: kitList(t.policies[policyType])})
 		for _, p := range t.policies[policyType] {
 			responses = append(responses, collectortest.Response{URL: kitBase + "/api/v1/policies/" + p.ID + "/rules", Body: kitList(t.policyRules[p.ID])})

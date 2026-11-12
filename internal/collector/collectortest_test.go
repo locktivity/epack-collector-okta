@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"sort"
 	"testing"
 
@@ -212,11 +213,11 @@ func kitLargeOrgScenario() collectortest.Scenario {
 	pins.row(213, throttled(214)).row(214, retried(214, 1052)).
 		row(538, throttled(538)).row(539, retried(538, 1003)).
 		row(874, throttled(873)).row(875, retried(873, 1068)).
-		row(1000, map[string]any{"call": 1243, "operation": "okta.logs.list", "step": "system_log", "attempt": 1, "start_ms": 0, "status": 403, "vendor_code": "E0000006"})
+		row(1000, map[string]any{"call": 1244, "operation": "okta.logs.list", "step": "system_log", "attempt": 1, "start_ms": 0, "status": 403, "vendor_code": "E0000006"})
 	pins.result["/calls/requests/1001"] = collectortest.Absent
-	pins.result["/calls/requests_dropped"] = 248
+	pins.result["/calls/requests_dropped"] = 249
 	pins.result["/calls/problem_requests_dropped"] = 0
-	pins.onlyGap(kitOAuthGap(kitRefusedLogGap(1243, "okta.logs.read", "system log: access denied (403; grant okta.logs.read and an admin role that can read it)")))
+	pins.onlyGap(kitOAuthGap(kitRefusedLogGap(1244, "okta.logs.read", "system log: access denied (403; grant okta.logs.read and an admin role that can read it)")))
 	return collectortest.Scenario{
 		Name:      "large org with throttled factor reads and a refused system log read",
 		Config:    map[string]any{"level": "audit"},
@@ -266,7 +267,7 @@ func TestCollectorKit(t *testing.T) {
 				// An API token has no scopes, so the gap names none.
 				Name:      "system log refused for the API token's owner",
 				Responses: append([]collectortest.Response{kitLogsRefused()}, kitResponses(kitTenant())...),
-				Expect: newKitPins().onlyGap(kitRefusedLogGap(42, "",
+				Expect: newKitPins().onlyGap(kitRefusedLogGap(43, "",
 					"system log: access denied (403; the API token's owner needs an admin role that can read it)")).expect(),
 			},
 		},
@@ -322,7 +323,7 @@ func TestCollectorKitOAuth(t *testing.T) {
 				Name:      "system log refused for the service app's admin role",
 				Config:    map[string]any{"level": "audit"},
 				Responses: append([]collectortest.Response{kitLogsRefused()}, kitOAuthResponsesGranting(kitTenant(), kitAuditScopes)...),
-				Expect: newKitPins().appSignIn(kitAuditScopes, kitAuditScopes).onlyGap(kitOAuthGap(kitRefusedLogGap(33, "",
+				Expect: newKitPins().appSignIn(kitAuditScopes, kitAuditScopes).onlyGap(kitOAuthGap(kitRefusedLogGap(34, "",
 					"system log: access denied (403; okta.logs.read is granted, so the service app needs an admin role that can read it)"))).expect(),
 			},
 		}, kitRecordings(t, "okta")...),
@@ -349,7 +350,7 @@ func kitRecordings(t *testing.T, names ...string) []collectortest.Scenario {
 		case err != nil:
 			t.Fatal(err)
 		default:
-			out = append(out, kitEndRecordedSystemLog(kitRefilterRecordedSystemLog(sc)))
+			out = append(out, kitAnswerRecordedRouting(kitEndRecordedSystemLog(kitRefilterRecordedSystemLog(sc))))
 		}
 	}
 	return out
@@ -373,6 +374,18 @@ func kitRefilterRecordedSystemLog(sc collectortest.Scenario) collectortest.Scena
 		q.Set("filter", buildSystemLogFilter())
 		u.RawQuery = q.Encode()
 		sc.Responses[i].URL = u.String()
+	}
+	return sc
+}
+
+// kitAnswerRecordedRouting answers the IdP routing policy list with an
+// empty one when the recording has no answer for it. The recording was made
+// before the collector read the routing rules. Record the sandbox again to
+// replace it with Okta's answer.
+func kitAnswerRecordedRouting(sc collectortest.Scenario) collectortest.Scenario {
+	routing := kitBase + "/api/v1/policies?type=" + PolicyTypeIdPDiscovery
+	if !slices.ContainsFunc(sc.Responses, func(r collectortest.Response) bool { return r.URL == routing }) {
+		sc.Responses = append(sc.Responses, collectortest.Response{Operation: "okta.policies.list", URL: routing, Body: "[]"})
 	}
 	return sc
 }

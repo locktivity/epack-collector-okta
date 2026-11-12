@@ -143,6 +143,11 @@ func (o *OrgPosture) ToIDPPosture() *IDPPosture {
 		InactivePct:                share(o.Users.InactiveCount, users, componentsdk.RoundUp),
 		LockedOutPct:               share(o.Users.LockedOutCount, users, componentsdk.RoundUp),
 	}
+	usersElsewhere := len(o.elsewhere.users) > 0 || o.elsewhere.err != nil
+	if usersElsewhere {
+		userSecurity.MFAUserCount, userSecurity.PhishingResistantUserCount = nil, nil
+		userSecurity.MFACoveragePct, userSecurity.MFAPhishingResistantPct = Percentage{}, Percentage{}
+	}
 	if userSecurity != (IDPPostureUserSecurity{}) {
 		posture.UserSecurity = &userSecurity
 	}
@@ -173,6 +178,10 @@ func (o *OrgPosture) ToIDPPosture() *IDPPosture {
 		StandingPrivilegedUsersPresent:       present(pa.StandingPrivilegedUsersCount),
 		StandingPrivilegedUsersCount:         atAudit(pa.StandingPrivilegedUsersCount),
 	}
+	if len(o.elsewhere.admins) > 0 || o.elsewhere.err != nil {
+		privileged.PrivilegedMFAUserCount, privileged.PrivilegedPhishingResistantUserCount = nil, nil
+		privileged.PrivilegedMFACoveragePct, privileged.PrivilegedPhishingResistantPct = Percentage{}, Percentage{}
+	}
 	if privileged != (IDPPosturePrivilegedAccess{}) {
 		posture.PrivilegedAccess = &privileged
 	}
@@ -193,9 +202,12 @@ func (o *OrgPosture) ToIDPPosture() *IDPPosture {
 	if o.Policy.mfaRequirementUnread() {
 		policy.MFARequired = nil
 	}
-	if o.Policy.mfaCoverageUnread() {
+	if o.Policy.mfaCoverageUnread() || usersElsewhere {
 		policy.MFARequiredUserCount = nil
 		policy.MFARequiredCoveragePct = Percentage{}
+	}
+	if usersElsewhere {
+		policy.MFARequired = nil
 	}
 	if policy != (IDPPosturePolicy{}) {
 		posture.Policy = &policy

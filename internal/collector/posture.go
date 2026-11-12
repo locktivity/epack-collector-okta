@@ -99,6 +99,10 @@ type OrgPosture struct {
 	OrgSettings       *OrgSettings       `json:"org_settings,omitempty"`
 
 	Diagnostics *Diagnostics `json:"diagnostics,omitempty"`
+
+	// elsewhere is who signs in through another identity provider, whose
+	// MFA values the normalized artifact leaves out.
+	elsewhere signInElsewhere
 }
 
 // Diagnostics contains warnings encountered during collection. It distinguishes

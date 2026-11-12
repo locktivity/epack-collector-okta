@@ -155,6 +155,12 @@ Aggregated security policy settings across the active sign-on policies. An MFA e
 | `idle_timeout_min_minutes` | **Strictest idle policy.** The shortest idle timeout across active sign-on rules. Protects high-risk users from unattended sessions. |
 | `idle_timeout_max_minutes` | **Most permissive idle timeout.** The longest idle timeout across active sign-on rules. Users under this policy stay logged in longer when inactive. |
 
+### Users who sign in through another identity provider
+
+Okta's IdP routing rules can send a user's sign-ins to another identity provider, such as a partner's SAML provider or Google, and that provider decides whether the user uses MFA. The collector reads the routing rules with `okta.policies.read` at every level. A user they can send elsewhere, on any sign-in, signs in through that provider, and so does a user Okta holds no password for, whose credentials provider is `FEDERATION` or `SOCIAL`. Rules that send sign-ins to Okta itself, its desktop single sign-on (`IWA`, `AgentlessDSSO`) or its smart card provider (`X509`) don't count.
+
+When an enabled user signs in through another provider, `okta.idp-posture.json` leaves out `user_security.mfa_user_count`, `phishing_resistant_user_count`, `mfa_coverage_pct` and `mfa_phishing_resistant_pct`, and `policy.mfa_required`, `mfa_required_user_count` and `mfa_required_coverage_pct`, with an `unsupported` gap. When an admin does, the `privileged_access` MFA values are left out the same way. At the `audit` level and above the gap names the providers, read from `/api/v1/idps`. When the routing rules can't be read, the same values are left out with the read's gap. `okta.details.json` still reports the factors users enrolled in Okta.
+
 ### device_access
 
 Device access enforcement posture based on sign-on policy rule conditions.

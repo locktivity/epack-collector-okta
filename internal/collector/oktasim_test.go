@@ -36,6 +36,18 @@ import (
 // collector app's scopes and admin roles, the authenticators,
 // the network zones, and custom admin roles (custom_roles, by name, with
 // their permissions). Group key everyone is Okta's Everyone group.
+//
+// An account's signs_in_through is a key of the identity_providers extra,
+// each a SAML 2.0 provider with a name, and optionally more login domains
+// its routing rule sends to it (domains) and a network zone the rule is
+// limited to (zone). Okta's IdP routing policy has a rule for each
+// provider, ahead of its Default Rule, which sends the account's login
+// there, by domain where no account that signs in elsewhere shares it.
+// Okta lists none of such an account's factors, which the other provider
+// holds. An account's provider extra is its credentials provider, such as
+// FEDERATION for one a provider created, and routed false leaves it out of
+// the routing rules, which only an account Okta holds no password for can
+// do.
 type oktaSim struct {
 	r        *roster.Roster
 	rec      *simulate.Recorded
@@ -119,6 +131,7 @@ func (s *oktaSim) responses() []collectortest.Response {
 	s.roles()
 	s.apps()
 	s.policies()
+	s.routing()
 	s.surfaces()
 	return s.t.Responses()
 }
@@ -173,7 +186,23 @@ func (s *oktaSim) user(op string, a roster.Account) any {
 		simulate.Set(u, "profile/userType", userType)
 	}
 	simulate.Set(u, "_links/self/href", kitBase+"/api/v1/users/"+id)
+	provider := s.provider(a)
+	simulate.Set(u, "credentials/provider", map[string]any{"type": provider, "name": provider})
+	if !simPasswordProviders[provider] {
+		simulate.Drop(u, "credentials/password")
+	}
 	return u
+}
+
+// simPasswordProviders are the credentials providers that check a password
+// Okta holds or delegates. FEDERATION and SOCIAL accounts have none and
+// sign in only through an identity provider.
+var simPasswordProviders = map[string]bool{"OKTA": true, "ACTIVE_DIRECTORY": true, "LDAP": true, "IMPORT": true}
+
+func (s *oktaSim) provider(a roster.Account) string {
+	provider := "OKTA"
+	simulate.Extra(a.Extra, "provider", &provider)
+	return provider
 }
 
 func (s *oktaSim) users() {
@@ -184,11 +213,15 @@ func (s *oktaSim) users() {
 		id := s.userIDs[a.Key]
 		var pending []string
 		simulate.Extra(a.Extra, "pending_factors", &pending)
+		methods := a.Methods
+		if a.SignsInThrough != "" {
+			methods = nil
+		}
 		var factors []any
-		for i, method := range append(slices.Clone(a.Methods), pending...) {
+		for i, method := range append(slices.Clone(methods), pending...) {
 			f := s.rec.Like("okta.users.factors.list", "", func(m map[string]any) bool { return m["factorType"] == method })
 			f["id"], f["factorType"], f["status"] = simulate.Base62("fct", 17, "factor", a.Key+method), method, "ACTIVE"
-			if i >= len(a.Methods) {
+			if i >= len(methods) {
 				f["status"] = "PENDING_ACTIVATION"
 			}
 			factors = append(factors, f)
@@ -578,6 +611,148 @@ func (s *oktaSim) signOnRule(policy map[string]any, p roster.Policy) any {
 	return rule
 }
 
+// simIdP is an identity_providers extra.
+type simIdP struct {
+	Name    string   `json:"name"`
+	Domains []string `json:"domains"`
+	Zone    string   `json:"zone"`
+}
+
+func simIdPID(key string) string { return simulate.Base62("0oa", 17, "idp", key) }
+
+// routing answers the identity providers and the IdP routing policy, which
+// every org has. Neither is in the recording, whose org has no identity
+// provider, so their items follow Okta's API reference and its examples.
+func (s *oktaSim) routing() {
+	var idps map[string]simIdP
+	simulate.Extra(s.r.Extra, "identity_providers", &idps)
+	routed := map[string][]roster.Account{}
+	for _, a := range s.listed() {
+		route := a.SignsInThrough != ""
+		simulate.Extra(a.Extra, "routed", &route)
+		switch {
+		case a.SignsInThrough == "" && route:
+			panic("oktaSim: account " + a.Key + " is routed and signs in through no identity provider")
+		case a.SignsInThrough == "" && !simPasswordProviders[s.provider(a)]:
+			panic("oktaSim: account " + a.Key + " has no password and signs in through no identity provider")
+		case a.SignsInThrough != "" && !route && simPasswordProviders[s.provider(a)]:
+			panic("oktaSim: account " + a.Key + " signs in through " + a.SignsInThrough + " with no routing rule, and has a password")
+		}
+		if _, ok := idps[a.SignsInThrough]; a.SignsInThrough != "" && !ok {
+			panic("oktaSim: account " + a.Key + " signs in through " + a.SignsInThrough + ", which is no identity provider")
+		}
+		if route {
+			routed[a.SignsInThrough] = append(routed[a.SignsInThrough], a)
+		}
+	}
+	keys := slices.Sorted(maps.Keys(idps))
+
+	var list []any
+	for _, key := range keys {
+		idp, id := idps[key], simIdPID(key)
+		list = append(list, map[string]any{
+			"id": id, "type": "SAML2", "name": cmp.Or(idp.Name, key), "status": "ACTIVE",
+			"created": s.at(400), "lastUpdated": s.at(400),
+			"protocol": map[string]any{
+				"type": "SAML2",
+				"endpoints": map[string]any{
+					"sso": map[string]any{"url": "https://" + key + ".example/sso", "binding": "HTTP-POST", "destination": "https://" + key + ".example/sso"},
+					"acs": map[string]any{"binding": "HTTP-POST", "type": "INSTANCE"},
+				},
+				"credentials": map[string]any{"trust": map[string]any{"issuer": "https://" + key + ".example", "audience": "https://www.okta.com/saml2/service-provider/sim", "kid": simulate.UUID("kid", key)}},
+			},
+			"policy": map[string]any{
+				"provisioning": map[string]any{"action": "AUTO", "profileMaster": true, "groups": map[string]any{"action": "NONE"},
+					"conditions": map[string]any{"deprovisioned": map[string]any{"action": "NONE"}, "suspended": map[string]any{"action": "NONE"}}},
+				"accountLink":  map[string]any{"filter": nil, "action": "AUTO"},
+				"subject":      map[string]any{"userNameTemplate": map[string]any{"template": "idpuser.subjectNameId"}, "filter": "", "matchType": "USERNAME"},
+				"mapAMRClaims": false, "maxClockSkew": 0,
+			},
+			"_links": map[string]any{"users": map[string]any{"href": kitBase + "/api/v1/idps/" + id + "/users"}},
+		})
+	}
+	s.t.List("okta.idps.list", kitBase+"/api/v1/idps?limit=200", reads("okta.idps.read"), simLinked(), list)
+
+	policy := s.rec.Like("okta.policies.list", "", func(m map[string]any) bool { return m["system"] == true })
+	id := simulate.Base62("00p", 17, "policy", "IDP_DISCOVERY")
+	policy["id"], policy["type"], policy["name"], policy["description"] = id, "IDP_DISCOVERY", "Idp Discovery Policy", "Idp Discovery Policy"
+	policy["priority"], policy["status"], policy["conditions"] = 1, "ACTIVE", nil
+	delete(policy, "settings")
+	simulate.Set(policy, "_links/rules/href", kitBase+"/api/v1/policies/"+id+"/rules")
+	s.t.List("okta.policies.list", kitBase+"/api/v1/policies?type=IDP_DISCOVERY", reads("okta.policies.read"), simulate.LinkHeader{}, []any{policy})
+
+	var zones map[string]struct{ Name string }
+	simulate.Extra(s.r.Extra, "network_zones", &zones)
+	rule := func(key, name string, priority int, system bool, conditions map[string]any, providers []any) any {
+		ruleID := simulate.Base62("0pr", 17, "rule", "IDP_DISCOVERY"+key)
+		return map[string]any{
+			"id": ruleID, "status": "ACTIVE", "name": name, "priority": priority, "system": system, "type": "IDP_DISCOVERY",
+			"created": s.at(400), "lastUpdated": s.at(400), "conditions": conditions,
+			"actions": map[string]any{"idp": map[string]any{"providers": providers, "idpSelectionType": "SPECIFIC"}},
+			"_links": map[string]any{"self": map[string]any{"href": kitBase + "/api/v1/policies/" + id + "/rules/" + ruleID,
+				"hints": map[string]any{"allow": []string{"GET", "PUT", "DELETE"}}}},
+		}
+	}
+	var rules []any
+	for _, key := range keys {
+		idp := idps[key]
+		patterns := s.patterns(key, routed[key], idp.Domains)
+		if len(patterns) == 0 {
+			continue
+		}
+		network := map[string]any{"connection": "ANYWHERE"}
+		if idp.Zone != "" {
+			if _, ok := zones[idp.Zone]; !ok {
+				panic("oktaSim: identity provider " + key + " is limited to " + idp.Zone + ", which is no network zone")
+			}
+			network = map[string]any{"connection": "ZONE", "include": []string{simulate.Base62("nzo", 17, "zone", idp.Zone)}}
+		}
+		conditions := map[string]any{"network": network, "userIdentifier": map[string]any{"type": "IDENTIFIER", "patterns": patterns}}
+		rules = append(rules, rule(key, "Route to "+cmp.Or(idp.Name, key), len(rules)+1, false, conditions, []any{map[string]any{"type": "SAML2", "id": simIdPID(key)}}))
+	}
+	rules = append(rules, rule("default", "Default Rule", len(rules)+1, true, map[string]any{"network": map[string]any{"connection": "ANYWHERE"}}, []any{map[string]any{"type": "OKTA"}}))
+	s.t.Get("okta.policies.rules.list", kitBase+"/api/v1/policies/"+id+"/rules?", reads("okta.policies.read"), rules)
+}
+
+// patterns are a routing rule's user identifier patterns for the accounts
+// it routes and the domains it adds: a domain suffix where every listed
+// account with a login there is routed to the same provider, and the login
+// otherwise.
+func (s *oktaSim) patterns(key string, routed []roster.Account, domains []string) []any {
+	loginOf := func(a roster.Account) string {
+		login := strings.ReplaceAll(a.Key, "_", ".") + "@example.com"
+		simulate.Extra(a.Extra, "login", &login)
+		return strings.ToLower(login)
+	}
+	domainOf := func(login string) string { return login[strings.LastIndex(login, "@")+1:] }
+	sameDomain := func(domain string) bool {
+		return !slices.ContainsFunc(s.listed(), func(a roster.Account) bool {
+			return domainOf(loginOf(a)) == domain && (a.SignsInThrough != key || !slices.ContainsFunc(routed, func(r roster.Account) bool { return r.Key == a.Key }))
+		})
+	}
+	var out []any
+	seen := map[string]bool{}
+	for _, d := range domains {
+		if !sameDomain(d) {
+			panic("oktaSim: the routing rule for " + key + " sends " + d + ", where an account signs in elsewhere")
+		}
+		out = append(out, map[string]any{"matchType": "SUFFIX", "value": d})
+		seen[d] = true
+	}
+	for _, a := range routed {
+		login := loginOf(a)
+		switch d := domainOf(login); {
+		case seen[d]:
+		case sameDomain(d):
+			out = append(out, map[string]any{"matchType": "SUFFIX", "value": d})
+			seen[d] = true
+		default:
+			out = append(out, map[string]any{"matchType": "EQUALS", "value": login})
+		}
+	}
+	return nonNil(out)
+}
+
 // surfaces answers the reads no normalized value comes from: device
 // assurance, authenticators, zones, identity providers, API tokens, hooks,
 // the System Log, and the org.
@@ -618,7 +793,6 @@ func (s *oktaSim) surfaces() {
 	s.t.Get("okta.device_assurances.list", kitBase+"/api/v1/device-assurances?", reads("okta.deviceAssurance.read"), []any{})
 	s.t.Get("okta.authenticators.list", kitBase+"/api/v1/authenticators?", reads("okta.authenticators.read"), nonNil(auths))
 	s.t.List("okta.zones.list", kitBase+"/api/v1/zones?limit=200", reads("okta.networkZones.read"), simLinked(), zoneList)
-	s.t.List("okta.idps.list", kitBase+"/api/v1/idps?limit=200", reads("okta.idps.read"), simLinked(), nil)
 	s.t.Get("okta.api_tokens.list", kitBase+"/api/v1/api-tokens?", simulate.Needs([]string{"okta.apiTokens.read"}, simSuperAdmin), []any{})
 	s.t.Get("okta.event_hooks.list", kitBase+"/api/v1/eventHooks?", reads("okta.eventHooks.read"), []any{})
 	s.t.Get("okta.inline_hooks.list", kitBase+"/api/v1/inlineHooks?", reads("okta.inlineHooks.read"), []any{})
