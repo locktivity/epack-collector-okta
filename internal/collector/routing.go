@@ -145,20 +145,21 @@ func holdsPassword(u okta.User) bool {
 }
 
 // matchesUser reports whether a routing rule's user identifier condition
-// can match u. No condition matches everyone. An attribute the user list
-// doesn't give, a pattern type the collector doesn't know, or an expression
-// Go can't compile counts as matching, so a rule that might send u
-// elsewhere does.
+// can match u. No condition matches everyone. The collector reads only the
+// login and email attributes, so a rule on another attribute, a pattern type
+// the collector doesn't know, or an expression Go can't compile counts as
+// matching, and a rule that might send u elsewhere does.
 func matchesUser(cond *okta.UserIdentifierCondition, u okta.User) bool {
 	if cond == nil || len(cond.Patterns) == 0 {
 		return true
 	}
 	value := u.Profile.Login
 	if cond.Type == "ATTRIBUTE" {
-		attributes := map[string]string{"login": u.Profile.Login, "email": u.Profile.Email, "firstName": u.Profile.FirstName,
-			"lastName": u.Profile.LastName, "userType": u.Profile.UserType}
-		var ok bool
-		if value, ok = attributes[cond.Attribute]; !ok {
+		switch cond.Attribute {
+		case "login":
+		case "email":
+			value = u.Profile.Email
+		default:
 			return true
 		}
 	}

@@ -34,6 +34,8 @@ func TestRoutingElsewhere(t *testing.T) {
 	user := defUser("ana", StatusActive, 1)
 	federated := user
 	federated.Credentials.Provider.Type = "FEDERATION"
+	emailed := user
+	emailed.Profile.Email = "ana@partner.example"
 	login := func(matchType, value string) *okta.UserIdentifierCondition {
 		return identifier("IDENTIFIER", "", matchType, value)
 	}
@@ -62,8 +64,9 @@ func TestRoutingElsewhere(t *testing.T) {
 		{"an expression", []okta.PolicyRule{routeRule(1, login("EXPRESSION", `^[a-z]+@acme\.com$`), "SAML2")}, user, []string{"Partner SAML"}},
 		{"an expression that doesn't match", []okta.PolicyRule{routeRule(1, login("EXPRESSION", `^bo@`), "SAML2")}, user, nil},
 		{"an expression Go can't compile", []okta.PolicyRule{routeRule(1, login("EXPRESSION", `(?<=x)a`), "SAML2")}, user, []string{"Partner SAML"}},
-		{"an attribute the user list doesn't give", []okta.PolicyRule{routeRule(1, identifier("ATTRIBUTE", "department", "EQUALS", "Sales"), "SAML2")}, user, []string{"Partner SAML"}},
-		{"an attribute that differs", []okta.PolicyRule{routeRule(1, identifier("ATTRIBUTE", "userType", "EQUALS", "Contractor"), "SAML2")}, user, nil},
+		{"an attribute the collector doesn't read", []okta.PolicyRule{routeRule(1, identifier("ATTRIBUTE", "department", "EQUALS", "Sales"), "SAML2")}, user, []string{"Partner SAML"}},
+		{"an email that differs", []okta.PolicyRule{routeRule(1, identifier("ATTRIBUTE", "email", "SUFFIX", "partner.example"), "SAML2")}, user, nil},
+		{"an email that matches", []okta.PolicyRule{routeRule(1, identifier("ATTRIBUTE", "email", "SUFFIX", "partner.example"), "SAML2")}, emailed, []string{"Partner SAML"}},
 		{"everyone", []okta.PolicyRule{routeRule(1, nil, "SAML2")}, user, []string{"Partner SAML"}},
 		{"an earlier rule to Okta", []okta.PolicyRule{routeRule(1, nil, "OKTA"), routeRule(2, nil, "SAML2")}, user, nil},
 		{"an earlier rule to Okta on one network", []okta.PolicyRule{onNetwork(routeRule(1, nil, "OKTA")), routeRule(2, nil, "SAML2")}, user, []string{"Partner SAML"}},

@@ -10284,7 +10284,7 @@
           "internal/collector/normalized.go:352",
           "internal/collector/normalized.go:355",
           "internal/collector/policy.go:114",
-          "internal/collector/routing.go:252"
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -10469,7 +10469,7 @@
           "internal/collector/normalized.go:352",
           "internal/collector/normalized.go:355",
           "internal/collector/policy.go:114",
-          "internal/collector/routing.go:252"
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -10628,7 +10628,7 @@
           "internal/collector/normalized.go:352",
           "internal/collector/normalized.go:355",
           "internal/collector/policy.go:114",
-          "internal/collector/routing.go:252"
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -10889,7 +10889,7 @@
           "internal/collector/privileged.go:146",
           "internal/collector/privileged.go:151",
           "internal/collector/privileged.go:160",
-          "internal/collector/routing.go:252"
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -11074,7 +11074,7 @@
           "internal/collector/privileged.go:146",
           "internal/collector/privileged.go:151",
           "internal/collector/privileged.go:160",
-          "internal/collector/routing.go:252"
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -11261,7 +11261,7 @@
           "internal/collector/privileged.go:146",
           "internal/collector/privileged.go:151",
           "internal/collector/privileged.go:160",
-          "internal/collector/routing.go:252"
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -11446,7 +11446,7 @@
           "internal/collector/privileged.go:146",
           "internal/collector/privileged.go:151",
           "internal/collector/privileged.go:160",
-          "internal/collector/routing.go:252"
+          "internal/collector/routing.go:253"
         ],
         "copies": [
           {
@@ -12361,7 +12361,7 @@
           }
         ],
         "gaps": [
-          "internal/collector/routing.go:252",
+          "internal/collector/routing.go:253",
           "internal/collector/users.go:150",
           "internal/collector/users.go:173"
         ],
@@ -12544,7 +12544,7 @@
           }
         ],
         "gaps": [
-          "internal/collector/routing.go:252",
+          "internal/collector/routing.go:253",
           "internal/collector/users.go:150",
           "internal/collector/users.go:173"
         ],
@@ -12681,7 +12681,7 @@
           }
         ],
         "gaps": [
-          "internal/collector/routing.go:252",
+          "internal/collector/routing.go:253",
           "internal/collector/users.go:150",
           "internal/collector/users.go:173"
         ],
@@ -12832,7 +12832,7 @@
           }
         ],
         "gaps": [
-          "internal/collector/routing.go:252",
+          "internal/collector/routing.go:253",
           "internal/collector/users.go:150",
           "internal/collector/users.go:173"
         ],
@@ -13720,7 +13720,7 @@
     "internal/collector/routing.go:65": "\t\t\tif _, ok := privileged.privilegedUserIDs[u.ID]; ok {",
     "internal/collector/routing.go:66": "\t\t\t\tadmins[name] = true",
     "internal/collector/routing.go:70": "\treturn signInElsewhere{users: slices.Sorted(maps.Keys(found)), admins: slices.Sorted(maps.Keys(admins))}",
-    "internal/collector/routing.go:252": "\t\t\t\tc.gaps.rec.NotCollected(at, e.err, gapOptions(e.err)...)",
+    "internal/collector/routing.go:253": "\t\t\t\tc.gaps.rec.NotCollected(at, e.err, gapOptions(e.err)...)",
     "internal/collector/system_log.go:134": "func eventTypeCategory(eventType string) string {",
     "internal/collector/system_log.go:135": "\tfor category, types := range securityRelevantEventTypes {",
     "internal/collector/system_log.go:136": "\t\tfor _, t := range types {",
