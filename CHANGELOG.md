@@ -3,6 +3,7 @@
 ## Unreleased
 
 - The collector is built on epack v0.11.0.
+- The trace map, `docs/schema/trace-map.json`, gains the calls and gaps behind group descriptions, identity provider protocols, `DYNAMIC_V2` zones, System Log categories and `org_settings.self_service_recovery_enabled`, and one more gap source for the MFA requirement values. The simulated org tests reach them.
 
 ## v0.5.2
 

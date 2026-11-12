@@ -303,12 +303,10 @@ func TestSimulatedOrgsKit(t *testing.T) {
 		// which the sensitivity check doesn't change.
 		Insensitive:   []string{"okta.token.create", "okta.iam.roles.list", "okta.org.get"},
 		GapOperations: true,
-		// The committed trace map is generated from the kit's tenant, and
-		// the simulated orgs show dependencies it lacks. Okta's IDs are 20
-		// characters, so a failed per-user call's path in a gap's detail,
-		// such as /api/v1/users/<id>/roles, is a run of 40 that redaction
-		// hides, in a real run too.
-		SkipChecks: []string{"tracemap", "redaction"},
+		// Okta's IDs are 20 characters, so a failed per-user call's path in
+		// a gap's detail, such as /api/v1/users/<id>/roles, is a run of 40
+		// that redaction hides, in a real run too.
+		SkipChecks: []string{"redaction"},
 	})
 }
 

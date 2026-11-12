@@ -1972,6 +1972,9 @@
         ]
       },
       "/groups/inventory/*/description": {
+        "operations": [
+          "okta.groups.list"
+        ],
         "code": [
           {
             "role": "condition",
@@ -1997,6 +2000,9 @@
             "role": "assign",
             "line": "internal/collector/groups.go:91"
           }
+        ],
+        "gaps": [
+          "internal/collector/groups.go:67"
         ]
       },
       "/groups/inventory/*/id": {
@@ -2927,6 +2933,9 @@
         ]
       },
       "/identity_providers/count_by_protocol": {
+        "operations": [
+          "okta.idps.list"
+        ],
         "code": [
           {
             "role": "condition",
@@ -2952,6 +2961,9 @@
             "role": "assign",
             "line": "internal/collector/idps.go:60"
           }
+        ],
+        "gaps": [
+          "internal/collector/idps.go:51"
         ]
       },
       "/identity_providers/count_by_protocol/SAML2": {
@@ -3376,6 +3388,9 @@
         ]
       },
       "/network_zones/count_by_type/DYNAMIC_V2": {
+        "operations": [
+          "okta.zones.list"
+        ],
         "code": [
           {
             "role": "condition",
@@ -3401,6 +3416,9 @@
             "role": "assign",
             "line": "internal/collector/network_zones.go:79"
           }
+        ],
+        "gaps": [
+          "internal/collector/network_zones.go:67"
         ]
       },
       "/network_zones/count_by_type/IP": {
@@ -4003,8 +4021,10 @@
       },
       "/org_settings/self_service_recovery_enabled": {
         "operations": [
+          "okta.groups.users.list",
           "okta.org.get",
           "okta.policies.list",
+          "okta.policies.rules.list",
           "okta.users.list"
         ],
         "code": [
@@ -7645,6 +7665,9 @@
         ]
       },
       "/system_log/count_by_category": {
+        "operations": [
+          "okta.logs.list"
+        ],
         "code": [
           {
             "role": "helper",
@@ -7679,6 +7702,9 @@
             "role": "assign",
             "line": "internal/collector/system_log.go:168"
           }
+        ],
+        "gaps": [
+          "internal/collector/system_log.go:154"
         ]
       },
       "/system_log/count_by_category/application": {
@@ -10200,6 +10226,7 @@
         ],
         "gaps": [
           "internal/collector/normalized.go:340",
+          "internal/collector/normalized.go:343",
           "internal/collector/policy.go:114"
         ],
         "copies": [
@@ -10355,6 +10382,7 @@
         ],
         "gaps": [
           "internal/collector/normalized.go:340",
+          "internal/collector/normalized.go:343",
           "internal/collector/policy.go:114"
         ],
         "copies": [
@@ -10464,6 +10492,7 @@
         ],
         "gaps": [
           "internal/collector/normalized.go:340",
+          "internal/collector/normalized.go:343",
           "internal/collector/policy.go:114"
         ],
         "copies": [
@@ -12910,6 +12939,7 @@
     "internal/collector/normalized.go:238": "\treturn Percentage{Value: floatPtr(componentsdk.Percent(*count, *total, rounding)), Read: true}",
     "internal/collector/normalized.go:239": "}",
     "internal/collector/normalized.go:340": "\t\t\tc.gaps.rec.NotCollected(at, p.appsErr, gapOptions(p.appsErr)...)",
+    "internal/collector/normalized.go:343": "\t\tc.gaps.rec.NotCollectedCode(at, componentsdk.CodeNotRead, appSignInMFA)",
     "internal/collector/normalized.go:355": "\t\tc.gaps.rec.NotCollectedCode(componentsdk.Location{Path: idpPosturePath, Pointer: u.pointer}, u.code, u.reason)",
     "internal/collector/normalized.go:359": "func floatPtr(v *int) *float64 {",
     "internal/collector/normalized.go:360": "\tif v == nil {",
