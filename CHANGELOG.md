@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The collector is built on epack v0.11.0.
+
 ## v0.5.2
 
 - The collector is built on Go 1.26.11.
