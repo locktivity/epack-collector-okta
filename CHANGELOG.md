@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## v0.5.5
+
+- The collector is built on epack v0.12.2.
 - The Not Collected section of `docs/overview.md` is rendered from `docs/surface.yaml`, which gives a verdict to every read operation of Okta's published API description that the collector's recordings never call, so the list comes from Okta's description rather than from memory. A new `docs/coverage.md` lists what the collector reads, by area, and every operation it leaves out with the reason.
 
 ## v0.5.4

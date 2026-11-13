@@ -54,9 +54,6 @@ func simHarness(t testing.TB, standing simulate.Differences) simulate.Harness {
 		Recorded:   rec,
 		Unrecorded: simUnrecorded,
 		Coverage:   true,
-		Uncompared: map[string]string{
-			"/privileged_access/privileged_users_present": "roster.Derive in epack v0.11.1 gives it only with the admins' MFA percentages, which it leaves out when an admin signs in through another identity provider",
-		},
 	}
 }
 
