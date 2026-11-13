@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   collector:
-    uses: locktivity/epack/.github/workflows/collector-ci.yaml@cf4107a5798b6b442e821e7ddcff50ceaa82e8a0 # v0.10.0
+    uses: locktivity/epack/.github/workflows/collector-ci.yaml@0230915f198796725c1468b8e41694de14f168df # v0.12.2
     with:
       name: okta
       profile-url: ${{ vars.EVIDENCE_PROFILE_URL }}
