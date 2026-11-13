@@ -223,12 +223,12 @@ func (o *OrgPosture) ToIDPPosture() *IDPPosture {
 		posture.Lifecycle = &lifecycle
 	}
 
-	// Device access - only emit if we have positive evidence
-	if isTrue(o.DeviceAccess.ManagedDeviceRequired) {
-		posture.DeviceAccess = &IDPPostureDeviceAccess{ManagedDeviceRequired: boolPtr(true)}
-		if isTrue(o.DeviceAccess.ManagedDeviceRequiredForAdmins) {
-			posture.DeviceAccess.ManagedDeviceRequiredForAdmins = boolPtr(true)
-		}
+	deviceAccess := IDPPostureDeviceAccess{
+		ManagedDeviceRequired:          o.DeviceAccess.ManagedDeviceRequired,
+		ManagedDeviceRequiredForAdmins: o.DeviceAccess.ManagedDeviceRequiredForAdmins,
+	}
+	if deviceAccess != (IDPPostureDeviceAccess{}) {
+		posture.DeviceAccess = &deviceAccess
 	}
 
 	if posture.UserSecurity == nil && posture.AppSecurity == nil && posture.PrivilegedAccess == nil &&
@@ -383,8 +383,4 @@ func present(count *int) *bool {
 		return nil
 	}
 	return boolPtr(*count > 0)
-}
-
-func isTrue(b *bool) bool {
-	return b != nil && *b
 }

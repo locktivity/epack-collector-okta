@@ -2384,7 +2384,7 @@ func TestToIDPPosture_WithDeviceAccess(t *testing.T) {
 	idpPosture := orgPosture.ToIDPPosture()
 
 	if idpPosture.DeviceAccess == nil {
-		t.Fatal("DeviceAccess = nil, want non-nil when ManagedDeviceRequired is true")
+		t.Fatal("DeviceAccess = nil, want both values written as true")
 	}
 	if idpPosture.DeviceAccess.ManagedDeviceRequired == nil || !*idpPosture.DeviceAccess.ManagedDeviceRequired {
 		t.Error("DeviceAccess.ManagedDeviceRequired = false, want true")
@@ -2394,7 +2394,7 @@ func TestToIDPPosture_WithDeviceAccess(t *testing.T) {
 	}
 }
 
-func TestToIDPPosture_WithoutDeviceAccess(t *testing.T) {
+func TestToIDPPosture_NoManagedDeviceRequirement(t *testing.T) {
 	orgPosture := &OrgPosture{
 		OrgDomain: "test.okta.com",
 		Users:     UserMetrics{TotalCount: intPtr(1), EnabledCount: intPtr(1), Suspended: intPtr(0)},
@@ -2408,10 +2408,11 @@ func TestToIDPPosture_WithoutDeviceAccess(t *testing.T) {
 
 	idpPosture := orgPosture.ToIDPPosture()
 
-	// DeviceAccess should be nil when ManagedDeviceRequired is false (no positive evidence)
-	if idpPosture.DeviceAccess != nil {
-		t.Error("DeviceAccess should be nil when ManagedDeviceRequired is false")
+	if idpPosture.DeviceAccess == nil {
+		t.Fatal("DeviceAccess = nil, want both values written as false")
 	}
+	assertBool(t, "DeviceAccess.ManagedDeviceRequired", idpPosture.DeviceAccess.ManagedDeviceRequired, false)
+	assertBool(t, "DeviceAccess.ManagedDeviceRequiredForAdmins", idpPosture.DeviceAccess.ManagedDeviceRequiredForAdmins, false)
 }
 
 // TestLeftOutIDPPostureValuesGetTheirCodes checks the gaps on the normalized

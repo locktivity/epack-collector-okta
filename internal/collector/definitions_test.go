@@ -389,10 +389,9 @@ func TestManagedDeviceCondition_LimitsTheRule(t *testing.T) {
 				{"device_access", "managed_device_required_users_count"}: needed,
 				{"device_access", "managed_device_required"}:             tc.deviceNeeded,
 			})
-			_, written := normalized["device_access"]
-			if written != tc.deviceNeeded {
-				t.Errorf("normalized device_access written = %v, want %v", written, tc.deviceNeeded)
-			}
+			wantValues(t, "normalized", normalized, map[[2]string]any{
+				{"device_access", "managed_device_required"}: tc.deviceNeeded,
+			})
 		})
 	}
 }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- In `okta.idp-posture.json`, `device_access.managed_device_required` and `managed_device_required_for_admins` are written when false too, as `okta.details.json` has them. Through v0.5.3 `device_access` was written only when a managed device was required of every enabled user, so a false value was left out with no gap.
+
 ## v0.5.3
 
 - The collector is built on epack v0.11.1.
