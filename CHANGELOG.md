@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The Not Collected section of `docs/overview.md` is rendered from `docs/surface.yaml`, which gives a verdict to every read operation of Okta's published API description that the collector's recordings never call, so the list comes from Okta's description rather than from memory. A new `docs/coverage.md` lists what the collector reads, by area, and every operation it leaves out with the reason.
+
 ## v0.5.4
 
 - A list read fails with `invalid_response` when an item lacks a field Okta sends in every one, and the values the list feeds are left out with a gap that names the call. That covers the status of users, factors, apps, policies, rules and hooks, the type of factors, groups, network zones, identity providers and admin roles, an app's `signOnMode` and `features`, a policy's priority, an authenticator's key, a System Log event's `eventType`, an API token's `lastUpdated`, an identity provider's provisioning action, and the IDs of custom roles, role assignees and group members, and of the custom role an assignment names. Through v0.5.3 a user with no status counted as not enabled, an app with none as active, and a policy, rule, factor or hook with none as inactive. A policy with no priority came first, an item with no type counted under an empty name, an app with no features provisioned nothing, and an assignment that named no custom role left out the privileged counts with a gap that named no call.

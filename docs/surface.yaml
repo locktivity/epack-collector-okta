@@ -1,0 +1,164 @@
+# The vendor API surface the collector is checked against. `epack sdk
+# surface` matches the recordings to the Okta management API description
+# and needs a verdict here for every GET operation the recordings never
+# call. The Not Collected section of docs/overview.md is rendered from the
+# not_collected items, in this order.
+vendor: Okta
+spec:
+  source: https://github.com/okta/okta-management-openapi-spec
+  path: dist/current/management-oneOfInheritance-noExamples.yaml
+  revision: ec20a8e9f2f2
+  sha256: 19f175205f0c566a0e2bf5e55074d49efa3e65988f456efa0be68699e8cbbc86
+scope:
+  methods: [get]
+
+# What the overview's Not Collected section says. Each headline folds one
+# or more not_collected items into a sentence a buyer needs; the coverage
+# reference holds every item.
+overview:
+  - title: Devices
+    says: >-
+      The devices users enroll in Okta Verify, with their OS version and disk
+      encryption. The collector reads the device assurance policies and
+      writes no endpoint-posture file.
+    items: [Devices]
+  - title: Service app credentials and assignments
+    says: >-
+      The credentials, scopes and tokens of apps that call the Okta API, and
+      which users and groups each app is assigned to. From the audit level the
+      collector reads API tokens only, and writes no access-posture file.
+    items: [Service app credentials and grants, App assignments]
+  - title: Admin and org settings
+    says: >-
+      Admin roles granted through groups and the scope of each admin role, and
+      org-wide settings such as whether Okta Support can access the org.
+    items: [Admin role scope, Org security settings]
+  - title: Identity Governance and Privileged Access
+    says: >-
+      Access certification campaigns and the service accounts Okta Privileged
+      Access manages, which need their own subscriptions.
+    items: [Access reviews, Privileged access service accounts]
+
+not_collected:
+  - title: Devices
+    says: >-
+      The devices users enroll in Okta Verify, with each device's OS version
+      and disk encryption, the operating system accounts on them, device
+      integrations, and device posture checks. The collector reads the device
+      assurance policies and writes no endpoint-posture file.
+    paths: ["/api/v1/devices*", "/api/v1/users/{userId}/devices", "/api/v1/device-integrations*", "/api/v1/device-posture-checks*"]
+  - title: Service app credentials and grants
+    says: >-
+      The client secrets, key pairs and certificate signing requests of apps
+      that call the Okta API, the Okta API scopes granted to each app, the
+      tokens issued to them, the admin roles assigned to OAuth 2.0 clients,
+      each app's provisioning connection, group push mappings and federated
+      claims, and API service integrations with their secrets. From the audit
+      level the collector reads API tokens only. It writes no access-posture
+      file.
+    paths: ["/api/v1/apps/{appId}/credentials/*", "/api/v1/apps/{appId}/grants*", "/api/v1/apps/{appId}/tokens*", "/api/v1/apps/{appId}/federated-claims*", "/api/v1/apps/{appId}/features*", "/api/v1/apps/{appId}/connections/*", "/api/v1/apps/{appId}/interclient-*", "/api/v1/apps/{appId}/group-push/*", "/api/v1/apps/{appId}/sso/*", "/oauth2/v1/clients/*", "/integrations/api/v1/api-services*"]
+  - title: App assignments
+    says: >-
+      Which users and groups are assigned to each app, and the apps each user
+      sees. The collector reads the app list for single sign-on coverage and
+      the members of each group.
+    paths: ["/api/v1/apps/{appId}/users*", "/api/v1/apps/{appId}/groups*", "/api/v1/groups/{groupId}/apps", "/api/v1/users/{id}/appLinks"]
+  - title: Access reviews
+    says: >-
+      Access certification campaigns, governance bundles and their
+      entitlements, and the governance source of each admin role assignment,
+      in Okta Identity Governance. The Identity Governance APIs require an Okta
+      Identity Governance subscription.
+    paths: ["/api/v1/iam/governance/*", "/api/v1/users/{userId}/roles/{roleAssignmentId}/governance*"]
+  - title: Admin role scope
+    says: >-
+      Admin roles assigned to groups, the apps and groups an admin role is
+      limited to, the permissions of custom roles, and resource sets with their
+      bindings. The collector reads the users holding admin roles and the
+      custom roles defined.
+    paths: ["/api/v1/iam/resource-sets*", "/api/v1/iam/roles/{roleIdOrLabel}/permissions*", "/api/v1/groups/{groupId}/roles*", "/api/v1/users/{userId}/roles/{roleAssignmentId}/targets*", "/api/v1/users/{userId}/roles/{roleIdOrEncodedRoleId}/targets"]
+  - title: Custom authorization servers
+    says: >-
+      Custom OAuth 2.0 authorization servers: their access policies and rules,
+      scopes, claims, signing keys, the clients registered with them and the
+      refresh tokens they issued.
+    paths: ["/api/v1/authorizationServers*"]
+  - title: Org security settings
+    says: >-
+      Whether Okta Support may access the org and the open support cases,
+      third-party admin access, automatic Admin Console assignment, the default
+      privileges of public client apps, ThreatInsight, bot protection and
+      CAPTCHA, attack protection settings for authenticators and user lockout,
+      org contacts and preferences.
+    paths: ["/api/v1/org/*", "/attack-protection/*", "/api/v1/threats/*", "/api/v1/bot-protection/*", "/api/v1/captchas*"]
+  - title: Hardware tokens
+    says: >-
+      The YubiKey OTP tokens uploaded to the org and who holds them, and the
+      WebAuthn security keys preregistered for users.
+    paths: ["/api/v1/org/factors/*", "/webauthn-registration/*"]
+  - title: Risk signals
+    says: >-
+      Behavior detection rules, each user's risk level and classification,
+      user blocks, security events providers, and Shared Signals Framework
+      streams.
+    paths: ["/api/v1/behaviors*", "/api/v1/security-events-providers*", "/api/v1/ssf/*"]
+    operations: [getUserRisk, getUserClassification, listUserBlocks, getWellknownSsfMetadata]
+  - title: User sessions and grants
+    says: >-
+      Users' sessions, the OAuth 2.0 clients and grants on each user's account
+      with their refresh tokens, and the tokens users hold from social identity
+      providers.
+    paths: ["/api/v1/sessions*", "/api/v1/users/{userId}/clients*", "/api/v1/users/{userId}/grants*"]
+    operations: [listSocialAuthTokens]
+  - title: Custom domains and email sending
+    says: >-
+      Custom domains and their certificates, the email domains Okta sends from
+      with their verification status, and custom SMTP servers.
+    paths: ["/api/v1/domains*", "/api/v1/email-domains*", "/api/v1/email-servers*"]
+  - title: Log streaming
+    says: >-
+      Where the org streams its system log, such as a Splunk or Amazon
+      EventBridge destination, and whether each stream is active. The
+      collector reads the system log itself.
+    paths: ["/api/v1/logStreams*"]
+    operations: [listLogStreamSchemas, getLogStreamSchema]
+  - title: Trusted origins
+    says: The origins the org allows for cross-origin requests and redirects.
+    paths: ["/api/v1/trustedOrigins*"]
+  - title: Group rules and owners
+    says: >-
+      The rules that assign users to groups automatically, and each group's
+      owners.
+    paths: ["/api/v1/groups/rules*", "/api/v1/groups/{groupId}/owners"]
+  - title: Realms and identity sources
+    says: >-
+      Realms and their assignments, and the users, groups and sessions of
+      custom identity sources and Active Directory group queries.
+    paths: ["/api/v1/realms*", "/api/v1/realm-assignments*", "/api/v1/identity-sources/*", "/api/v1/directories/*"]
+  - title: Directory agents
+    says: >-
+      The Active Directory and LDAP agent pools, and their automatic update
+      settings.
+    paths: ["/api/v1/agentPools*"]
+  - title: Privileged access service accounts
+    says: >-
+      The service accounts Okta Privileged Access manages, which require an
+      Okta Privileged Access subscription.
+    paths: ["/privileged-access/*"]
+
+irrelevant:
+  - reason: Branding, page and template customization
+    paths: ["/api/v1/brands*", "/api/v1/templates/*", "/.well-known/*", "/api/v1/first-party-app-settings/*", "/api/v1/meta/uischemas*"]
+  - reason: Profile schemas, mappings, user types and linked objects
+    paths: ["/api/v1/meta/schemas/*", "/api/v1/meta/types/*", "/api/v1/mappings*", "/api/v1/users/{userIdOrLogin}/linkedObjects/*"]
+  - reason: Feature flags, rate limit administration, notification subscriptions and disaster recovery status
+    paths: ["/api/v1/features*", "/api/v1/rate-limit-settings/*", "/api/v1/principal-rate-limits*", "/api/v1/roles/{roleRef}/subscriptions*", "/api/v1/users/{userId}/subscriptions*", "/api/v1/dr/*"]
+  - reason: Delivery providers for push, SMS and telephony
+    paths: ["/api/v1/push-providers*", "/api/v1/telephony-providers*"]
+  - reason: Detail of, or another view on, what the collector already reads
+    paths: ["/api/v1/authenticators/{authenticatorId}*", "/api/v1/idps/*", "/api/v1/hook-keys*", "/api/v1/policies/{policyId}*", "/api/v1/users/{userId}/factors/*", "/api/v1/users/{userId}/authenticator-enrollments*"]
+    operations: [getApiToken, getApplication, getDeviceAssurancePolicy, getEventHook, getInlineHook, getGroup, listUserGroups, listUserIdentityProviders, getNetworkZone, getUser, getUserAssignedRole, getRole]
+
+unmatched:
+  - operation: okta.token.create
+    reason: The OAuth 2.0 token endpoint, which the management API description does not cover.
