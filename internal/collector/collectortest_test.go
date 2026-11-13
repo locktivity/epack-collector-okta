@@ -129,6 +129,16 @@ func (p kitPins) row(index int, fields map[string]any) kitPins {
 	return p
 }
 
+// noFailedReads pins the run's gaps to the normalized values the collector
+// leaves out every time, one for each at the audit level and above.
+func (p kitPins) noFailedReads() kitPins {
+	for i, u := range idpPostureLeftOut {
+		p.result[fmt.Sprintf("/gaps/%d/pointer", i)] = u.pointer
+	}
+	p.result[fmt.Sprintf("/gaps/%d", len(idpPostureLeftOut))] = collectortest.Absent
+	return p
+}
+
 // onlyGap pins the run's one gap on the detailed artifact, which sorts
 // first. The gaps on the normalized values the collector leaves out follow,
 // one for each at the audit level and above.
@@ -243,13 +253,49 @@ func kitLaggedGroupStats() *mockOktaClient {
 	return t
 }
 
+// kitPopulations are the lists in Okta's answers that are empty when there
+// are none, each with its source.
+var kitPopulations = []collectortest.Population{
+	{Operation: "okta.apps.list", List: "/", Reason: "Only a Super Admin sees Okta's default apps, so another admin sees none in an org with no apps of its own: https://support.okta.com/help/s/article/Admin-user-unable-to-manage-default-Okta-Dashboard-Okta-Browser-Plugin-and-Okta-Admin-Console-applications"},
+	{Operation: "okta.apps.list", List: "/*/features", Reason: "An app with no provisioning features lists none; the sandbox recording lists none for ten of its eleven apps."},
+	{Operation: "okta.users.factors.list", List: "/", Reason: "A user who has enrolled no factor lists none; the sandbox recording lists none for five of its ten users."},
+	{Operation: "okta.groups.users.list", List: "/", Reason: "A group can have no members; the sandbox recording's Okta Administrators group counts none."},
+	{Operation: "okta.iam.roles.list", List: "/roles", Reason: "An org with no custom admin roles lists none, and custom_roles is then [], as docs/levels.md says."},
+	{Operation: "okta.iam.roles.permissions.list", List: "/permissions", Reason: "A custom role with no permissions grants nothing, since Okta's custom roles \"limit an admin's access to a subset of permissions and resources\": https://developer.okta.com/docs/concepts/role-assignment/"},
+	{Operation: "okta.policies.rules.list", List: "/", Reason: "\"Policies that have no rules aren't considered during evaluation and are never applied\": https://developer.okta.com/docs/concepts/policies/"},
+	{Operation: "okta.device_assurances.list", List: "/", Reason: "An org with no device assurance policies lists none; the sandbox recording lists none."},
+	{Operation: "okta.zones.list", List: "/*/gateways", Reason: "A zone with no gateways has none; the sandbox recording's system IP zones send them as null."},
+	{Operation: "okta.idps.list", List: "/", Reason: "An org with no identity providers lists none; the sandbox recording lists none."},
+	{Operation: "okta.event_hooks.list", List: "/", Reason: "An org with no event hooks lists none; the sandbox recording lists none."},
+	{Operation: "okta.inline_hooks.list", List: "/", Reason: "An org with no inline hooks lists none; the sandbox recording lists none."},
+	{Operation: "okta.logs.list", List: "/", Reason: "A week with none of the events the filter names lists none, and Okta can end the log with an empty page, as the v0.5.0 CHANGELOG says."},
+}
+
+// kitOAuthPopulations are kitPopulations for a service app, which signs in
+// with no API token of its own.
+var kitOAuthPopulations = slices.Concat(kitPopulations, []collectortest.Population{
+	{Operation: "okta.api_tokens.list", List: "/", Reason: "An org with no API tokens lists none; the sandbox recording, read by a service app, lists none."},
+})
+
+// kitOmissions are the fields Okta leaves out, or sends as null, to mean a
+// value, each with its source.
+var kitOmissions = []collectortest.Omission{
+	{Operation: "okta.users.list", Field: "/*/lastLogin", Reason: "User.lastLogin is nullable in Okta's Users API reference, and the sandbox recording sends null for users who never signed in."},
+	{Operation: "okta.policies.rules.list", Field: "/*/priority", Reason: "PolicyRule.priority is nullable in Okta's Policy API reference, and Okta evaluates a rule with no priority last, as the v0.5.2 CHANGELOG says."},
+	{Operation: "okta.policies.rules.list", Field: "/*/conditions/device/managed", Reason: "A rule sends managed only when it limits sign-ins by it: \"When the managed property is passed, you must also include the registered property\" in Okta's Policy API reference."},
+	{Operation: "okta.zones.list", Field: "/*/gateways", Reason: "A zone with no gateways sends them as null, or not at all for a DYNAMIC_V2 zone; the sandbox recording shows both."},
+}
+
 func TestCollectorKit(t *testing.T) {
 	collectortest.Run(t, collectortest.Suite{
-		Spec:    Spec("test", "collectortest"),
-		Run:     Run,
-		Config:  kitTokenConfig(),
-		Secrets: map[string]string{"OKTA_API_TOKEN": kitAPIToken},
-		Clock:   kitNow,
+		Spec:        Spec("test", "collectortest"),
+		Run:         Run,
+		Config:      kitTokenConfig(),
+		Secrets:     map[string]string{"OKTA_API_TOKEN": kitAPIToken},
+		Clock:       kitNow,
+		FieldFaults: true,
+		Populations: kitPopulations,
+		Omissions:   kitOmissions,
 		Scenarios: []collectortest.Scenario{
 			{Name: "clean", Responses: kitResponses(kitTenant()), Expect: newKitPins().steps().tokenSignIn().expect()},
 			{
@@ -261,7 +307,7 @@ func TestCollectorKit(t *testing.T) {
 					Body:   `{"errorCode":"E0000011","errorSummary":"Invalid token provided","errorLink":"E0000011","errorId":"oae-kit","errorCauses":[]}`,
 				}},
 			},
-			{Name: "empty tenant", Responses: kitResponses(kitEmptyTenant())},
+			{Name: "new org", Responses: kitResponses(kitNewOrg()), Expect: newKitPins().noFailedReads().expect()},
 			{Name: "group statistics lag the member list", Responses: kitResponses(kitLaggedGroupStats())},
 			{
 				// An API token has no scopes, so the gap names none.
@@ -282,12 +328,15 @@ func TestCollectorKit(t *testing.T) {
 
 func TestCollectorKitOAuth(t *testing.T) {
 	collectortest.Run(t, collectortest.Suite{
-		Name:    kitOAuthName,
-		Spec:    Spec("test", "collectortest"),
-		Run:     Run,
-		Config:  kitOAuthConfig(),
-		Secrets: map[string]string{"OKTA_PRIVATE_KEY": kitPrivateKey()},
-		Clock:   kitNow,
+		Name:        kitOAuthName,
+		Spec:        Spec("test", "collectortest"),
+		Run:         Run,
+		Config:      kitOAuthConfig(),
+		Secrets:     map[string]string{"OKTA_PRIVATE_KEY": kitPrivateKey()},
+		Clock:       kitNow,
+		FieldFaults: true,
+		Populations: kitOAuthPopulations,
+		Omissions:   kitOmissions,
 		Scenarios: append([]collectortest.Scenario{
 			{
 				Name:      "clean",

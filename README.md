@@ -163,7 +163,7 @@ inventory or a whole surface is absent. The artifact
 a code such as `permission_denied`, `rate_limited`, or `not_licensed`, along with
 the API operations the collector called and the identity it signed in as. The
 `diagnostics.warnings` entries remain. A percentage is also `null` when its
-population is empty, such as `mfa_coverage` in an org with no users;
+population is empty, such as `sso_coverage` in an org with no apps of its own;
 `users.enabled_count`, `users.total_count` and `apps.total_count` give those
 populations, and the percentage's count is 0.
 

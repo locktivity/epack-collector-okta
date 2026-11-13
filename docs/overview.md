@@ -85,8 +85,8 @@ the level a given artifact was produced at.
 ## Metrics Reference
 
 A metric is `null` when the collector could not read what it needs, or when it
-is a percentage of an empty population, such as MFA coverage in an org with no
-users. The collector result artifact, `artifacts/okta.collector-result.json`,
+is a percentage of an empty population, such as SSO coverage in an org with no
+apps of its own. The collector result artifact, `artifacts/okta.collector-result.json`,
 records a gap for each value left out, with the reason.
 
 Each percentage below, and each of `mfa_required_all`,

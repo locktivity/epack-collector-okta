@@ -3,7 +3,6 @@ package collector
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -312,10 +311,7 @@ func (c *Collector) customRolePermissions(ctx context.Context, read rolePermissi
 		return r.labels, r.err
 	}
 	var r permissionsRead
-	if roleID == "" {
-		r.err = componentsdk.CodeError(componentsdk.CodeInvalidResponse, errors.New("a custom role assignment names no role"))
-		r.err = failed(r.err, c.warn("privileged access: %s", r.err), "")
-	} else if r.labels, r.err = c.client.ListRolePermissions(ctx, roleID); r.err != nil {
+	if r.labels, r.err = c.client.ListRolePermissions(ctx, roleID); r.err != nil {
 		r.err = c.warnSurface(c.customRoleName(label)+": failed to fetch permissions", "okta.roles.read", r.err)
 	}
 	read[roleID] = r

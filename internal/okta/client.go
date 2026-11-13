@@ -1,6 +1,7 @@
 package okta
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -37,7 +39,7 @@ type OktaClient interface {
 
 	// Policy operations
 	FetchPolicies(ctx context.Context, policyType string) ([]Policy, error)
-	FetchPolicyRules(ctx context.Context, policyID string) ([]PolicyRule, error)
+	FetchPolicyRules(ctx context.Context, policy Policy) ([]PolicyRule, error)
 
 	// Device assurance operations
 	FetchDeviceAssurancePolicies(ctx context.Context) ([]DeviceAssurancePolicy, error)
@@ -186,15 +188,10 @@ func (c *Client) get(ctx context.Context, op, path string, dest any) (*http.Resp
 	return resp, nil
 }
 
-// listPages reads every page of a list endpoint, following the Link header,
-// and hands each page to each. A response that carries no list fails the
-// read, so a missing list never reads as an empty one.
-func listPages[T any](ctx context.Context, c *Client, op, path string, each func([]T) error) error {
-	return listResponses(ctx, c, op, path, func(_ *http.Response, page []T) error { return each(page) })
-}
-
-// listResponses is listPages for a reader that checks each page against
-// the response that carried it.
+// listResponses reads every page of a list endpoint, following the Link
+// header, and hands each page to each with the response that carried it. A
+// response that carries no list fails the read, so a missing list never
+// reads as an empty one.
 func listResponses[T any](ctx context.Context, c *Client, op, path string, each func(*http.Response, []T) error) error {
 	pages := readPages{}
 	for path != "" {
@@ -230,10 +227,45 @@ func (p readPages) next(resp *http.Response, op, path, next string) (string, err
 	return next, nil
 }
 
-// listAll reads every page of a list endpoint into one slice.
-func listAll[T any](ctx context.Context, c *Client, op, path string) ([]T, error) {
+// listCheck holds a list read to what Okta always sends. item names what
+// an item lacks of the fields Okta sends in each one, or returns "" for an
+// item the collector can read. none, when set, says why an empty list is
+// wrong, and an empty one fails the read with it, with noneCode, or
+// invalid_response when noneCode is "".
+type listCheck[T any] struct {
+	item     func(T) string
+	none     string
+	noneCode componentsdk.Code
+}
+
+// listPages is listResponses for a list that check holds, and hands each
+// page to each. An item check finds a problem with fails the read, since a
+// list read in part would stand in for the whole.
+func listPages[T any](ctx context.Context, c *Client, op, path string, check listCheck[T], each func([]T) error) error {
+	var last *http.Response
+	listed := 0
+	err := listResponses(ctx, c, op, path, func(resp *http.Response, page []T) error {
+		if check.item != nil {
+			for _, item := range page {
+				if problem := check.item(item); problem != "" {
+					return invalidResponse(resp, op, problem)
+				}
+			}
+		}
+		last, listed = resp, listed+len(page)
+		return each(page)
+	})
+	if err == nil && listed == 0 && check.none != "" {
+		return responseProblem(last, cmp.Or(check.noneCode, componentsdk.CodeInvalidResponse), op, check.none)
+	}
+	return err
+}
+
+// listAll reads every page of a list endpoint into one slice, which check
+// holds.
+func listAll[T any](ctx context.Context, c *Client, op, path string, check listCheck[T]) ([]T, error) {
 	items := []T{}
-	err := listPages(ctx, c, op, path, func(page []T) error {
+	err := listPages(ctx, c, op, path, check, func(page []T) error {
 		items = append(items, page...)
 		return nil
 	})
@@ -243,35 +275,85 @@ func listAll[T any](ctx context.Context, c *Client, op, path string) ([]T, error
 	return items, nil
 }
 
+// decodeItems decodes each item of a page, which resp carried, and fails
+// with the problem check finds with one. check gets the item as Okta sent
+// it too, for a field whose zero value is also a value.
+func decodeItems[T any](resp *http.Response, op string, page []json.RawMessage, check func(T, json.RawMessage) string) ([]T, error) {
+	items := make([]T, len(page))
+	for i, raw := range page {
+		if err := json.Unmarshal(raw, &items[i]); err != nil {
+			return nil, componentsdk.ResponseError(resp, fmt.Errorf("decoding the response to %s: %w", op, err))
+		}
+		if problem := check(items[i], raw); problem != "" {
+			return nil, invalidResponse(resp, op, problem)
+		}
+	}
+	return items, nil
+}
+
 // invalidResponse reports a 200 response that lacks what the collector
 // reads from it, as an error about the call resp answered.
 func invalidResponse(resp *http.Response, op, problem string) error {
-	return componentsdk.ResponseError(resp, componentsdk.CodeError(componentsdk.CodeInvalidResponse, fmt.Errorf("the response to %s %s", op, problem)))
+	return responseProblem(resp, componentsdk.CodeInvalidResponse, op, problem)
 }
 
-// FetchUsers fetches all users with pagination.
+// responseProblem reports a problem with a 200 response, with code, as an
+// error about the call resp answered.
+func responseProblem(resp *http.Response, code componentsdk.Code, op, problem string) error {
+	return componentsdk.ResponseError(resp, componentsdk.CodeError(code, fmt.Errorf("the response to %s %s", op, problem)))
+}
+
+// noSuperAdmin is why a list of users is never empty: every org has at
+// least one individually assigned super admin.
+const noSuperAdmin = "lists no users, and every org has at least one super admin"
+
+// FetchUsers fetches all users with pagination. A user with no status, or
+// an empty list, fails the read.
 func (c *Client) FetchUsers(ctx context.Context, callback func([]User) error) error {
-	return listPages(ctx, c, "okta.users.list", fmt.Sprintf("/api/v1/users?limit=%d", paginationLimit), callback)
+	check := listCheck[User]{none: noSuperAdmin, item: func(u User) string {
+		if u.Status == "" {
+			return "lists a user with no status"
+		}
+		return ""
+	}}
+	return listPages(ctx, c, "okta.users.list", fmt.Sprintf("/api/v1/users?limit=%d", paginationLimit), check, callback)
 }
 
 // FetchUserFactors fetches all MFA factors for a user. A user with no
-// factors has an empty list; any other answer, a 404 included, is an error.
+// factors has an empty list; any other answer, a 404 included, is an error,
+// and so is a factor with no type or status.
 func (c *Client) FetchUserFactors(ctx context.Context, userID string) ([]Factor, error) {
-	return listAll[Factor](ctx, c, "okta.users.factors.list", "/api/v1/users/"+url.PathEscape(userID)+"/factors")
+	check := listCheck[Factor]{item: func(f Factor) string {
+		if f.FactorType == "" || f.Status == "" {
+			return "lists a factor with no factorType or status"
+		}
+		return ""
+	}}
+	return listAll(ctx, c, "okta.users.factors.list", "/api/v1/users/"+url.PathEscape(userID)+"/factors", check)
 }
 
-// FetchGroupUsers fetches all users in a group with pagination.
+// FetchGroupUsers fetches all users in a group with pagination. A member
+// with no id fails the read, since policies match people by it.
 func (c *Client) FetchGroupUsers(ctx context.Context, groupID string, callback func([]User) error) error {
 	path := fmt.Sprintf("/api/v1/groups/%s/users?limit=%d", url.PathEscape(groupID), paginationLimit)
-	return listPages(ctx, c, "okta.groups.users.list", path, callback)
+	check := listCheck[User]{item: func(u User) string {
+		if u.ID == "" {
+			return "lists a member with no id"
+		}
+		return ""
+	}}
+	return listPages(ctx, c, "okta.groups.users.list", path, check, callback)
 }
 
-// FetchUsersWithRoleAssignments fetches all users that have role assignments.
+// FetchUsersWithRoleAssignments fetches all users that have role
+// assignments. A user with no id, or an empty list, fails the read: every
+// org's super admin holds a role.
 func (c *Client) FetchUsersWithRoleAssignments(ctx context.Context, callback func([]RoleAssignedUser) error) error {
 	const op = "okta.iam.assignees.list"
 	path := fmt.Sprintf("/api/v1/iam/assignees/users?limit=%d", paginationLimit)
 
 	pages := readPages{}
+	listed := 0
 	for path != "" {
 		var page RoleAssignedUsersResponse
 		resp, err := c.get(ctx, op, path, &page)
@@ -281,6 +363,10 @@ func (c *Client) FetchUsersWithRoleAssignments(ctx context.Context, callback fun
 		if page.Value == nil {
 			return invalidResponse(resp, op, "has no value list")
 		}
+		if slices.ContainsFunc(*page.Value, func(u RoleAssignedUser) bool { return u.ID == "" }) {
+			return invalidResponse(resp, op, "lists a user with no id")
+		}
+		listed += len(*page.Value)
 		if err := callback(*page.Value); err != nil {
 			return err
 		}
@@ -288,6 +374,9 @@ func (c *Client) FetchUsersWithRoleAssignments(ctx context.Context, callback fun
 		next := ""
 		if page.Links.Next != nil && page.Links.Next.Href != "" {
 			next = getPathAndQuery(page.Links.Next.Href)
+		}
+		if next == "" && listed == 0 {
+			return invalidResponse(resp, op, noSuperAdmin)
 		}
 		if path, err = pages.next(resp, op, path, next); err != nil {
 			return err
@@ -297,14 +386,23 @@ func (c *Client) FetchUsersWithRoleAssignments(ctx context.Context, callback fun
 	return nil
 }
 
-// FetchUserRoleAssignments fetches all role assignments for a user.
+// FetchUserRoleAssignments fetches all role assignments for a user the
+// role assignees list names. An empty list fails the read, since that user
+// holds a role, and so does a role with no type, or a custom role that
+// names no role ID.
 func (c *Client) FetchUserRoleAssignments(ctx context.Context, userID string) ([]RoleAssignment, error) {
-	return listAll[RoleAssignment](ctx, c, "okta.users.roles.list", "/api/v1/users/"+url.PathEscape(userID)+"/roles")
+	check := listCheck[RoleAssignment]{none: "lists no roles for a user the role assignees list names", item: func(r RoleAssignment) string {
+		if r.Type == "" || (strings.EqualFold(r.Type, "CUSTOM") && r.Role == "") {
+			return "lists a role with no type, or a custom role with no role ID"
+		}
+		return ""
+	}}
+	return listAll(ctx, c, "okta.users.roles.list", "/api/v1/users/"+url.PathEscape(userID)+"/roles", check)
 }
 
 // FetchUserGroupIDs fetches the IDs of the groups a user belongs to.
 func (c *Client) FetchUserGroupIDs(ctx context.Context, userID string) ([]string, error) {
-	groups, err := listAll[Group](ctx, c, "okta.users.groups.list", "/api/v1/users/"+url.PathEscape(userID)+"/groups")
+	groups, err := listAll(ctx, c, "okta.users.groups.list", "/api/v1/users/"+url.PathEscape(userID)+"/groups", listCheck[Group]{})
 	if err != nil {
 		return nil, err
 	}
@@ -315,38 +413,131 @@ func (c *Client) FetchUserGroupIDs(ctx context.Context, userID string) ([]string
 	return ids, nil
 }
 
-// FetchApplications fetches all applications with pagination.
+// FetchApplications fetches all applications with pagination. An app with
+// no status, sign-on mode, or features list fails the read. Okta sends an
+// app with no features an empty list.
 func (c *Client) FetchApplications(ctx context.Context, callback func([]Application) error) error {
-	return listPages(ctx, c, "okta.apps.list", fmt.Sprintf("/api/v1/apps?limit=%d", paginationLimit), callback)
+	check := listCheck[Application]{item: func(a Application) string {
+		if a.Status == "" || a.SignOnMode == "" || a.Features == nil {
+			return "lists an app with no status, signOnMode, or features"
+		}
+		return ""
+	}}
+	return listPages(ctx, c, "okta.apps.list", fmt.Sprintf("/api/v1/apps?limit=%d", paginationLimit), check, callback)
 }
 
 // FetchPolicies fetches all policies of a given type. Okta scopes each
 // sign-on, MFA enrollment and password policy to the groups it includes,
 // and the default policy includes the Everyone group. An active policy that
-// includes no group fails the read, since who it applies to is unknown.
+// includes no group fails the read, since who it applies to is unknown. So
+// does a policy with no status or priority, and an empty list: Okta creates
+// a default policy of each type, which can't be deleted.
 func (c *Client) FetchPolicies(ctx context.Context, policyType string) ([]Policy, error) {
 	const op = "okta.policies.list"
 	policies := []Policy{}
-	err := listResponses(ctx, c, op, "/api/v1/policies?type="+url.QueryEscape(policyType), func(resp *http.Response, page []Policy) error {
-		for _, p := range page {
+	var last *http.Response
+	err := listResponses(ctx, c, op, "/api/v1/policies?type="+url.QueryEscape(policyType), func(resp *http.Response, page []json.RawMessage) error {
+		read, err := decodeItems(resp, op, page, func(p Policy, raw json.RawMessage) string {
+			var sent struct {
+				Priority *int `json:"priority"`
+			}
+			_ = json.Unmarshal(raw, &sent)
+			switch {
+			case p.Status == "" || sent.Priority == nil:
+				return "lists a policy with no status or priority"
 			// An IdP routing policy applies to every sign-in and names no
 			// group.
-			if p.Status == "ACTIVE" && policyType != "IDP_DISCOVERY" && !p.Conditions.People.includesGroups() {
-				return invalidResponse(resp, op, "has an active policy that includes no group")
+			case p.Status == "ACTIVE" && policyType != "IDP_DISCOVERY" && !p.Conditions.People.includesGroups():
+				return "has an active policy that includes no group"
 			}
+			return ""
+		})
+		if err != nil {
+			return err
 		}
-		policies = append(policies, page...)
+		last, policies = resp, append(policies, read...)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
+	// No IdP routing policy reads as Okta's default routing rule would,
+	// leaving every sign-in to Okta.
+	if len(policies) == 0 && policyType != "IDP_DISCOVERY" {
+		return nil, invalidResponse(last, op, "lists no policies, and Okta creates a default policy of each type")
+	}
 	return policies, nil
 }
 
-// FetchPolicyRules fetches all rules for a policy.
-func (c *Client) FetchPolicyRules(ctx context.Context, policyID string) ([]PolicyRule, error) {
-	return listAll[PolicyRule](ctx, c, "okta.policies.rules.list", "/api/v1/policies/"+url.PathEscape(policyID)+"/rules")
+// FetchPolicyRules fetches all rules for a policy. A policy can have no
+// rules, and Okta then never applies it, but a default policy always has
+// its default rule. A rule with no status fails the read, and so does a
+// sign-on rule with no signon access, or one that allows sign-in with no
+// requireFactor or session settings, and a password rule that doesn't say
+// whether it allows self-service reset and unlock. Okta sends all of them
+// in each rule.
+func (c *Client) FetchPolicyRules(ctx context.Context, policy Policy) ([]PolicyRule, error) {
+	const op = "okta.policies.rules.list"
+	rules := []PolicyRule{}
+	var last *http.Response
+	err := listResponses(ctx, c, op, "/api/v1/policies/"+url.PathEscape(policy.ID)+"/rules", func(resp *http.Response, page []json.RawMessage) error {
+		read, err := decodeItems(resp, op, page, func(r PolicyRule, raw json.RawMessage) string {
+			switch {
+			case r.Status == "":
+				return "lists a rule with no status"
+			case policy.Type == "OKTA_SIGN_ON":
+				return signonProblem(r, raw)
+			case policy.Type == "PASSWORD" && (r.Actions.SelfServicePasswordReset == nil || r.Actions.SelfServicePasswordReset.Access == "" ||
+				r.Actions.SelfServiceUnlock == nil || r.Actions.SelfServiceUnlock.Access == ""):
+				return "lists a password rule with no selfServicePasswordReset or selfServiceUnlock access"
+			}
+			return ""
+		})
+		if err != nil {
+			return err
+		}
+		last, rules = resp, append(rules, read...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(rules) == 0 && policy.System {
+		return nil, invalidResponse(last, op, "lists no rules for a default policy, which always has its default rule")
+	}
+	return rules, nil
+}
+
+// signonProblem names what a sign-on rule lacks of the signon action Okta
+// sends in each one, or returns "". false and 0 are values of
+// requireFactor and the session settings, so the rule as Okta sent it says
+// whether they are there.
+func signonProblem(r PolicyRule, raw json.RawMessage) string {
+	if r.Actions.Signon == nil || r.Actions.Signon.Access == "" {
+		return "lists a sign-on rule with no signon access"
+	}
+	if r.Actions.Signon.Access != "ALLOW" {
+		return ""
+	}
+	var sent struct {
+		Actions struct {
+			Signon struct {
+				RequireFactor *bool `json:"requireFactor"`
+				Session       struct {
+					UsePersistentCookie       *bool `json:"usePersistentCookie"`
+					MaxSessionIdleMinutes     *int  `json:"maxSessionIdleMinutes"`
+					MaxSessionLifetimeMinutes *int  `json:"maxSessionLifetimeMinutes"`
+				} `json:"session"`
+			} `json:"signon"`
+		} `json:"actions"`
+	}
+	_ = json.Unmarshal(raw, &sent)
+	signon := sent.Actions.Signon
+	if signon.RequireFactor == nil || signon.Session.UsePersistentCookie == nil ||
+		signon.Session.MaxSessionIdleMinutes == nil || signon.Session.MaxSessionLifetimeMinutes == nil {
+		return "lists a sign-on rule that allows sign-in with no requireFactor or session settings"
+	}
+	return ""
 }
 
 // VendorCode reads Okta's code for a failed response, for
@@ -426,19 +617,44 @@ func StatusCodeOf(err error) int {
 	return 0
 }
 
-// ListGroups fetches all groups with pagination, expanding member-count stats.
+// ListGroups fetches all groups with pagination, expanding member-count
+// stats. A group with no type fails the read. So does an empty list, with
+// permission_denied: every org has the built-in Everyone group, and Okta
+// doesn't list it for a group admin, so the admin the collector signs in as
+// can't see the groups.
+// https://developer.okta.com/docs/api/openapi/okta-management/management/tags/group/other/listgroups
 func (c *Client) ListGroups(ctx context.Context, callback func([]Group) error) error {
-	return listPages(ctx, c, "okta.groups.list", fmt.Sprintf("/api/v1/groups?expand=stats&limit=%d", paginationLimit), callback)
+	check := listCheck[Group]{
+		none:     "lists no groups, and every org has the Everyone group, which Okta doesn't list for a group admin",
+		noneCode: componentsdk.CodePermissionDenied,
+		item: func(g Group) string {
+			if g.Type == "" {
+				return "lists a group with no type"
+			}
+			return ""
+		},
+	}
+	return listPages(ctx, c, "okta.groups.list", fmt.Sprintf("/api/v1/groups?expand=stats&limit=%d", paginationLimit), check, callback)
 }
 
-// ListAuthenticators fetches the org-level authenticator catalog.
+// ListAuthenticators fetches the org-level authenticator catalog. An
+// authenticator with no key or status, or an empty catalog, fails the read:
+// Okta lists each authenticator, inactive ones too, and the password
+// authenticator is active by default.
 func (c *Client) ListAuthenticators(ctx context.Context) ([]Authenticator, error) {
-	return listAll[Authenticator](ctx, c, "okta.authenticators.list", "/api/v1/authenticators")
+	check := listCheck[Authenticator]{none: "lists no authenticators, and Okta lists each one, inactive ones too", item: func(a Authenticator) string {
+		if a.Key == "" || a.Status == "" {
+			return "lists an authenticator with no key or status"
+		}
+		return ""
+	}}
+	return listAll(ctx, c, "okta.authenticators.list", "/api/v1/authenticators", check)
 }
 
 // ListIAMRoles fetches the org's custom administrator roles (Okta Identity
 // Governance feature). Returns an *APIStatusError with status 404 when the
-// feature is not licensed.
+// feature is not licensed. A role with no id fails the read, since its
+// permissions can't be read.
 func (c *Client) ListIAMRoles(ctx context.Context) ([]IAMRole, error) {
 	const op = "okta.iam.roles.list"
 	path := fmt.Sprintf("/api/v1/iam/roles?limit=%d", paginationLimit)
@@ -454,6 +670,9 @@ func (c *Client) ListIAMRoles(ctx context.Context) ([]IAMRole, error) {
 		if page.Roles == nil {
 			return nil, invalidResponse(resp, op, "has no roles list")
 		}
+		if slices.ContainsFunc(*page.Roles, func(r IAMRole) bool { return r.ID == "" }) {
+			return nil, invalidResponse(resp, op, "lists a role with no id")
+		}
 		roles = append(roles, *page.Roles...)
 
 		next := ""
@@ -468,7 +687,9 @@ func (c *Client) ListIAMRoles(ctx context.Context) ([]IAMRole, error) {
 	return roles, nil
 }
 
-// ListRolePermissions fetches the permission labels granted to a custom role.
+// ListRolePermissions fetches the permission labels granted to a custom
+// role. A response with no permissions list fails the read. An empty list
+// is a role that grants nothing.
 func (c *Client) ListRolePermissions(ctx context.Context, roleID string) ([]string, error) {
 	const op = "okta.iam.roles.permissions.list"
 	var page RolePermissionsResponse
@@ -488,7 +709,7 @@ func (c *Client) ListRolePermissions(ctx context.Context, roleID string) ([]stri
 
 // FetchDeviceAssurancePolicies fetches all device assurance policies.
 func (c *Client) FetchDeviceAssurancePolicies(ctx context.Context) ([]DeviceAssurancePolicy, error) {
-	return listAll[DeviceAssurancePolicy](ctx, c, "okta.device_assurances.list", "/api/v1/device-assurances")
+	return listAll(ctx, c, "okta.device_assurances.list", "/api/v1/device-assurances", listCheck[DeviceAssurancePolicy]{})
 }
 
 // FetchOrgSettings fetches organization settings.

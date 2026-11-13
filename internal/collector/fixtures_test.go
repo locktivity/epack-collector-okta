@@ -53,7 +53,8 @@ func kitPrivateKey() string {
 // kitTenant is richClient's tenant at the kit's clock, grown so each
 // per-item operation has a first, a middle, and a last call: six listed
 // users (one more deprovisioned), three admins, three apps, sign-on and
-// MFA-enrollment policies with group scopes, and three groups.
+// MFA-enrollment policies with group scopes, the default password policy,
+// and three groups.
 func kitTenant() *mockOktaClient {
 	t := richClientAt(kitNow)
 	day := 24 * time.Hour
@@ -89,7 +90,7 @@ func kitTenant() *mockOktaClient {
 
 	t.apps = append(t.apps,
 		okta.Application{ID: "app2", Label: "Chat", Name: "chat", SignOnMode: "OPENID_CONNECT", Status: "ACTIVE", Features: []string{"IMPORT_NEW_USERS", "PUSH_USER_DEACTIVATION"}},
-		okta.Application{ID: "app3", Label: "Legacy Wiki", Name: "legacy_wiki", SignOnMode: "BROWSER_PLUGIN", Status: "INACTIVE"},
+		okta.Application{ID: "app3", Label: "Legacy Wiki", Name: "legacy_wiki", SignOnMode: "BROWSER_PLUGIN", Status: "INACTIVE", Features: []string{}},
 	)
 	t.apps[0].Features = []string{"PUSH_NEW_USERS"}
 
@@ -113,6 +114,9 @@ func kitTenant() *mockOktaClient {
 		PolicyTypeMFAEnroll: {
 			{ID: "p3", Name: "Engineering enrollment", Type: PolicyTypeMFAEnroll, Status: "ACTIVE", Priority: 1, Conditions: okta.PolicyConditions{People: groupScope("g2")}},
 		},
+		PolicyTypePassword: {
+			{ID: "pw1", Name: "Default", Type: PolicyTypePassword, Status: "ACTIVE", Priority: 1, Conditions: okta.PolicyConditions{People: groupScope("g3")}},
+		},
 	}
 	t.policyRules = map[string][]okta.PolicyRule{
 		"p1": {{ID: "r1", Name: "Admins on managed devices", Status: "ACTIVE", Priority: intPtr(1),
@@ -120,6 +124,8 @@ func kitTenant() *mockOktaClient {
 			Actions:    okta.PolicyRuleActions{Signon: signon(true, 60, 15)}}},
 		"p2": {{ID: "r2", Name: "Default", Status: "ACTIVE", Priority: intPtr(1), Actions: okta.PolicyRuleActions{Signon: signon(false, 720, 60)}}},
 		"p3": {{ID: "r3", Name: "Challenge", Status: "ACTIVE", Priority: intPtr(1), Actions: okta.PolicyRuleActions{Enroll: &okta.EnrollActions{Self: "CHALLENGE"}}}},
+		"pw1": {{ID: "pwr1", Name: "Default Rule", Status: "ACTIVE", Priority: intPtr(1),
+			Actions: okta.PolicyRuleActions{SelfServicePasswordReset: &okta.RuleAccess{Access: "ALLOW"}, SelfServiceUnlock: &okta.RuleAccess{Access: "DENY"}}}},
 	}
 
 	t.groups = []okta.Group{
@@ -148,11 +154,65 @@ func kitTenant() *mockOktaClient {
 	return t
 }
 
-// kitEmptyTenant has no users, apps, groups, or policies.
-func kitEmptyTenant() *mockOktaClient {
+// kitNewOrg is an org with nothing of its own yet: the super admin who
+// signed it up, whose API token the collector signs in with, and what Okta
+// creates with every org. That is Okta's default apps, which the counts
+// leave out, the Everyone and Okta Administrators groups, a default
+// sign-on, MFA enrollment and password policy, each with its default rule,
+// the system network zones, and the password and email authenticators.
+func kitNewOrg() *mockOktaClient {
+	admin := okta.User{ID: "u1", Status: "ACTIVE", Created: kitNow.Add(-time.Hour), LastLogin: kitNow, LastUpdated: kitNow,
+		Profile: okta.UserProfile{Login: "founder@new.example", UserType: "Employee"}}
+	app := func(id, label, name string) okta.Application {
+		return okta.Application{ID: id, Label: label, Name: name, SignOnMode: "OPENID_CONNECT", Status: "ACTIVE", Features: []string{}}
+	}
+	policy := func(id, policyType string) okta.Policy {
+		return okta.Policy{ID: id, Name: "Default Policy", Type: policyType, Status: "ACTIVE", Priority: 1, System: true,
+			Conditions: okta.PolicyConditions{People: everyoneGroup("g-everyone")}}
+	}
+	rule := func(id string, actions okta.PolicyRuleActions) []okta.PolicyRule {
+		return []okta.PolicyRule{{ID: id, Name: "Default Rule", Status: "ACTIVE", Priority: intPtr(1), System: true, Actions: actions}}
+	}
+	signon := &okta.SignonActions{Access: "ALLOW"}
+	signon.Session.MaxSessionIdleMinutes, signon.Session.MaxSessionLifetimeMinutes = 120, 1440
+	zone := func(id, name, zoneType, status, usage string) okta.NetworkZone {
+		return okta.NetworkZone{ID: id, Name: name, Type: zoneType, Status: status, Usage: usage}
+	}
 	return &mockOktaClient{
-		orgSettings: &okta.OrgSettings{ID: "00o-empty", Subdomain: "empty", Status: "ACTIVE"},
-		orgContacts: []okta.OrgContact{{Type: "BILLING", UserID: "00u-departed"}, {Type: "TECHNICAL", UserID: "00u-departed"}},
+		users:         []okta.User{admin},
+		factors:       map[string][]okta.Factor{"u1": {{ID: "f1", FactorType: "email", Status: "ACTIVE", Created: kitNow.Add(-time.Hour)}}},
+		userGroupIDs:  map[string][]string{"u1": {"g-everyone"}},
+		roleAssignees: []okta.RoleAssignedUser{{ID: "u1"}},
+		userRoles:     map[string][]okta.RoleAssignment{"u1": {{ID: "ra1", Type: "SUPER_ADMIN", Status: "ACTIVE", AssignmentType: "USER"}}},
+		apps:          []okta.Application{app("app1", "Okta Admin Console", "saasure"), app("app2", "Okta Dashboard", "okta_enduser"), app("app3", "Okta Browser Plugin", "okta_browser_plugin")},
+		policies: map[string][]okta.Policy{
+			PolicyTypeSignOn:    {policy("p-signon", PolicyTypeSignOn)},
+			PolicyTypeMFAEnroll: {policy("p-enroll", PolicyTypeMFAEnroll)},
+			PolicyTypePassword:  {policy("p-password", PolicyTypePassword)},
+		},
+		policyRules: map[string][]okta.PolicyRule{
+			"p-signon": rule("r-signon", okta.PolicyRuleActions{Signon: signon}),
+			"p-enroll": rule("r-enroll", okta.PolicyRuleActions{Enroll: &okta.EnrollActions{Self: "CHALLENGE"}}),
+			"p-password": rule("r-password", okta.PolicyRuleActions{
+				SelfServicePasswordReset: &okta.RuleAccess{Access: "ALLOW"}, SelfServiceUnlock: &okta.RuleAccess{Access: "DENY"}}),
+		},
+		groups: []okta.Group{
+			{ID: "g-everyone", Type: "BUILT_IN", Created: kitNow.Add(-time.Hour), Profile: okta.GroupProfile{Name: "Everyone"}, Embedded: stats(1)},
+			{ID: "g-admins", Type: "BUILT_IN", Created: kitNow.Add(-time.Hour), Profile: okta.GroupProfile{Name: "Okta Administrators"}, Embedded: stats(0)},
+		},
+		groupUsers: map[string][]okta.User{"g-everyone": {admin}},
+		authenticators: []okta.Authenticator{
+			{ID: "aut1", Key: "okta_password", Type: "password", Name: "Password", Status: "ACTIVE"},
+			{ID: "aut2", Key: "okta_email", Type: "email", Name: "Email", Status: "ACTIVE"},
+		},
+		networkZones: []okta.NetworkZone{
+			zone("z1", "LegacyIpZone", "IP", "ACTIVE", "POLICY"),
+			zone("z2", "BlockedIpZone", "IP", "ACTIVE", "BLOCKLIST"),
+			zone("z3", "DefaultEnhancedDynamicZone", "DYNAMIC_V2", "INACTIVE", "BLOCKLIST"),
+		},
+		apiTokens:   []okta.APIToken{{ID: "tok1", Name: "epack-collector", Created: kitNow.Add(-time.Hour), LastUpdated: kitNow, UserID: "u1"}},
+		orgSettings: &okta.OrgSettings{ID: "00o-new", Subdomain: "new", Status: "ACTIVE"},
+		orgContacts: []okta.OrgContact{{Type: "BILLING", UserID: "u1"}, {Type: "TECHNICAL", UserID: "u1"}},
 	}
 }
 
@@ -240,8 +300,8 @@ func kitThrottled(url string) collectortest.Response {
 // kitLargeOrg is the Collection Trace canvas's sample org: 1,192 people, the
 // last 71 of them without an active factor, then three deprovisioned people,
 // listed in six pages, with 23 admins. Its other surfaces are the clean
-// tenant's, with a password policy, so a run at audit makes 1,246 calls, the
-// system log read being the 1,243rd.
+// tenant's, so a run at audit makes 1,246 calls, the system log read being
+// the 1,243rd.
 func kitLargeOrg() *mockOktaClient {
 	t := kitTenant()
 	day := 24 * time.Hour
@@ -281,10 +341,6 @@ func kitLargeOrg() *mockOktaClient {
 	}
 	t.groups[0].Embedded, t.groups[1].Embedded, t.groups[2].Embedded = stats(23), stats(50), stats(1192)
 	t.groupUsers = map[string][]okta.User{"g1": t.users[:23], "g2": t.users[100:150], "g3": t.users[:1192]}
-	t.policies[PolicyTypePassword] = []okta.Policy{{ID: "pw1", Name: "Default", Type: PolicyTypePassword, Status: "ACTIVE", Priority: 1,
-		Conditions: okta.PolicyConditions{People: everyoneGroup("g3")}}}
-	t.policyRules["pw1"] = []okta.PolicyRule{{ID: "pwr1", Name: "Default Rule", Status: "ACTIVE", Priority: intPtr(1),
-		Actions: okta.PolicyRuleActions{SelfServicePasswordReset: &okta.RuleAccess{Access: "ALLOW"}}}}
 	return t
 }
 

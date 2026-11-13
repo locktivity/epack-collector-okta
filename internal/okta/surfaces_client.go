@@ -4,34 +4,74 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 )
 
-// ListNetworkZones fetches all network zones with pagination.
+// ListNetworkZones fetches all network zones with pagination. A zone with
+// no type, or an empty list, fails the read: every org has Okta's system
+// zones.
 func (c *Client) ListNetworkZones(ctx context.Context) ([]NetworkZone, error) {
-	return listAll[NetworkZone](ctx, c, "okta.zones.list", fmt.Sprintf("/api/v1/zones?limit=%d", paginationLimit))
+	check := listCheck[NetworkZone]{none: "lists no zones, and every org has Okta's system zones", item: func(z NetworkZone) string {
+		if z.Type == "" {
+			return "lists a zone with no type"
+		}
+		return ""
+	}}
+	return listAll(ctx, c, "okta.zones.list", fmt.Sprintf("/api/v1/zones?limit=%d", paginationLimit), check)
 }
 
-// ListIdentityProviders fetches all federation identity providers.
+// ListIdentityProviders fetches all federation identity providers. A
+// provider with no type or JIT provisioning action fails the read.
 func (c *Client) ListIdentityProviders(ctx context.Context) ([]IdentityProvider, error) {
-	return listAll[IdentityProvider](ctx, c, "okta.idps.list", fmt.Sprintf("/api/v1/idps?limit=%d", paginationLimit))
+	check := listCheck[IdentityProvider]{item: func(idp IdentityProvider) string {
+		if idp.Type == "" || idp.Policy.Provisioning.Action == "" {
+			return "lists an identity provider with no type or provisioning action"
+		}
+		return ""
+	}}
+	return listAll(ctx, c, "okta.idps.list", fmt.Sprintf("/api/v1/idps?limit=%d", paginationLimit), check)
 }
 
 // ListAPITokens fetches all SSWS API tokens. Requires a SUPER_ADMIN-level scope;
-// returns an *APIStatusError (403) otherwise.
+// returns an *APIStatusError (403) otherwise. A token with no lastUpdated
+// fails the read, and so does an empty list when the client signs in with
+// a token, since Okta lists every active token.
 func (c *Client) ListAPITokens(ctx context.Context) ([]APIToken, error) {
-	return listAll[APIToken](ctx, c, "okta.api_tokens.list", "/api/v1/api-tokens")
+	check := listCheck[APIToken]{item: func(t APIToken) string {
+		if t.LastUpdated.IsZero() {
+			return "lists a token with no lastUpdated"
+		}
+		return ""
+	}}
+	if c.oauth == nil {
+		check.none = "lists no tokens, and the token the collector signs in with is one"
+	}
+	return listAll(ctx, c, "okta.api_tokens.list", "/api/v1/api-tokens", check)
 }
 
-// ListEventHooks fetches all event hooks.
+// hookStatus checks that a hook has its status, which says whether Okta
+// calls it.
+func hookStatus(status string) string {
+	if status == "" {
+		return "lists a hook with no status"
+	}
+	return ""
+}
+
+// ListEventHooks fetches all event hooks. A hook with no status fails the
+// read.
 func (c *Client) ListEventHooks(ctx context.Context) ([]EventHook, error) {
-	return listAll[EventHook](ctx, c, "okta.event_hooks.list", "/api/v1/eventHooks")
+	check := listCheck[EventHook]{item: func(h EventHook) string { return hookStatus(h.Status) }}
+	return listAll(ctx, c, "okta.event_hooks.list", "/api/v1/eventHooks", check)
 }
 
-// ListInlineHooks fetches all inline hooks.
+// ListInlineHooks fetches all inline hooks. A hook with no status fails the
+// read.
 func (c *Client) ListInlineHooks(ctx context.Context) ([]InlineHook, error) {
-	return listAll[InlineHook](ctx, c, "okta.inline_hooks.list", "/api/v1/inlineHooks")
+	check := listCheck[InlineHook]{item: func(h InlineHook) string { return hookStatus(h.Status) }}
+	return listAll(ctx, c, "okta.inline_hooks.list", "/api/v1/inlineHooks", check)
 }
 
 // ListSystemLog fetches System Log events matching filter since the given time,
@@ -57,6 +97,9 @@ func (c *Client) ListSystemLog(ctx context.Context, filter string, since time.Ti
 		}
 		if page == nil {
 			return nil, invalidResponse(resp, op, "has no list")
+		}
+		if slices.ContainsFunc(*page, func(e LogEvent) bool { return e.EventType == "" }) {
+			return nil, invalidResponse(resp, op, "lists an event with no eventType")
 		}
 		// Okta can offer a next page of the System Log when no events
 		// remain, so an empty page ends the read.
