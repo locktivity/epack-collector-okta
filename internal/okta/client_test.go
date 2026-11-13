@@ -58,11 +58,11 @@ func TestFetchUsers_Pagination(t *testing.T) {
 		if page == 0 {
 			// First page - include Link header for next page
 			w.Header().Set("Link", `<`+serverURL+`/api/v1/users?after=cursor123>; rel="next"`)
-			_ = json.NewEncoder(w).Encode([]User{{ID: "user1"}})
+			_ = json.NewEncoder(w).Encode([]User{{ID: "user1", Status: "ACTIVE"}})
 			page++
 		} else {
 			// Second page - no Link header
-			_ = json.NewEncoder(w).Encode([]User{{ID: "user2"}})
+			_ = json.NewEncoder(w).Encode([]User{{ID: "user2", Status: "ACTIVE"}})
 		}
 	}))
 	defer server.Close()
@@ -292,8 +292,8 @@ func TestFetchUserRoleAssignments(t *testing.T) {
 
 func TestFetchApplications(t *testing.T) {
 	apps := []Application{
-		{ID: "app1", SignOnMode: "SAML_2_0", Status: "ACTIVE"},
-		{ID: "app2", SignOnMode: "OPENID_CONNECT", Status: "ACTIVE"},
+		{ID: "app1", SignOnMode: "SAML_2_0", Status: "ACTIVE", Features: []string{}},
+		{ID: "app2", SignOnMode: "OPENID_CONNECT", Status: "ACTIVE", Features: []string{"PUSH_NEW_USERS"}},
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +373,7 @@ func TestFetchPolicyRules(t *testing.T) {
 	client := NewClientWithHTTP(server.Client(), server.URL)
 	client.SetToken("test-token")
 
-	fetched, err := client.FetchPolicyRules(context.Background(), "policy123")
+	fetched, err := client.FetchPolicyRules(context.Background(), Policy{ID: "policy123"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestFetchPolicyRules_DeviceConditionBooleansOrStrings(t *testing.T) {
 	client := NewClientWithHTTP(server.Client(), server.URL)
 	client.SetToken("test-token")
 
-	rules, err := client.FetchPolicyRules(context.Background(), "policy123")
+	rules, err := client.FetchPolicyRules(context.Background(), Policy{ID: "policy123"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -606,6 +606,7 @@ func TestErrorsFromAResponseNameItsCall(t *testing.T) {
 		{URL: base + "/api/v1/users/00u1/factors", Status: http.StatusForbidden,
 			Body: `{"errorCode":"E0000006","errorSummary":"You do not have permission to perform the requested action"}`},
 		{URL: base + "/api/v1/org", Body: `{"id":`},
+		{URL: base + "/api/v1/groups?expand=stats&limit=200", Body: `[]`},
 	}, func(ctx componentsdk.CollectorContext) error {
 		client := NewClient(sdkClient(ctx), "acme.okta.com", "test-token")
 		if _, err := client.SignIn(ctx.Context()); err != nil {
@@ -620,14 +621,17 @@ func TestErrorsFromAResponseNameItsCall(t *testing.T) {
 		rec.NotCollected(at("/factors"), err)
 		_, err = client.FetchOrgSettings(ctx.Context())
 		rec.NotCollected(at("/org"), err)
+		rec.NotCollected(at("/groups"), client.ListGroups(ctx.Context(), func([]Group) error { return nil }))
 		return emitNothing(ctx)
 	})
 
-	// A list that is not there, a refusal, and a body cut short.
+	// A list that is not there, a refusal, a body cut short, and an empty
+	// group list, which only an admin who can't see the groups gets.
 	want := map[string]componentsdk.Gap{
 		"/users":   {Operation: "okta.users.list", Call: 2, Code: componentsdk.CodeInvalidResponse},
 		"/factors": {Operation: "okta.users.factors.list", Call: 3, Code: componentsdk.CodePermissionDenied, VendorCode: "E0000006"},
 		"/org":     {Operation: "okta.org.get", Call: 4, Code: componentsdk.CodeInvalidResponse},
+		"/groups":  {Operation: "okta.groups.list", Call: 5, Code: componentsdk.CodePermissionDenied},
 	}
 	if len(res.Result.Gaps) != len(want) {
 		t.Fatalf("gaps = %+v, want %d", res.Result.Gaps, len(want))

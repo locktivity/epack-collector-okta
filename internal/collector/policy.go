@@ -261,7 +261,7 @@ func (c *Collector) fetchActivePoliciesWithRules(ctx context.Context, policyType
 
 	result := make([]scopedPolicy, 0, len(activePolicies))
 	for _, policy := range activePolicies {
-		rules, err := c.client.FetchPolicyRules(ctx, policy.ID)
+		rules, err := c.client.FetchPolicyRules(ctx, policy)
 		if err != nil {
 			return nil, err
 		}

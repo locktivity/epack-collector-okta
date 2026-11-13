@@ -88,7 +88,7 @@ func TestSignInWithOAuthExchangesASignedAssertion(t *testing.T) {
 			if r.Header.Get("Authorization") != "Bearer access-123" {
 				t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
 			}
-			_, _ = w.Write([]byte(`[]`))
+			_, _ = w.Write([]byte(`[{"id":"aut1","key":"okta_password","type":"password","status":"ACTIVE"}]`))
 		}
 	}))
 	defer server.Close()

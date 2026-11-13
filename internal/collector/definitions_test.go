@@ -216,7 +216,8 @@ func customRole(roleID, label string) okta.RoleAssignment {
 
 // TestPrivileged_CountsRolesThatCanChangeAccess checks that the privileged
 // count leaves out roles that can only read and accounts that are not
-// enabled, and counts a custom role only when it grants a write.
+// enabled, and counts a custom role only when it grants a write. A custom
+// role with no permissions grants nothing.
 func TestPrivileged_CountsRolesThatCanChangeAccess(t *testing.T) {
 	users := []okta.User{
 		defUser("readonly", "ACTIVE", 1),
@@ -228,6 +229,7 @@ func TestPrivileged_CountsRolesThatCanChangeAccess(t *testing.T) {
 		defUser("custom-write", "ACTIVE", 1),
 		defUser("custom-factors", "ACTIVE", 1),
 		defUser("readonly-and-custom-read", "ACTIVE", 1),
+		defUser("custom-empty", "ACTIVE", 1),
 	}
 	roles := map[string][]okta.RoleAssignment{
 		"readonly":                 {role("READ_ONLY_ADMIN")},
@@ -239,11 +241,13 @@ func TestPrivileged_CountsRolesThatCanChangeAccess(t *testing.T) {
 		"custom-write":             {customRole("cr-groups", "Group Manager")},
 		"custom-factors":           {customRole("cr-factors", "Factor Reset")},
 		"readonly-and-custom-read": {role("READ_ONLY_ADMIN"), customRole("cr-read", "Auditor")},
+		"custom-empty":             {customRole("cr-empty", "Placeholder")},
 	}
 	permissions := map[string][]string{
 		"cr-read":    {"okta.users.read", "okta.groups.read", "okta.apps.read"},
 		"cr-groups":  {"okta.groups.read", "okta.groups.members.manage"},
 		"cr-factors": {"okta.users.read", "okta.users.credentials.resetFactors"},
+		"cr-empty":   {},
 	}
 	for _, level := range []componentsdk.Level{componentsdk.LevelTrust, componentsdk.LevelAudit} {
 		t.Run(string(level), func(t *testing.T) {

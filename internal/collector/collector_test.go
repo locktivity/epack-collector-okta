@@ -134,11 +134,11 @@ func (m *mockOktaClient) FetchPolicies(ctx context.Context, policyType string) (
 	return m.policies[policyType], nil
 }
 
-func (m *mockOktaClient) FetchPolicyRules(ctx context.Context, policyID string) ([]okta.PolicyRule, error) {
+func (m *mockOktaClient) FetchPolicyRules(ctx context.Context, policy okta.Policy) ([]okta.PolicyRule, error) {
 	if m.rulesErr != nil {
 		return nil, m.rulesErr
 	}
-	return m.policyRules[policyID], nil
+	return m.policyRules[policy.ID], nil
 }
 
 func (m *mockOktaClient) FetchDeviceAssurancePolicies(ctx context.Context) ([]okta.DeviceAssurancePolicy, error) {
