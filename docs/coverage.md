@@ -159,8 +159,6 @@ Whether Okta Support may access the org and the open support cases, third-party 
 - `getOrgCaptchaSettings` (GET /api/v1/org/captcha)
 - `listOrgContactTypes` (GET /api/v1/org/contacts)
 - `getOrgContactUser` (GET /api/v1/org/contacts/{contactType})
-- `listYubikeyOtpTokens` (GET /api/v1/org/factors/yubikey_token/tokens)
-- `getYubikeyOtpTokenById` (GET /api/v1/org/factors/yubikey_token/tokens/{tokenId})
 - `getThirdPartyAdminSetting` (GET /api/v1/org/orgSettings/thirdPartyAdminSetting)
 - `getOrgPreferences` (GET /api/v1/org/preferences)
 - `getAerialConsent` (GET /api/v1/org/privacy/aerial)
@@ -177,6 +175,8 @@ Whether Okta Support may access the org and the open support cases, third-party 
 
 The YubiKey OTP tokens uploaded to the org and who holds them, and the WebAuthn security keys preregistered for users.
 
+- `listYubikeyOtpTokens` (GET /api/v1/org/factors/yubikey_token/tokens)
+- `getYubikeyOtpTokenById` (GET /api/v1/org/factors/yubikey_token/tokens/{tokenId})
 - `listWebAuthnPreregistrationFactors` (GET /webauthn-registration/api/v1/users/{userId}/enrollments)
 
 ### Risk signals
