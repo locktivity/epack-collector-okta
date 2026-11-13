@@ -8,6 +8,7 @@ spec:
   source: https://github.com/okta/okta-management-openapi-spec
   path: dist/current/management-oneOfInheritance-noExamples.yaml
   revision: ec20a8e9f2f2
+  url: https://raw.githubusercontent.com/okta/okta-management-openapi-spec/ec20a8e9f2f204912d9b0f03a866ea5d181e69d5/dist/current/management-oneOfInheritance-noExamples.yaml
   sha256: 19f175205f0c566a0e2bf5e55074d49efa3e65988f456efa0be68699e8cbbc86
 scope:
   methods: [get]
