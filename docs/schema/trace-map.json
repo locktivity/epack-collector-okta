@@ -9433,10 +9433,6 @@
         ],
         "code": [
           {
-            "role": "helper",
-            "line": "internal/collector/collector.go:363"
-          },
-          {
             "role": "condition",
             "line": "internal/collector/device_access.go:69"
           },
@@ -9469,12 +9465,8 @@
             "line": "internal/collector/device_access.go:115"
           },
           {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:227"
-          },
-          {
             "role": "assign",
-            "line": "internal/collector/normalized.go:228"
+            "line": "internal/collector/normalized.go:227"
           },
           {
             "role": "input",
@@ -9567,10 +9559,6 @@
         ],
         "code": [
           {
-            "role": "helper",
-            "line": "internal/collector/collector.go:363"
-          },
-          {
             "role": "condition",
             "line": "internal/collector/device_access.go:69"
           },
@@ -9583,32 +9571,12 @@
             "line": "internal/collector/device_access.go:76"
           },
           {
-            "role": "input",
-            "line": "internal/collector/device_access.go:77"
-          },
-          {
             "role": "condition",
             "line": "internal/collector/device_access.go:79"
           },
           {
             "role": "input",
             "line": "internal/collector/device_access.go:80"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/device_access.go:107"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/device_access.go:108"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/device_access.go:114"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/device_access.go:115"
           },
           {
             "role": "condition",
@@ -9627,20 +9595,12 @@
             "line": "internal/collector/device_access.go:130"
           },
           {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:227"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/normalized.go:229"
-          },
-          {
             "role": "assign",
-            "line": "internal/collector/normalized.go:230"
+            "line": "internal/collector/normalized.go:228"
           },
           {
             "role": "input",
-            "line": "internal/collector/policy.go:42"
+            "line": "internal/collector/policy.go:40"
           },
           {
             "role": "input",
@@ -9652,7 +9612,15 @@
           },
           {
             "role": "input",
+            "line": "internal/collector/policy.go:72"
+          },
+          {
+            "role": "input",
             "line": "internal/collector/policy.go:76"
+          },
+          {
+            "role": "input",
+            "line": "internal/collector/privileged.go:34"
           },
           {
             "role": "condition",
@@ -9703,28 +9671,8 @@
             "line": "internal/collector/privileged.go:99"
           },
           {
-            "role": "condition",
-            "line": "internal/collector/users.go:110"
-          },
-          {
             "role": "input",
-            "line": "internal/collector/users.go:111"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:207"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:212"
-          },
-          {
-            "role": "condition",
-            "line": "internal/collector/users.go:213"
-          },
-          {
-            "role": "input",
-            "line": "internal/collector/users.go:214"
+            "line": "internal/collector/privileged.go:101"
           }
         ],
         "gaps": [
@@ -13354,10 +13302,8 @@
     "internal/collector/normalized.go:218": "\t\tAccountCount:          atAudit(accounts),",
     "internal/collector/normalized.go:219": "\t\tSuspendedAccountCount: atAudit(o.Users.SuspendedCount),",
     "internal/collector/normalized.go:220": "\t\tSuspendedPct:          share(o.Users.SuspendedCount, accounts, componentsdk.RoundUp),",
-    "internal/collector/normalized.go:227": "\tif isTrue(o.DeviceAccess.ManagedDeviceRequired) {",
-    "internal/collector/normalized.go:228": "\t\tposture.DeviceAccess = \u0026IDPPostureDeviceAccess{ManagedDeviceRequired: boolPtr(true)}",
-    "internal/collector/normalized.go:229": "\t\tif isTrue(o.DeviceAccess.ManagedDeviceRequiredForAdmins) {",
-    "internal/collector/normalized.go:230": "\t\t\tposture.DeviceAccess.ManagedDeviceRequiredForAdmins = boolPtr(true)",
+    "internal/collector/normalized.go:227": "\t\tManagedDeviceRequired:          o.DeviceAccess.ManagedDeviceRequired,",
+    "internal/collector/normalized.go:228": "\t\tManagedDeviceRequiredForAdmins: o.DeviceAccess.ManagedDeviceRequiredForAdmins,",
     "internal/collector/normalized.go:243": "func share(count, total *int, rounding componentsdk.Rounding) Percentage {",
     "internal/collector/normalized.go:244": "\tif total != nil \u0026\u0026 *total == 0 {",
     "internal/collector/normalized.go:245": "\t\treturn Percentage{Read: true}",

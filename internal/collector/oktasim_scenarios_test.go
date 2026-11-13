@@ -88,9 +88,7 @@ const simRoutingUnrecorded = "the recording was made by a collector that didn't 
 
 // simStanding are differences that hold wherever the collector reads the
 // value.
-var simStanding = simulate.Same(simulate.Unwritten, "normalized.go writes device_access only when a rule has a managed-device condition, and never a false",
-	"/device_access/managed_device_required", "/device_access/managed_device_required_for_admins").With(
-	simulate.Same(simulate.Gap, "not_read: normalized.go idpPostureLeftOut, since Okta sets which clients may sign in to an app in its app sign-in policy, which the collector does not read", "/policy/legacy_auth_blocked"),
+var simStanding = simulate.Same(simulate.Gap, "not_read: normalized.go idpPostureLeftOut, since Okta sets which clients may sign in to an app in its app sign-in policy, which the collector does not read", "/policy/legacy_auth_blocked").With(
 	simulate.Same(simulate.Gap, "not_read: idpPostureLeftOut, since app sign-in policy rules are not read", "/policy/phishing_resistant_required_for_privileged"),
 	simulate.Same(simulate.Gap, "not_read: idpPostureLeftOut, since Okta's user grants API, which the collector does not read, reports the apps users have granted access to",
 		"/app_security/authorized_third_party_apps_count"),
