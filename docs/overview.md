@@ -196,11 +196,14 @@ a top-level `diagnostics.warnings` array says what to grant.
 
 ## Not Collected
 
-Okta offers the following through its APIs, and the collector does not read them.
+Okta offers the following through its API, and the collector does not read them.
 
-- **Devices.** The devices users enroll in Okta Verify, with each device's OS version and disk encryption. The collector writes no `endpoint-posture` file.
-- **Service app credentials.** The client secrets and public keys of apps that call the Okta API with OAuth 2.0, and the Okta scopes granted to each app. From the `audit` level the collector reads API tokens only. It writes no `access-posture` file.
-- **Access reviews.** Access certification campaigns and their reviews in Okta Identity Governance. The Identity Governance APIs require an Okta Identity Governance subscription.
+- **Devices.** The devices users enroll in Okta Verify, with their OS version and disk encryption. The collector reads the device assurance policies and writes no endpoint-posture file.
+- **Service app credentials and assignments.** The credentials, scopes and tokens of apps that call the Okta API, and which users and groups each app is assigned to. From the audit level the collector reads API tokens only, and writes no access-posture file.
+- **Admin and org settings.** Admin roles granted through groups and the scope of each admin role, and org-wide settings such as whether Okta Support can access the org.
+- **Identity Governance and Privileged Access.** Access certification campaigns and the service accounts Okta Privileged Access manages, which need their own subscriptions.
+
+The coverage reference lists what the collector reads of the Okta API, and everything else the API offers with why it is left out, checked against Okta's published API description: https://github.com/locktivity/epack-collector-okta/blob/main/docs/coverage.md
 
 ## Use Cases
 
