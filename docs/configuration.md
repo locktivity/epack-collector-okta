@@ -185,6 +185,10 @@ with a code in `artifacts/okta.collector-result.json`, and under
   read, the service app's admin role cannot read the surface. The gap names no
   scope, and its warning says the app needs an admin role that can read it (see
   [Step 4](#step-4-assign-admin-role)).
+- **`groups` is left out with `permission_denied` and no refusal.** Okta answered
+  with no groups. Every org has the Everyone group, and Okta doesn't list it for
+  a group admin, so the admin role can't see the groups. Assign Read Only
+  Administrator org-wide (see [Step 4](#step-4-assign-admin-role)).
 - **`privileged_access` counts are null.** Listing admin-role assignments needs a
   Super Administrator-level role; Read-Only Admin can't (see the privileged-access
   note in [Step 4](#step-4-assign-admin-role)).
